@@ -6,6 +6,7 @@ import uuid
 from pydantic import BaseModel, Field
 
 from app.llm.provider import LLMMessage, LLMProvider
+from app.research.service import research_service
 
 logger = logging.getLogger(__name__)
 
@@ -319,6 +320,188 @@ Respond with valid JSON only."""
                 behavioral_axioms=["Pragmatic decision-maker"],
                 extraction_confidence=0.0,
             )
+
+    # ---- Role-to-authority heuristic ----
+
+    _ROLE_AUTHORITY_MAP: dict[str, int] = {
+        "ceo": 10,
+        "chief executive": 10,
+        "president": 10,
+        "cfo": 9,
+        "coo": 9,
+        "cto": 9,
+        "cro": 9,
+        "cmo": 9,
+        "chief": 9,
+        "evp": 8,
+        "executive vice president": 8,
+        "svp": 8,
+        "senior vice president": 8,
+        "general manager": 8,
+        "managing director": 8,
+        "vp": 7,
+        "vice president": 7,
+        "head of": 7,
+        "director": 6,
+        "senior director": 7,
+        "manager": 5,
+        "senior manager": 6,
+        "lead": 5,
+        "analyst": 4,
+        "associate": 3,
+    }
+
+    @staticmethod
+    def _infer_authority_from_role(role: str) -> int:
+        """Infer authority level (1-10) from a job title/role string."""
+        role_lower = role.lower()
+        for keyword, level in InterviewExtractor._ROLE_AUTHORITY_MAP.items():
+            if keyword in role_lower:
+                return level
+        return 5  # default mid-level
+
+    @staticmethod
+    def _parse_coalition_tendencies(description: str) -> float:
+        """Parse a coalition tendencies description to a 0.0-1.0 float."""
+        desc_lower = description.lower() if description else ""
+        keyword_scores: dict[str, float] = {
+            "rarely": 0.2,
+            "seldom": 0.2,
+            "avoids": 0.2,
+            "independent": 0.2,
+            "lone": 0.2,
+            "sometimes": 0.5,
+            "occasional": 0.5,
+            "moderate": 0.5,
+            "when needed": 0.5,
+            "frequently": 0.8,
+            "often": 0.8,
+            "regularly": 0.8,
+            "always": 0.9,
+            "strong": 0.8,
+            "extensive": 0.8,
+            "active": 0.7,
+            "collaborative": 0.7,
+            "coalition": 0.7,
+            "alliance": 0.7,
+        }
+        for keyword, score in keyword_scores.items():
+            if keyword in desc_lower:
+                return score
+        return 0.5  # default moderate
+
+    @staticmethod
+    def _derive_incentive_structure(
+        role: str, known_priorities: list[str]
+    ) -> list[str]:
+        """Derive incentive structure from role and known priorities."""
+        incentives: list[str] = []
+        role_lower = role.lower()
+        priorities_text = " ".join(known_priorities).lower()
+
+        if any(k in role_lower for k in ("cfo", "finance", "investor", "treasurer")):
+            incentives.append("financial")
+        if any(k in role_lower for k in ("ceo", "president", "founder", "board")):
+            incentives.extend(["reputational", "financial"])
+        if any(k in role_lower for k in ("coo", "operations", "supply", "logistics")):
+            incentives.append("operational")
+        if any(k in role_lower for k in ("compliance", "legal", "regulatory", "counsel")):
+            incentives.append("regulatory")
+
+        if "growth" in priorities_text or "revenue" in priorities_text:
+            incentives.append("financial")
+        if "brand" in priorities_text or "reputation" in priorities_text:
+            incentives.append("reputational")
+        if "efficiency" in priorities_text or "cost" in priorities_text:
+            incentives.append("operational")
+        if "compliance" in priorities_text or "regulation" in priorities_text:
+            incentives.append("regulatory")
+
+        # Deduplicate while preserving order
+        seen: set[str] = set()
+        unique: list[str] = []
+        for item in incentives:
+            if item not in seen:
+                seen.add(item)
+                unique.append(item)
+
+        return unique if unique else ["operational"]
+
+    @staticmethod
+    def _derive_behavioral_axioms(
+        notable_decisions: list[str], public_statements: list[str]
+    ) -> list[str]:
+        """Derive behavioral axioms from notable decisions and public statements."""
+        axioms: list[str] = []
+
+        for decision in notable_decisions[:2]:
+            if decision:
+                axioms.append(f"Decision pattern: {decision}")
+
+        for statement in public_statements[:2]:
+            if statement:
+                axioms.append(f"Stated principle: {statement}")
+
+        return axioms if axioms else ["Pragmatic decision-maker"]
+
+    async def research_persona(
+        self, name: str, company: str = "", role: str = ""
+    ) -> ExtractedPersona:
+        """Extract persona attributes by researching an executive's public profile.
+
+        Uses the autoresearch service to gather public data about the executive
+        and maps the synthesis to ExtractedPersona fields. Falls back to
+        extract_from_description() if research fails.
+
+        Args:
+            name: Executive's full name
+            company: Company name (optional, improves research accuracy)
+            role: Job title / role (optional, used for authority inference)
+
+        Returns:
+            ExtractedPersona with research-derived attributes
+        """
+        try:
+            result = await research_service.research_executive(
+                name, company=company, role=role
+            )
+            synthesis = result.get("synthesis", {})
+
+            if not synthesis or not isinstance(synthesis, dict):
+                raise ValueError("Empty or invalid synthesis returned from research")
+
+            resolved_role = synthesis.get("role", role) or role or "Unknown"
+
+            return ExtractedPersona(
+                name=synthesis.get("name", name) or name,
+                role=resolved_role,
+                risk_tolerance=synthesis.get("risk_tolerance", "moderate"),
+                information_bias=synthesis.get("information_bias", "balanced"),
+                decision_speed=synthesis.get("decision_speed", "moderate"),
+                authority_level=self._infer_authority_from_role(resolved_role),
+                coalition_tendencies=self._parse_coalition_tendencies(
+                    synthesis.get("coalition_tendencies", "")
+                ),
+                incentive_structure=self._derive_incentive_structure(
+                    resolved_role,
+                    synthesis.get("known_priorities", []),
+                ),
+                behavioral_axioms=self._derive_behavioral_axioms(
+                    synthesis.get("notable_decisions", []),
+                    synthesis.get("public_statements", []),
+                ),
+                extraction_confidence=0.6,
+            )
+
+        except Exception as e:
+            logger.error(f"Research-based persona extraction failed for {name}: {e}")
+            # Fall back to description-based extraction
+            fallback_description = (
+                f"{name} is a {role or 'professional'}"
+                f"{' at ' + company if company else ''}. "
+                "No further details are available."
+            )
+            return await self.extract_from_description(fallback_description)
 
     def get_interview_protocol(self) -> InterviewProtocol:
         """Return the standard interview question set.

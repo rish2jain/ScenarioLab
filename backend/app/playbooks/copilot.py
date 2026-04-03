@@ -26,6 +26,49 @@ class PlaybookCopilot:
     def __init__(self, llm_provider: LLMProvider | None = None):
         self.llm = llm_provider
 
+    async def analyze_seed_with_research(
+        self, seed_content: str
+    ) -> CopilotSuggestions:
+        """Analyze seed material enriched with external research context.
+
+        First augments the seed content with autoresearch results, then
+        passes the enriched content through the standard analysis pipeline.
+
+        Args:
+            seed_content: Raw seed material content.
+
+        Returns:
+            CopilotSuggestions with research-enhanced recommendations.
+        """
+        try:
+            from app.research.service import research_service
+
+            result = await research_service.augment_text(
+                seed_content, purpose="playbook selection"
+            )
+            augmented_context = result.get("augmented_context", "")
+
+            if augmented_context:
+                enriched_content = (
+                    seed_content
+                    + "\n\n--- AUTORESEARCH CONTEXT ---\n\n"
+                    + augmented_context
+                )
+            else:
+                enriched_content = seed_content
+
+            entities_found = result.get("entities_found", [])
+            logger.info(
+                f"Enriched seed content with research context "
+                f"({len(entities_found)} entities found)"
+            )
+
+        except Exception as e:
+            logger.error(f"Research augmentation failed, using original content: {e}")
+            enriched_content = seed_content
+
+        return await self.analyze_seed(enriched_content)
+
     async def analyze_seed(self, seed_content: str) -> CopilotSuggestions:
         """Analyze seed material and suggest simulation configuration.
 

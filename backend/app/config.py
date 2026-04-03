@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     alpha_vantage_api_key: str = ""
     news_api_key: str = ""
 
+    # Autoresearch
+    tavily_api_key: str = ""
+    sec_user_agent: str = "MiroFish/1.0 (research@mirofish.ai)"
+
     # Voice Settings
     whisper_model: str = "whisper-1"
     tts_voice: str = "alloy"

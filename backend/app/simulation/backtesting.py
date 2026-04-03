@@ -1,10 +1,12 @@
 """Backtesting Engine for simulation accuracy validation."""
 
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any
 
 from app.llm.factory import get_llm_provider
+from app.research.service import research_service
 from app.simulation.engine import SimulationEngine, simulation_engine
 from app.simulation.models import (
     AgentConfig,
@@ -590,6 +592,97 @@ class BacktestingEngine:
                 "match": sim_val == actual_val if isinstance(actual_val, bool) else "N/A",
             }
         return comparison
+
+    async def auto_populate_case(
+        self, case_description: str, tags: list[str] | None = None
+    ) -> dict[str, Any]:
+        """Auto-populate a backtest case from a natural-language description using autoresearch.
+
+        Calls the research service to gather historical data, then transforms the
+        synthesis into the same shape as ``BUNDLED_CASES`` entries so it can be
+        consumed by ``run_backtest`` or added to the case library by the caller.
+
+        Args:
+            case_description: Free-text description of the historical case.
+            tags: Optional category tags to guide the research query.
+
+        Returns:
+            A dict matching the ``BUNDLED_CASES`` entry format.
+        """
+        research_result = await research_service.research_historical_case(
+            case_description, tags=tags
+        )
+        synthesis = research_result["synthesis"]
+
+        # Slugify the case name for a stable case_id
+        case_name = synthesis.get("case_name", case_description)
+        case_id = re.sub(r"[^a-z0-9]+", "_", case_name.lower()).strip("_")
+
+        # Build a narrative seed from the synthesis fields
+        stakeholder_lines = "\n".join(
+            f"- {name}: {stance}"
+            for name, stance in synthesis.get("stakeholder_stances", {}).items()
+        )
+        timeline = synthesis.get("timeline", {})
+        milestone_lines = "\n".join(
+            f"- {m}" for m in timeline.get("key_milestones", [])
+        )
+        outcome = synthesis.get("outcome", {})
+        decision_lines = "\n".join(
+            f"- {d}" for d in outcome.get("key_decisions", [])
+        )
+        seed_material = (
+            f"{synthesis.get('description', case_description)}\n\n"
+            f"Key stakeholders:\n{stakeholder_lines}\n\n"
+            f"Timeline ({timeline.get('duration_description', 'N/A')}):\n{milestone_lines}\n\n"
+            f"Outcome: {outcome.get('summary', 'N/A')}\n"
+            f"Key decisions:\n{decision_lines}"
+        )
+
+        # Derive outcome_direction from the outcome summary and key decisions
+        outcome_direction: dict[str, Any] = {
+            "summary": outcome.get("summary", ""),
+        }
+        for decision in outcome.get("key_decisions", []):
+            key = re.sub(r"[^a-z0-9]+", "_", decision.lower()).strip("_")
+            outcome_direction[key] = True
+
+        return {
+            "case_id": case_id,
+            "name": case_name,
+            "description": synthesis.get("description", case_description),
+            "tags": synthesis.get("tags", tags or []),
+            "seed_material": seed_material,
+            "actual_outcomes": {
+                "stakeholder_stances": synthesis.get("stakeholder_stances", {}),
+                "timeline": {
+                    "key_milestones": timeline.get("key_milestones", []),
+                },
+                "outcome_direction": outcome_direction,
+            },
+        }
+
+    async def run_backtest_auto(
+        self, case_description: str, tags: list[str] | None = None
+    ) -> dict[str, Any]:
+        """Convenience method: auto-populate a case from research, then backtest it.
+
+        Combines ``auto_populate_case`` and ``run_backtest`` into a single call
+        so callers can go straight from a natural-language description to a
+        scored backtest result.
+
+        Args:
+            case_description: Free-text description of the historical case.
+            tags: Optional category tags to guide the research query.
+
+        Returns:
+            Backtest results with accuracy scores (same shape as ``run_backtest``).
+        """
+        case = await self.auto_populate_case(case_description, tags=tags)
+        return await self.run_backtest(
+            seed_material=case["seed_material"],
+            actual_outcomes=case["actual_outcomes"],
+        )
 
     def get_bundled_cases(self) -> list[dict]:
         """Get list of bundled test cases.

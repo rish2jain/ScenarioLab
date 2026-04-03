@@ -9,6 +9,7 @@ import httpx
 from app.config import settings
 from app.llm.database import MarketIntelligenceRepository, init_llm_tables
 from app.llm.factory import get_llm_provider
+from app.research.service import research_service
 
 logger = logging.getLogger(__name__)
 
@@ -296,6 +297,70 @@ Relevance Score:"""
 
         return summary
 
+    async def auto_research_company(self, company_name: str) -> dict[str, Any]:
+        """Fetch company research via autoresearch and format for market feed.
+
+        Args:
+            company_name: Name of the company to research.
+
+        Returns:
+            Dictionary with company research data compatible with market feed structure.
+        """
+        try:
+            result = await research_service.research_company(company_name)
+            synthesis = result.get("synthesis", {})
+            return {
+                "type": "company_research",
+                "company_name": company_name,
+                "synthesis": synthesis,
+                "filings": result.get("filings", []),
+                "raw_web_results": result.get("raw_web_results", []),
+                "raw_news": result.get("raw_news", []),
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as e:
+            logger.error(f"Auto-research failed for company '{company_name}': {e}")
+            return {
+                "type": "company_research",
+                "company_name": company_name,
+                "error": str(e),
+                "synthesis": {},
+                "filings": [],
+                "raw_web_results": [],
+                "raw_news": [],
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+            }
+
+    async def auto_research_industry(self, industry: str) -> dict[str, Any]:
+        """Fetch industry research via autoresearch and format for market feed.
+
+        Args:
+            industry: Name of the industry to research.
+
+        Returns:
+            Dictionary with industry research data compatible with market feed structure.
+        """
+        try:
+            result = await research_service.research_industry(industry)
+            synthesis = result.get("synthesis", {})
+            return {
+                "type": "industry_research",
+                "industry": industry,
+                "synthesis": synthesis,
+                "raw_results": result.get("raw_results", []),
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+            }
+        except Exception as e:
+            logger.error(f"Auto-research failed for industry '{industry}': {e}")
+            return {
+                "type": "industry_research",
+                "industry": industry,
+                "error": str(e),
+                "synthesis": {},
+                "raw_results": [],
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+            }
+
     async def configure_sources(
         self, simulation_id: str, config: dict
     ) -> dict[str, Any]:
@@ -311,6 +376,7 @@ Relevance Score:"""
         _market_configs[simulation_id] = {
             "stock_symbols": config.get("stock_symbols", []),
             "news_queries": config.get("news_queries", []),
+            "auto_research_queries": config.get("auto_research_queries", []),
             "refresh_interval": config.get("refresh_interval", 300),
             "configured_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -365,10 +431,25 @@ Relevance Score:"""
             articles = await self.fetch_news(query)
             news.extend(articles)
 
+        # Fetch auto-research data when configured
+        auto_research: list[dict[str, Any]] = []
+        for query in config.get("auto_research_queries", []):
+            query_type = query.get("type", "company") if isinstance(query, dict) else "company"
+            query_name = query.get("name", query) if isinstance(query, dict) else query
+            try:
+                if query_type == "industry":
+                    result = await self.auto_research_industry(query_name)
+                else:
+                    result = await self.auto_research_company(query_name)
+                auto_research.append(result)
+            except Exception as e:
+                logger.error(f"Auto-research query failed for '{query_name}': {e}")
+
         return {
             "simulation_id": simulation_id,
             "stocks": stocks,
             "news": news[:20],  # Limit to 20 articles
+            "auto_research": auto_research,
             "fetched_at": datetime.now(timezone.utc).isoformat(),
         }
 

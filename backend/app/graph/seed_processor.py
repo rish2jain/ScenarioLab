@@ -220,6 +220,54 @@ class SeedProcessor:
                     seeds.append(seed)
         return seeds
 
+    async def augment_seed(self, seed_id: str) -> SeedMaterial | None:
+        """Augment a seed material with external research context.
+
+        Researches entities found in the seed's raw content and appends
+        the augmented context to processed_content.
+
+        Args:
+            seed_id: ID of the seed material to augment.
+
+        Returns:
+            Updated SeedMaterial with augmented content, or None if not found.
+        """
+        seed = await self.get_seed(seed_id)
+        if seed is None:
+            logger.warning(f"Seed {seed_id} not found for augmentation")
+            return None
+
+        try:
+            from app.research.service import research_service
+
+            result = await research_service.augment_text(seed.raw_content)
+
+            augmented_context = result.get("augmented_context", "")
+            if augmented_context:
+                separator = "\n\n--- AUTORESEARCH CONTEXT ---\n\n"
+                base_content = seed.processed_content or seed.raw_content
+                seed.processed_content = base_content + separator + augmented_context
+
+            seed.status = "augmented"
+
+            self._store[seed.id] = seed
+            await self._get_repo().save(seed)
+
+            entities_found = result.get("entities_found", [])
+            logger.info(
+                f"Augmented seed {seed_id} with research context "
+                f"({len(entities_found)} entities found)"
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to augment seed {seed_id}: {e}")
+            seed.status = "failed"
+            seed.error_message = f"Augmentation failed: {e}"
+            self._store[seed.id] = seed
+            await self._get_repo().save(seed)
+
+        return seed
+
     async def update_seed(self, seed_id: str, **updates) -> SeedMaterial | None:
         """Update a seed material in memory and DB."""
         seed = await self.get_seed(seed_id)

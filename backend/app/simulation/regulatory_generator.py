@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.llm.provider import LLMMessage, LLMProvider
+from app.research.service import research_service
 
 logger = logging.getLogger(__name__)
 
@@ -119,20 +120,125 @@ class RegulatoryScenarioGenerator:
     def __init__(self, llm_provider: LLMProvider | None = None):
         self.llm = llm_provider
 
+    async def auto_fetch_regulation(
+        self,
+        regulation_name: str,
+        industry: str = "general",
+        jurisdiction: str = "",
+    ) -> RegulatoryGeneratorResult:
+        """Generate a scenario by auto-researching a regulation by name.
+
+        Uses the research service to fetch regulation data, then builds
+        a full simulation scenario from the synthesized results.
+
+        Args:
+            regulation_name: Name of the regulation to research
+            industry: Industry context for role selection
+            jurisdiction: Optional jurisdiction filter (e.g. "EU", "US")
+
+        Returns:
+            RegulatoryGeneratorResult with scenario config and impacts
+        """
+        if not self.llm:
+            raise ValueError("LLM provider required for scenario generation")
+
+        logger.info(
+            f"Auto-fetching regulation: {regulation_name} "
+            f"(jurisdiction={jurisdiction}, industry={industry})"
+        )
+
+        # Step 1: Research the regulation
+        research_data = await research_service.research_regulation(
+            regulation_name, jurisdiction=jurisdiction
+        )
+        synthesis = research_data.get("synthesis", {})
+
+        # Step 2: Map synthesis to RegulatoryExtraction
+        extraction = RegulatoryExtraction(
+            regulation_name=synthesis.get(
+                "regulation_name", regulation_name
+            ),
+            key_requirements=synthesis.get(
+                "key_requirements", ["Compliance required"]
+            ),
+            affected_parties=synthesis.get(
+                "affected_parties", ["Organization"]
+            ),
+            compliance_deadlines=synthesis.get("compliance_deadlines", []),
+            penalties=synthesis.get("penalties", []),
+        )
+
+        # Step 3: Generate agent roster
+        roster = self._generate_agent_roster(industry, extraction)
+
+        # Step 4: Build scenario config
+        scenario_config = self._build_scenario_config(
+            extraction, roster, industry
+        )
+
+        # Step 5: Build regulatory text from synthesis for impact analysis
+        synthesis_text_parts = [
+            f"Regulation: {extraction.regulation_name}",
+            f"Jurisdiction: {synthesis.get('jurisdiction', jurisdiction)}",
+            "Key Requirements: "
+            + "; ".join(extraction.key_requirements),
+            "Affected Parties: "
+            + ", ".join(extraction.affected_parties),
+        ]
+        enforcement = synthesis.get("enforcement_precedents", [])
+        if enforcement:
+            synthesis_text_parts.append(
+                "Enforcement Precedents: " + "; ".join(enforcement)
+            )
+        implications = synthesis.get("practical_implications", [])
+        if implications:
+            synthesis_text_parts.append(
+                "Practical Implications: " + "; ".join(implications)
+            )
+        synthesized_text = "\n".join(synthesis_text_parts)
+
+        # Step 6: Identify impacts
+        impacts = await self.identify_impacts(synthesized_text, industry)
+
+        return RegulatoryGeneratorResult(
+            scenario_config=scenario_config,
+            impact_assessment=impacts,
+            generation_metadata={
+                "industry": industry,
+                "jurisdiction": jurisdiction,
+                "regulation_name": extraction.regulation_name,
+                "requirements_count": len(extraction.key_requirements),
+                "source": "autoresearch",
+                "eurlex_results_count": len(
+                    research_data.get("eurlex_results", [])
+                ),
+            },
+        )
+
     async def generate_scenario(
         self,
-        regulatory_text: str,
+        regulatory_text: str = "",
         industry: str = "general",
+        regulation_name: str | None = None,
     ) -> RegulatoryGeneratorResult:
         """Generate a full simulation scenario from regulatory text.
 
         Args:
             regulatory_text: The regulatory document text
             industry: Industry context for role selection
+            regulation_name: Optional regulation name; when provided and
+                regulatory_text is empty, auto-fetches via research service
 
         Returns:
             RegulatoryGeneratorResult with scenario config and impacts
         """
+        # Auto-fetch when regulation_name is provided and no text given
+        if regulation_name and not regulatory_text.strip():
+            return await self.auto_fetch_regulation(
+                regulation_name=regulation_name,
+                industry=industry,
+            )
+
         if not self.llm:
             raise ValueError("LLM provider required for scenario generation")
 

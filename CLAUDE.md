@@ -27,6 +27,7 @@ The frontend proxies `/api/*` requests to the backend via Next.js rewrites (`nex
 | `llm/` | Multi-provider LLM abstraction (OpenAI, Anthropic, Ollama, llama.cpp) via factory pattern |
 | `analytics/` | Post-simulation analytics agent, emergent pattern detection, metrics export |
 | `reports/` | Report generation agent, narrative builder, deliverable templates, exporters (PDF, PPTX, etc.) |
+| `research/` | Autoresearch service: web search (Tavily), SEC EDGAR, EUR-Lex, LLM synthesis |
 | `mcp/` | MCP (Model Context Protocol) server for tool-use integration |
 | `seed/` | Multilanguage seed data support |
 | `cli.py` | CLI entry point (`mirofish-sim`) for headless simulation runs |
@@ -47,6 +48,8 @@ All config via environment variables loaded from `.env` at project root (see `.e
 - `NEO4J_URI` / `NEO4J_USER` / `NEO4J_PASSWORD` — Graph database
 - `MIRO_API_TOKEN` — Miro board integration
 - `MCP_SERVER_ENABLED` — Toggle MCP server
+- `TAVILY_API_KEY` — Web search for autoresearch (Tavily API)
+- `SEC_USER_AGENT` — SEC EDGAR API user agent string
 
 Backend settings are managed via Pydantic `BaseSettings` in `backend/app/config.py`.
 

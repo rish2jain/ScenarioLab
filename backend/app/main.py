@@ -12,13 +12,14 @@ from app.api_integrations.router import router as api_v1_router
 from app.config import settings
 from app.database import close_database, init_database
 from app.graph.neo4j_client import Neo4jClient
-from app.llm.database import init_llm_tables
 from app.graph.router import router as graph_router
+from app.llm.database import init_llm_tables
 from app.llm.router import router as llm_router
 from app.mcp.router import router as mcp_router
 from app.personas.router import router as personas_router
 from app.playbooks.router import router as playbooks_router
 from app.reports.router import router as reports_router
+from app.research.router import router as research_router
 from app.simulation.advanced_router import router as advanced_router
 from app.simulation.router import router as simulation_router
 from app.simulation.voice_router import router as voice_router
@@ -131,6 +132,7 @@ app.include_router(reports_router)
 app.include_router(mcp_router)
 app.include_router(voice_router)
 app.include_router(api_v1_router)
+app.include_router(research_router)
 
 
 @app.get("/")
