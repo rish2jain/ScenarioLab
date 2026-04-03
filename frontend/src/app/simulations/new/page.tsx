@@ -14,6 +14,8 @@ import {
   Minus,
   AlertCircle,
   Loader2,
+  FileText,
+  Upload,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -21,13 +23,35 @@ import { StepWizard } from '@/components/ui/StepWizard';
 import { Slider } from '@/components/ui/Slider';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
-import { usePlaybookStore, useSimulationStore } from '@/lib/store';
+import { DropZone } from '@/components/ui/DropZone';
+import { usePlaybookStore, useSimulationStore, useUploadStore } from '@/lib/store';
 import { api } from '@/lib/api';
 import type { Playbook, Agent } from '@/lib/types';
+
+/** Shape passed to api.createSimulation from this page. */
+interface CreateSimulationRequest {
+  name: string;
+  playbookId: string;
+  playbookName: string;
+  status: 'pending';
+  seedIds: string[];
+  agentConfigs: Record<string, number>;
+  playbook: Playbook;
+  config: {
+    rounds: number;
+    environmentType: string;
+    modelSelection: string;
+    monteCarloIterations: number;
+  };
+  currentRound: number;
+  totalRounds: number;
+  agents: never[];
+}
 
 const steps = [
   { id: 'playbook', label: 'Select Playbook' },
   { id: 'agents', label: 'Configure Agents' },
+  { id: 'documents', label: 'Seed Documents' },
   { id: 'parameters', label: 'Set Parameters' },
   { id: 'review', label: 'Review & Launch' },
 ];
@@ -43,8 +67,10 @@ export default function NewSimulationPage() {
   const router = useRouter();
   const { playbooks, setPlaybooks, selectedPlaybook, setSelectedPlaybook } = usePlaybookStore();
   const addSimulation = useSimulationStore((state) => state.addSimulation);
-  
+  const { files: uploadedFiles, addFile, updateFile } = useUploadStore();
+
   const [currentStep, setCurrentStep] = useState(0);
+  const [selectedSeedIds, setSelectedSeedIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [simulationName, setSimulationName] = useState('');
   const [rounds, setRounds] = useState(10);
@@ -64,29 +90,36 @@ export default function NewSimulationPage() {
   useEffect(() => {
     if (!selectedPlaybook) return;
 
+    let cancelled = false;
+    const targetId = selectedPlaybook.id;
+
     const loadAndConfigure = async () => {
       // If roster is missing (only summary was loaded), fetch the full detail
       let playbook = selectedPlaybook;
       if (!playbook.roster || playbook.roster.length === 0) {
-        const full = await api.getPlaybook(playbook.id);
-        if (full) {
-          setSelectedPlaybook(full);
-          playbook = full;
-        }
+        const full = await api.getPlaybook(targetId);
+        // Discard if the user already switched to a different playbook
+        if (cancelled || full === null) return;
+        setSelectedPlaybook(full);
+        playbook = full;
       }
+
+      if (cancelled) return;
 
       const configs: Record<string, number> = {};
       (playbook.roster ?? []).forEach((role) => {
         configs[role.role] = role.defaultCount;
       });
       setAgentConfigs(configs);
-      if (!simulationName) {
-        setSimulationName(`${playbook.name} - ${new Date().toLocaleDateString()}`);
-      }
+      setSimulationName((prev) =>
+        prev ? prev : `${playbook.name} - ${new Date().toLocaleDateString()}`
+      );
     };
 
     loadAndConfigure();
-  }, [selectedPlaybook?.id]);
+
+    return () => { cancelled = true; };
+  }, [selectedPlaybook?.id, setSelectedPlaybook, setAgentConfigs, setSimulationName]);
 
   const handleNext = () => {
     if (currentStep < steps.length - 1) {
@@ -106,12 +139,13 @@ export default function NewSimulationPage() {
     setIsLoading(true);
     
     try {
-      const newSimulation = await api.createSimulation({
+      const payload: CreateSimulationRequest = {
         name: simulationName,
         playbookId: selectedPlaybook.id,
         playbookName: selectedPlaybook.name,
         status: 'pending',
-        // Pass extra fields for backend request mapping
+        seedIds: selectedSeedIds,
+        // Pass extra fields so api.createSimulation can build the backend body
         agentConfigs,
         playbook: selectedPlaybook,
         config: {
@@ -123,7 +157,8 @@ export default function NewSimulationPage() {
         currentRound: 0,
         totalRounds: rounds,
         agents: [],
-      } as any);
+      };
+      const newSimulation = await api.createSimulation(payload as any);
 
       addSimulation(newSimulation);
       router.push(`/simulations/${newSimulation.id}`);
@@ -144,6 +179,28 @@ export default function NewSimulationPage() {
   const totalAgents = Object.values(agentConfigs).reduce((a, b) => a + b, 0);
   const estimatedCost = totalAgents * rounds * 0.02; // Mock cost calculation
 
+  const toggleSeedId = (id: string) => {
+    setSelectedSeedIds((prev) =>
+      prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id]
+    );
+  };
+
+  const handleFilesDrop = (files: File[]) => {
+    for (const file of files) {
+      const id = crypto.randomUUID();
+      addFile({
+        id,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        status: 'completed',
+        progress: 100,
+        uploadedAt: new Date().toISOString(),
+      });
+      setSelectedSeedIds((prev) => [...prev, id]);
+    }
+  };
+
   const canProceed = () => {
     switch (currentStep) {
       case 0:
@@ -151,6 +208,8 @@ export default function NewSimulationPage() {
       case 1:
         return totalAgents > 0;
       case 2:
+        return true; // Documents step is optional
+      case 3:
         return simulationName.trim().length > 0;
       default:
         return true;
@@ -293,6 +352,71 @@ export default function NewSimulationPage() {
           <div className="space-y-6">
             <div>
               <h2 className="text-xl font-semibold text-slate-100">
+                Seed Documents
+              </h2>
+              <p className="text-slate-400 mt-1">
+                Attach documents that agents will reference during the simulation
+              </p>
+            </div>
+
+            {uploadedFiles.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium text-slate-300">
+                  Previously Uploaded Files
+                </h3>
+                {uploadedFiles.map((file) => (
+                  <label
+                    key={file.id}
+                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                      selectedSeedIds.includes(file.id)
+                        ? 'border-accent bg-accent/10'
+                        : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedSeedIds.includes(file.id)}
+                      onChange={() => toggleSeedId(file.id)}
+                      className="w-4 h-4 rounded border-slate-600 text-accent focus:ring-accent"
+                    />
+                    <FileText className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-200 truncate">
+                        {file.name}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        {file.size < 1024 * 1024
+                          ? (file.size / 1024).toFixed(1) + ' KB'
+                          : (file.size / (1024 * 1024)).toFixed(1) + ' MB'}
+                      </p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            <div>
+              <h3 className="text-sm font-medium text-slate-300 mb-2">
+                Upload New Files
+              </h3>
+              <DropZone onFilesDrop={handleFilesDrop} />
+            </div>
+
+            <div className="p-4 bg-slate-800/30 rounded-lg border border-slate-700">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Selected Documents</span>
+                <span className="text-xl font-semibold text-slate-100">
+                  {selectedSeedIds.length}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {currentStep === 3 && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-xl font-semibold text-slate-100">
                 Set Parameters
               </h2>
               <p className="text-slate-400 mt-1">
@@ -372,7 +496,7 @@ export default function NewSimulationPage() {
           </div>
         )}
 
-        {currentStep === 3 && selectedPlaybook && (
+        {currentStep === 4 && selectedPlaybook && (
           <div className="space-y-6">
             <div>
               <h2 className="text-xl font-semibold text-slate-100">
@@ -412,6 +536,14 @@ export default function NewSimulationPage() {
                     <p className="text-sm text-slate-400">Total Agents</p>
                     <p className="text-slate-200">{totalAgents}</p>
                   </div>
+                  {selectedSeedIds.length > 0 && (
+                    <div>
+                      <p className="text-sm text-slate-400">Seed Documents</p>
+                      <p className="text-slate-200">
+                        {selectedSeedIds.length} attached
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
