@@ -16,6 +16,9 @@ from app.llm.provider import (
 
 logger = logging.getLogger(__name__)
 
+# Maximum seconds to wait for the CLI subprocess to produce a response.
+CHATGPT_CLI_TIMEOUT: float = 120.0
+
 
 class CLIChatGPTProvider(LLMProvider):
     """Provider that shells out to the OpenAI/ChatGPT CLI."""
@@ -23,7 +26,7 @@ class CLIChatGPTProvider(LLMProvider):
     provider_name = "cli-chatgpt"
 
     def __init__(self, model: str = ""):
-        self.model = model or "gpt-4o"
+        self.model = model or "gpt-5.4"
         # Try both 'chatgpt' and 'openai' CLI names
         self._cli = shutil.which("chatgpt") or shutil.which(
             "openai"
@@ -52,7 +55,7 @@ class CLIChatGPTProvider(LLMProvider):
             cli,
             "api", "chat.completions.create",
             "-m", model,
-            "-g", "user", prompt,
+            "--message", "user", prompt,
             "--max-tokens", str(max_tokens),
         ]
 
@@ -61,7 +64,22 @@ class CLIChatGPTProvider(LLMProvider):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await proc.communicate()
+
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=CHATGPT_CLI_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            # Kill the stalled process and reap it before re-raising.
+            proc.terminate()
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+            raise RuntimeError(
+                f"ChatGPT CLI timed out after {CHATGPT_CLI_TIMEOUT}s"
+            )
 
         if proc.returncode != 0:
             err = stderr.decode().strip()
@@ -82,7 +100,7 @@ class CLIChatGPTProvider(LLMProvider):
                     .get("message", {})
                     .get("content", raw)
                 )
-        except (json.JSONDecodeError, KeyError):
+        except json.JSONDecodeError:
             pass
 
         return raw

@@ -15,6 +15,9 @@ from app.llm.provider import (
 
 logger = logging.getLogger(__name__)
 
+# Maximum seconds to wait for the Gemini CLI subprocess to respond.
+GEMINI_CLI_TIMEOUT: float = 120.0
+
 
 class CLIGeminiProvider(LLMProvider):
     """Provider that shells out to the Gemini CLI."""
@@ -22,13 +25,13 @@ class CLIGeminiProvider(LLMProvider):
     provider_name = "cli-gemini"
 
     def __init__(self, model: str = ""):
-        self.model = model or "gemini-2.5-pro"
+        self.model = model or "gemini-3.1-pro"
         self._cli = shutil.which("gemini")
         if not self._cli:
             logger.warning(
                 "Gemini CLI not found in PATH. "
-                "Install via: npm install -g @anthropic-ai/gemini"
-                " or see https://ai.google.dev/gemini-api/docs/cli"
+                "See https://ai.google.dev/gemini-api/docs/cli "
+                "for installation instructions."
             )
 
     async def _run_cli(
@@ -49,7 +52,20 @@ class CLIGeminiProvider(LLMProvider):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await proc.communicate()
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=GEMINI_CLI_TIMEOUT
+            )
+        except asyncio.TimeoutError:
+            proc.terminate()
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+            raise RuntimeError(
+                f"Gemini CLI timed out after {GEMINI_CLI_TIMEOUT}s"
+            )
 
         if proc.returncode != 0:
             err = stderr.decode().strip()
@@ -67,7 +83,20 @@ class CLIGeminiProvider(LLMProvider):
         max_tokens: int = 2048,
         **kwargs,
     ) -> LLMResponse:
-        """Generate a completion via the Gemini CLI."""
+        """Generate a completion via the Gemini CLI.
+
+        Note: The Gemini CLI does not expose a ``--temperature`` flag.
+        The *temperature* parameter is accepted for interface compatibility
+        but is silently ignored.  Use the Gemini API provider directly if
+        you need to control sampling temperature.
+        """
+        if temperature != 0.7:
+            logger.warning(
+                "CLIGeminiProvider does not support the 'temperature' "
+                "parameter (the Gemini CLI has no --temperature flag). "
+                "The provided value %.2f will be ignored.",
+                temperature,
+            )
         max_tokens = min(max_tokens, MAX_TOKENS_CAP)
         async with _llm_semaphore:
             # Gemini CLI takes a single prompt; combine messages
