@@ -1,140 +1,38 @@
-"""SQLite persistence layer for MiroFish backend."""
+"""SQLite persistence layer for MiroFish backend.
+
+Repository classes for core simulation data. Connection management and DDL
+are delegated to ``app.db.connection``.
+"""
 
 import json
 import logging
-from datetime import datetime, timezone
-from pathlib import Path
 
-import aiosqlite
-
+from app.db.connection import (
+    close_database,  # re-exported for callers that import from here
+    get_db,  # re-exported
+)
+from app.db.connection import init_schema as _init_schema
+from app.db.connection import (
+    utc_now_iso as _utc_now_iso,
+)
 from app.graph.seed_processor import SeedMaterial
 from app.simulation.models import SimulationState
 
 logger = logging.getLogger(__name__)
 
-# Database file path (relative to backend dir)
-_DB_DIR = Path(__file__).resolve().parent.parent / "data"
-_DB_PATH = _DB_DIR / "mirofish.db"
-
-# Module-level connection reference
-_db: aiosqlite.Connection | None = None
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-async def get_db() -> aiosqlite.Connection:
-    """Return the active database connection, raising if not initialized."""
-    if _db is None:
-        raise RuntimeError("Database not initialized. Call init_database() first.")
-    return _db
-
 
 async def init_database() -> None:
-    """Initialize the SQLite database and create tables."""
-    global _db  # noqa: PLW0603
+    """Initialize the SQLite database and create all tables.
 
-    _DB_DIR.mkdir(parents=True, exist_ok=True)
-
-    logger.info(f"Initializing SQLite database at {_DB_PATH}")
-    _db = await aiosqlite.connect(str(_DB_PATH))
-    _db.row_factory = aiosqlite.Row
-
-    # Enable WAL mode for better concurrent read performance
-    await _db.execute("PRAGMA journal_mode=WAL")
-
-    await _db.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS simulations (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            config TEXT NOT NULL,
-            state TEXT NOT NULL,
-            status TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS seeds (
-            id TEXT PRIMARY KEY,
-            filename TEXT NOT NULL,
-            content_type TEXT NOT NULL,
-            raw_content TEXT NOT NULL,
-            processed_content TEXT,
-            status TEXT NOT NULL,
-            metadata TEXT NOT NULL DEFAULT '{}',
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS audit_events (
-            event_id TEXT PRIMARY KEY,
-            simulation_id TEXT NOT NULL,
-            event_type TEXT NOT NULL,
-            timestamp TEXT NOT NULL,
-            actor TEXT NOT NULL,
-            details TEXT NOT NULL,
-            previous_hash TEXT NOT NULL,
-            hash TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS scenario_branches (
-            branch_id TEXT PRIMARY KEY,
-            root_id TEXT NOT NULL,
-            parent_id TEXT,
-            name TEXT NOT NULL,
-            description TEXT,
-            config_diff TEXT NOT NULL,
-            simulation_id TEXT,
-            created_at TEXT NOT NULL,
-            creator TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS annotations (
-            id TEXT PRIMARY KEY,
-            simulation_id TEXT NOT NULL,
-            agent_id TEXT,
-            message_id TEXT,
-            round_number INTEGER,
-            content TEXT NOT NULL,
-            tag TEXT NOT NULL,
-            annotator TEXT NOT NULL,
-            timestamp TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS chat_history (
-            id TEXT PRIMARY KEY,
-            simulation_id TEXT NOT NULL,
-            agent_id TEXT NOT NULL,
-            agent_name TEXT,
-            user_message TEXT NOT NULL,
-            agent_response TEXT NOT NULL,
-            timestamp TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS agent_memories (
-            id TEXT PRIMARY KEY,
-            simulation_id TEXT NOT NULL,
-            agent_id TEXT NOT NULL,
-            round_number INTEGER NOT NULL,
-            content TEXT NOT NULL,
-            memory_type TEXT NOT NULL,
-            timestamp TEXT NOT NULL
-        );
-        """
-    )
-    await _db.commit()
+    This is the entry point used by ``app.main`` at startup.  It calls
+    ``app.db.connection.init_schema`` which owns all DDL.
+    """
+    await _init_schema()
     logger.info("Database tables initialized")
 
 
-async def close_database() -> None:
-    """Close the database connection."""
-    global _db  # noqa: PLW0603
-    if _db is not None:
-        await _db.close()
-        _db = None
-        logger.info("Database connection closed")
+# Re-export close_database so existing callers don't need to change their imports.
+__all__ = ["init_database", "close_database", "get_db"]
 
 
 class SimulationRepository:

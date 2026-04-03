@@ -1,33 +1,28 @@
-"""SQLite persistence layer for API integrations."""
+"""SQLite persistence layer for API integrations.
+
+Connection management and path resolution are delegated to
+``app.db.connection``.  This module uses the per-request ``get_fresh_db``
+pattern (open/close per operation) that was already established here.
+"""
 
 import json
 import logging
-from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 import aiosqlite
 
+from app.db.connection import INTEGRATION_DDL, get_fresh_db
+from app.db.connection import utc_now_iso as _utc_now_iso
+
 logger = logging.getLogger(__name__)
 
-# Database file path (same as main database)
-_DB_PATH = (
-    Path(__file__).resolve().parent.parent.parent / "data" / "mirofish.db"
-)
-
-# Lazy initialization flag
+# Lazy-initialization guard (same semantics as before)
 _initialized = False
 
 
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-async def get_db() -> aiosqlite.Connection:
-    """Get a database connection."""
-    db = await aiosqlite.connect(str(_DB_PATH))
-    db.row_factory = aiosqlite.Row
-    return db
+async def get_db():
+    """Get a fresh per-request database connection."""
+    return await get_fresh_db()
 
 
 async def init_integration_tables() -> None:
@@ -37,83 +32,10 @@ async def init_integration_tables() -> None:
     if _initialized:
         return
 
-    _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-
-    logger.info(f"Initializing integration tables at {_DB_PATH}")
+    logger.info("Initializing integration tables")
     db = await get_db()
     try:
-        await db.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS api_keys (
-                key_id TEXT PRIMARY KEY,
-                key_value TEXT UNIQUE NOT NULL,
-                name TEXT NOT NULL,
-                permissions TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                last_used_at TEXT,
-                active BOOLEAN DEFAULT 1,
-                metadata TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS webhooks (
-                webhook_id TEXT PRIMARY KEY,
-                url TEXT NOT NULL,
-                events TEXT NOT NULL,
-                api_key_id TEXT NOT NULL,
-                active BOOLEAN DEFAULT 1,
-                created_at TEXT NOT NULL,
-                last_triggered_at TEXT,
-                failure_count INTEGER DEFAULT 0,
-                metadata TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS webhook_deliveries (
-                delivery_id TEXT PRIMARY KEY,
-                webhook_id TEXT NOT NULL,
-                event_type TEXT NOT NULL,
-                url TEXT NOT NULL,
-                status_code INTEGER,
-                success BOOLEAN NOT NULL,
-                error_message TEXT,
-                timestamp TEXT NOT NULL,
-                response_time_ms REAL
-            );
-
-            CREATE TABLE IF NOT EXISTS custom_personas (
-                persona_id TEXT PRIMARY KEY,
-                persona_data TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS counterpart_agents (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                brief TEXT NOT NULL,
-                stakeholder_type TEXT NOT NULL,
-                rehearsal_mode TEXT NOT NULL,
-                persona_data TEXT NOT NULL,
-                conversation_history TEXT,
-                created_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS cross_simulation_data (
-                simulation_id TEXT PRIMARY KEY,
-                opted_in BOOLEAN DEFAULT 0,
-                patterns TEXT,
-                simulation_data TEXT,
-                updated_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS gamification_configs (
-                simulation_id TEXT PRIMARY KEY,
-                config TEXT NOT NULL,
-                scores TEXT,
-                leaderboard TEXT,
-                updated_at TEXT NOT NULL
-            );
-            """
-        )
+        await db.executescript(INTEGRATION_DDL)
         await db.commit()
         _initialized = True
         logger.info("Integration tables initialized")

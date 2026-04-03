@@ -1,107 +1,27 @@
-"""SQLite persistence layer for LLM-related data."""
+"""SQLite persistence layer for LLM-related data.
+
+Connection management and DDL are delegated to ``app.db.connection``.
+"""
 
 import json
 import logging
-from datetime import datetime, timezone
-from pathlib import Path
 
-import aiosqlite
+from app.db.connection import LLM_DDL, get_fresh_db
+from app.db.connection import utc_now_iso as _utc_now_iso
 
 logger = logging.getLogger(__name__)
-
-# Database file path (same as main database)
-_DB_PATH = (
-    Path(__file__).resolve().parent.parent.parent / "data" / "mirofish.db"
-)
-
-
-def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 async def get_db():
     """Get database connection (reuses the same DB file)."""
-    db = await aiosqlite.connect(str(_DB_PATH))
-    db.row_factory = aiosqlite.Row
-    return db
+    return await get_fresh_db()
 
 
-async def init_llm_tables():
+async def init_llm_tables() -> None:
     """Initialize LLM-related tables."""
     db = await get_db()
     try:
-        await db.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS fine_tuning_jobs (
-                job_id TEXT PRIMARY KEY,
-                dataset_id TEXT,
-                base_model TEXT NOT NULL,
-                lora_config TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'queued',
-                progress REAL DEFAULT 0.0,
-                created_at TEXT NOT NULL,
-                completed_at TEXT,
-                metrics TEXT,
-                error_message TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS fine_tuning_datasets (
-                dataset_id TEXT PRIMARY KEY,
-                data_type TEXT NOT NULL,
-                num_examples INTEGER DEFAULT 0,
-                format TEXT DEFAULT 'jsonl',
-                preview_samples TEXT,
-                created_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS lora_adapters (
-                adapter_id TEXT PRIMARY KEY,
-                job_id TEXT NOT NULL,
-                base_model TEXT NOT NULL,
-                domain TEXT NOT NULL,
-                size_mb REAL DEFAULT 0.0,
-                created_at TEXT NOT NULL,
-                performance_metrics TEXT,
-                active BOOLEAN DEFAULT 0
-            );
-
-            CREATE TABLE IF NOT EXISTS fine_tuning_benchmarks (
-                benchmark_id TEXT PRIMARY KEY,
-                domain TEXT NOT NULL,
-                questions TEXT NOT NULL,
-                evaluation_criteria TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS market_intelligence_configs (
-                simulation_id TEXT PRIMARY KEY,
-                config TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS market_intelligence_cache (
-                simulation_id TEXT PRIMARY KEY,
-                data TEXT NOT NULL,
-                injected_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS voice_conversations (
-                id TEXT PRIMARY KEY,
-                simulation_id TEXT NOT NULL,
-                agent_id TEXT NOT NULL,
-                messages TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS voice_audio_cache (
-                audio_id TEXT PRIMARY KEY,
-                simulation_id TEXT NOT NULL,
-                agent_id TEXT NOT NULL,
-                audio_data BLOB NOT NULL,
-                created_at TEXT NOT NULL
-            );
-            """
-        )
+        await db.executescript(LLM_DDL)
         await db.commit()
         logger.info("LLM tables initialized")
     except Exception as e:
@@ -109,6 +29,7 @@ async def init_llm_tables():
         raise
     finally:
         await db.close()
+
 
 
 class FineTuningRepository:
