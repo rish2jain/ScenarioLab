@@ -34,53 +34,6 @@ import { useSimulationStore } from '@/lib/store';
 import { api } from '@/lib/api';
 import type { Simulation, Agent } from '@/lib/types';
 
-// Mock agents for display
-const mockAgents: Agent[] = [
-  {
-    id: 'agent-1',
-    name: 'Sarah Chen',
-    role: 'Acquiring CEO',
-    archetype: 'aggressor',
-    description: 'Driven executive focused on rapid integration',
-    traits: ['Decisive', 'Results-oriented', 'Direct'],
-    goals: ['Achieve synergies', 'Meet timeline', 'Reduce costs'],
-    color: '#14b8a6',
-    isActive: true,
-  },
-  {
-    id: 'agent-2',
-    name: 'Michael Torres',
-    role: 'Target CEO',
-    archetype: 'defender',
-    description: 'Protective of acquired company culture',
-    traits: ['Cautious', 'Empathetic', 'Strategic'],
-    goals: ['Preserve culture', 'Protect employees', 'Maintain autonomy'],
-    color: '#f59e0b',
-    isActive: true,
-  },
-  {
-    id: 'agent-3',
-    name: 'Jennifer Walsh',
-    role: 'Integration Lead',
-    archetype: 'mediator',
-    description: 'Tasked with merging operations smoothly',
-    traits: ['Diplomatic', 'Organized', 'Patient'],
-    goals: ['Smooth transition', 'Minimize disruption', 'Build bridges'],
-    color: '#3b82f6',
-    isActive: true,
-  },
-  {
-    id: 'agent-4',
-    name: 'David Park',
-    role: 'HR Director',
-    archetype: 'analyst',
-    description: 'Manages talent retention concerns',
-    traits: ['Detail-oriented', 'Empathetic', 'Data-driven'],
-    goals: ['Retain talent', 'Manage morale', 'Ensure compliance'],
-    color: '#8b5cf6',
-    isActive: true,
-  },
-];
 
 export default function SimulationMonitorPage() {
   const params = useParams();
@@ -343,26 +296,29 @@ function FeatureCard({
           </div>
         </div>
 
-        {/* Agent Panel */}
         <div className="w-full lg:w-80 border-b lg:border-b-0 lg:border-l border-slate-700 bg-slate-800/30 overflow-y-auto order-1 lg:order-2 max-h-48 lg:max-h-none">
           <div className="p-3 md:p-4 border-b border-slate-700">
             <div className="flex items-center gap-2">
               <Users className="w-5 h-5 text-slate-400" />
               <h3 className="font-semibold text-slate-200">Agents</h3>
               <span className="ml-auto text-sm text-slate-400">
-                {mockAgents.length}
+                {currentSimulation.agents?.length ?? 0}
               </span>
             </div>
           </div>
           <div className="p-3 md:p-4 space-y-3">
-            {mockAgents.map((agent) => (
-              <AgentCard
-                key={agent.id}
-                agent={agent}
-                isSelected={selectedAgentId === agent.id}
-                onClick={() => setSelectedAgentId(agent.id)}
-              />
-            ))}
+            {(currentSimulation.agents ?? []).length > 0 ? (
+              currentSimulation.agents!.map((agent) => (
+                <AgentCard
+                  key={agent.id}
+                  agent={agent}
+                  isSelected={selectedAgentId === agent.id}
+                  onClick={() => setSelectedAgentId(agent.id)}
+                />
+              ))
+            ) : (
+              <p className="text-sm text-slate-500 text-center py-4">No agents yet</p>
+            )}
           </div>
         </div>
       </div>

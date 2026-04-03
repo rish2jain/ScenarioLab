@@ -62,17 +62,31 @@ export default function NewSimulationPage() {
   }, [setPlaybooks]);
 
   useEffect(() => {
-    if (selectedPlaybook) {
+    if (!selectedPlaybook) return;
+
+    const loadAndConfigure = async () => {
+      // If roster is missing (only summary was loaded), fetch the full detail
+      let playbook = selectedPlaybook;
+      if (!playbook.roster || playbook.roster.length === 0) {
+        const full = await api.getPlaybook(playbook.id);
+        if (full) {
+          setSelectedPlaybook(full);
+          playbook = full;
+        }
+      }
+
       const configs: Record<string, number> = {};
-      selectedPlaybook.roster.forEach((role) => {
+      (playbook.roster ?? []).forEach((role) => {
         configs[role.role] = role.defaultCount;
       });
       setAgentConfigs(configs);
       if (!simulationName) {
-        setSimulationName(`${selectedPlaybook.name} - ${new Date().toLocaleDateString()}`);
+        setSimulationName(`${playbook.name} - ${new Date().toLocaleDateString()}`);
       }
-    }
-  }, [selectedPlaybook]);
+    };
+
+    loadAndConfigure();
+  }, [selectedPlaybook?.id]);
 
   const handleNext = () => {
     if (currentStep < steps.length - 1) {
@@ -97,6 +111,9 @@ export default function NewSimulationPage() {
         playbookId: selectedPlaybook.id,
         playbookName: selectedPlaybook.name,
         status: 'pending',
+        // Pass extra fields for backend request mapping
+        agentConfigs,
+        playbook: selectedPlaybook,
         config: {
           rounds,
           environmentType,
@@ -106,7 +123,7 @@ export default function NewSimulationPage() {
         currentRound: 0,
         totalRounds: rounds,
         agents: [],
-      });
+      } as any);
 
       addSimulation(newSimulation);
       router.push(`/simulations/${newSimulation.id}`);

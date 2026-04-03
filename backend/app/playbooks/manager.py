@@ -76,6 +76,10 @@ class PlaybookSummary(BaseModel):
     category: str
     estimated_time_minutes: int
     environment: str
+    agent_count: int = 0
+    min_rounds: int = 0
+    max_rounds: int = 0
+    icon: str = "Building2"
 
 
 class PlaybookManager:
@@ -122,6 +126,14 @@ class PlaybookManager:
         """
         return self._playbooks.get(playbook_id)
 
+    # Map environment type to icon name for UI
+    _ICON_MAP: dict[str, str] = {
+        "integration": "Building2",
+        "compliance": "ShieldAlert",
+        "competitive": "Swords",
+        "boardroom": "Users",
+    }
+
     def get_all_playbooks(self) -> list[PlaybookSummary]:
         """Get summary of all playbooks.
 
@@ -136,6 +148,10 @@ class PlaybookManager:
                 category=p.category,
                 estimated_time_minutes=p.estimated_time_minutes,
                 environment=p.environment,
+                agent_count=sum(e.count for e in p.agent_roster),
+                min_rounds=p.typical_duration_rounds[0],
+                max_rounds=p.typical_duration_rounds[1],
+                icon=self._ICON_MAP.get(p.environment, "Building2"),
             )
             for p in self._playbooks.values()
         ]
