@@ -1,0 +1,665 @@
+{
+  "vertical": "financial_services",
+  "scenarios": [
+    {
+      "id": "interest-rate-shock",
+      "name": "Interest Rate Shock",
+      "description": "Central bank announces an unexpected rate hike, impacting lending portfolios, mortgage books, and fixed income holdings. Financial institutions must assess exposure and adjust pricing strategies.",
+      "category": "Macroeconomic Risk",
+      "typical_duration_rounds": [6, 8],
+      "estimated_time_minutes": 25,
+      "environment": "war_room",
+      "agent_roster": [
+        {
+          "role": "Bank CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Leading bank through sudden rate environment shift"
+          }
+        },
+        {
+          "role": "Chief Risk Officer",
+          "archetype_id": "cro",
+          "count": 1,
+          "customization": {
+            "context": "Assessing portfolio duration and interest rate risk exposure"
+          }
+        },
+        {
+          "role": "Treasury Head",
+          "archetype_id": "cfo",
+          "count": 1,
+          "customization": {
+            "context": "Managing funding costs and liquidity position"
+          }
+        },
+        {
+          "role": "Chief Economist",
+          "archetype_id": "strategy_vp",
+          "count": 1,
+          "customization": {
+            "context": "Forecasting rate trajectory and economic impact"
+          }
+        },
+        {
+          "role": "Retail Banking Head",
+          "archetype_id": "operations_head",
+          "count": 1,
+          "customization": {
+            "context": "Managing deposit pricing and mortgage portfolio"
+          }
+        },
+        {
+          "role": "Institutional Investor",
+          "archetype_id": "activist_investor",
+          "count": 1,
+          "customization": {
+            "context": "Evaluating bank equity and debt positions post-rate shock"
+          }
+        }
+      ],
+      "round_structure": [
+        "Rate announcement impact assessment: Portfolio exposure analysis",
+        "Funding cost recalculation: Deposit and wholesale funding impacts",
+        "Asset repricing strategy: Loan book adjustments",
+        "Hedging position review: Derivatives and duration management",
+        "Competitive response: Peer bank pricing moves",
+        "Capital adequacy check: Regulatory capital implications",
+        "Strategic pivot decision: Portfolio rebalancing commitments",
+        "Communication plan: Investor and customer messaging"
+      ],
+      "seed_material_template": {
+        "required": [
+          "Current interest rate exposure and duration gap",
+          "Loan book composition and repricing schedules",
+          "Deposit base maturity and beta analysis",
+          "Hedging portfolio positions and effectiveness"
+        ],
+        "optional": [
+          "Peer bank rate sensitivity disclosures",
+          "Historical rate shock scenario studies",
+          "Customer deposit behavior models",
+          "Central bank forward guidance analysis"
+        ]
+      },
+      "expected_deliverables": [
+        "Interest rate risk mitigation strategy",
+        "Portfolio rebalancing recommendations",
+        "Pricing adjustment plan",
+        "Hedging strategy update"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Executive committee with risk committee oversight",
+        "escalation_trigger": "Capital ratio breach triggers emergency response",
+        "coalition_dynamics": "Treasury efficiency vs. customer retention priorities"
+      }
+    },
+    {
+      "id": "credit-crisis-contagion",
+      "name": "Credit Crisis Contagion",
+      "description": "A major financial institution faces failure, triggering systemic risk concerns. Banks must assess counterparty exposure, liquidity needs, and potential regulatory interventions.",
+      "category": "Systemic Risk",
+      "typical_duration_rounds": [7, 10],
+      "estimated_time_minutes": 35,
+      "environment": "war_room",
+      "agent_roster": [
+        {
+          "role": "Bank CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Navigating systemic crisis with institution at risk"
+          }
+        },
+        {
+          "role": "Chief Risk Officer",
+          "archetype_id": "cro",
+          "count": 1,
+          "customization": {
+            "context": "Assessing counterparty and contagion risks"
+          }
+        },
+        {
+          "role": "CFO",
+          "archetype_id": "cfo",
+          "count": 1,
+          "customization": {
+            "context": "Managing liquidity and funding under stress"
+          }
+        },
+        {
+          "role": "General Counsel",
+          "archetype_id": "general_counsel",
+          "count": 1,
+          "customization": {
+            "context": "Advising on regulatory communications and legal exposure"
+          }
+        },
+        {
+          "role": "Central Bank Liaison",
+          "archetype_id": "regulator",
+          "count": 1,
+          "customization": {
+            "context": "Coordinating systemic stability measures"
+          }
+        },
+        {
+          "role": "Major Depositor",
+          "archetype_id": "board_member",
+          "count": 1,
+          "customization": {
+            "context": "Protecting corporate deposits and payment operations"
+          }
+        }
+      ],
+      "round_structure": [
+        "Crisis briefing: Failed institution exposure assessment",
+        "Counterparty risk analysis: Direct and indirect exposures",
+        "Liquidity stress test: Funding needs under scenarios",
+        "Collateral and margin review: Call risk assessment",
+        "Regulatory coordination: Central bank and supervisor engagement",
+        "Market confidence measures: Communication strategy",
+        "Contingency funding: Emergency liquidity options",
+        "Portfolio defensive moves: Risk reduction actions",
+        "Recovery planning: Post-crisis positioning strategy"
+      ],
+      "seed_material_template": {
+        "required": [
+          "Direct counterparty exposure to failed institution",
+          "Interbank lending and repo positions",
+          "Liquidity coverage and net stable funding ratios",
+          "Collateral and margin arrangements"
+        ],
+        "optional": [
+          "Stress testing results for credit shocks",
+          "Historical crisis contagion patterns",
+          "Central bank emergency facility terms",
+          "Peer bank exposure comparisons"
+        ]
+      },
+      "expected_deliverables": [
+        "Contagion risk assessment report",
+        "Liquidity contingency plan",
+        "Counterparty exposure mitigation strategy",
+        "Crisis communication framework"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Crisis management committee with board notification",
+        "escalation_trigger": "Liquidity stress triggers emergency protocols",
+        "coalition_dynamics": "Prudent risk reduction vs. market confidence preservation"
+      }
+    },
+    {
+      "id": "fintech-disruption-banking",
+      "name": "Fintech Disruption in Banking",
+      "description": "A digital challenger bank enters traditional markets with superior UX, lower fees, and innovative services. Incumbents must decide on competitive response, partnership, or acquisition strategies.",
+      "category": "Competitive Strategy",
+      "typical_duration_rounds": [7, 9],
+      "estimated_time_minutes": 30,
+      "environment": "war_room",
+      "agent_roster": [
+        {
+          "role": "Incumbent Bank CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Defending market share against digital challenger"
+          }
+        },
+        {
+          "role": "Chief Digital Officer",
+          "archetype_id": "strategy_vp",
+          "count": 1,
+          "customization": {
+            "context": "Evaluating digital transformation response options"
+          }
+        },
+        {
+          "role": "CFO",
+          "archetype_id": "cfo",
+          "count": 1,
+          "customization": {
+            "context": "Modeling acquisition vs. organic investment economics"
+          }
+        },
+        {
+          "role": "Retail Banking Head",
+          "archetype_id": "operations_head",
+          "count": 1,
+          "customization": {
+            "context": "Protecting customer base and branch network"
+          }
+        },
+        {
+          "role": "Challenger Bank CEO",
+          "archetype_id": "competitor_exec",
+          "count": 1,
+          "customization": {
+            "context": "Aggressive fintech disruptor seeking market share"
+          }
+        },
+        {
+          "role": "Venture Capital Investor",
+          "archetype_id": "activist_investor",
+          "count": 1,
+          "customization": {
+            "context": "Evaluating fintech investment and bank partnership opportunities"
+          }
+        }
+      ],
+      "round_structure": [
+        "Competitive threat assessment: Challenger capabilities and positioning",
+        "Customer segment analysis: Vulnerability by product and demographic",
+        "Response option evaluation: Build, buy, partner, or ignore",
+        "Digital capabilities gap analysis: Technology and UX assessment",
+        "Financial modeling: Investment requirements and returns",
+        "M&A target evaluation: Acquisition feasibility and pricing",
+        "Partnership structure options: Collaboration models",
+        "Implementation planning: Timeline and resource allocation",
+        "Strategic commitment: Definitive response decision"
+      ],
+      "seed_material_template": {
+        "required": [
+          "Challenger bank product and pricing details",
+          "Customer segment profitability and churn risk analysis",
+          "Current digital platform capabilities assessment",
+          "M&A comparable transactions and valuations"
+        ],
+        "optional": [
+          "Fintech partnership case studies",
+          "Customer digital behavior analytics",
+          "Technology stack architecture comparison",
+          "Regulatory considerations for bank-fintech partnerships"
+        ]
+      },
+      "expected_deliverables": [
+        "Competitive response strategy",
+        "Digital transformation roadmap",
+        "M&A or partnership recommendation",
+        "Investment and resource plan"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Board approval for major M&A or capital commitments",
+        "escalation_trigger": "Accelerated customer loss triggers emergency review",
+        "coalition_dynamics": "Digital transformation advocates vs. traditional banking defenders"
+      }
+    },
+    {
+      "id": "esg-regulatory-tightening",
+      "name": "ESG Regulatory Tightening",
+      "description": "New ESG disclosure requirements and sustainable finance regulations impact investment strategies, lending criteria, and capital allocation. Financial institutions must adapt frameworks and products.",
+      "category": "Regulatory Response",
+      "typical_duration_rounds": [6, 8],
+      "estimated_time_minutes": 25,
+      "environment": "negotiation",
+      "agent_roster": [
+        {
+          "role": "Asset Manager CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Leading asset manager through ESG regulatory transformation"
+          }
+        },
+        {
+          "role": "Chief Sustainability Officer",
+          "archetype_id": "cro",
+          "count": 1,
+          "customization": {
+            "context": "Developing ESG integration and reporting frameworks"
+          }
+        },
+        {
+          "role": "Head of Sustainable Finance",
+          "archetype_id": "strategy_vp",
+          "count": 1,
+          "customization": {
+            "context": "Creating green bond and ESG product offerings"
+          }
+        },
+        {
+          "role": "Compliance Officer",
+          "archetype_id": "general_counsel",
+          "count": 1,
+          "customization": {
+            "context": "Ensuring ESG disclosure compliance and avoiding greenwashing"
+          }
+        },
+        {
+          "role": "ESG Regulator",
+          "archetype_id": "regulator",
+          "count": 1,
+          "customization": {
+            "context": "Enforcing new sustainable finance disclosure requirements"
+          }
+        },
+        {
+          "role": "ESG-focused Institutional Investor",
+          "archetype_id": "board_member",
+          "count": 1,
+          "customization": {
+            "context": "Demanding robust ESG integration and transparency"
+          }
+        }
+      ],
+      "round_structure": [
+        "Regulatory briefing: New ESG disclosure requirements",
+        "Portfolio ESG assessment: Current exposure and gaps",
+        "Taxonomy alignment: Eligible activities classification",
+        "Data and reporting infrastructure: Systems and processes",
+        "Product strategy: Green finance and ESG fund development",
+        "Stewardship approach: Engagement and voting policies",
+        "Transition finance framework: Supporting brown-to-green",
+        "Compliance roadmap: Implementation timeline and milestones"
+      ],
+      "seed_material_template": {
+        "required": [
+          "Full text of new ESG disclosure regulations",
+          "Current portfolio ESG data and coverage",
+          "EU Taxonomy or equivalent classification framework",
+          "Peer ESG integration and product offerings"
+        ],
+        "optional": [
+          "ESG data provider evaluations",
+          "Greenwashing enforcement cases",
+          "Sustainable finance market forecasts",
+          "Climate scenario analysis results"
+        ]
+      },
+      "expected_deliverables": [
+        "ESG integration strategy",
+        "Regulatory compliance roadmap",
+        "Sustainable product development plan",
+        "Stewardship policy framework"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Executive committee with sustainability board oversight",
+        "escalation_trigger": "Regulatory non-compliance findings trigger immediate action",
+        "coalition_dynamics": "Traditional investment managers vs. ESG integration advocates"
+      }
+    },
+    {
+      "id": "digital-currency-impact",
+      "name": "Digital Currency Impact",
+      "description": "Central Bank Digital Currency (CBDC) introduction disrupts payment systems, deposit funding, and transaction banking. Financial institutions must adapt business models and infrastructure.",
+      "category": "Strategic Transformation",
+      "typical_duration_rounds": [7, 9],
+      "estimated_time_minutes": 30,
+      "environment": "war_room",
+      "agent_roster": [
+        {
+          "role": "Bank CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Leading bank through CBDC-induced payment disruption"
+          }
+        },
+        {
+          "role": "Head of Payments",
+          "archetype_id": "operations_head",
+          "count": 1,
+          "customization": {
+            "context": "Managing payment infrastructure transition"
+          }
+        },
+        {
+          "role": "Chief Technology Officer",
+          "archetype_id": "strategy_vp",
+          "count": 1,
+          "customization": {
+            "context": "Integrating CBDC infrastructure and APIs"
+          }
+        },
+        {
+          "role": "Treasury Head",
+          "archetype_id": "cfo",
+          "count": 1,
+          "customization": {
+            "context": "Assessing deposit disintermediation risks"
+          }
+        },
+        {
+          "role": "Central Bank Digital Currency Lead",
+          "archetype_id": "regulator",
+          "count": 1,
+          "customization": {
+            "context": "Overseeing CBDC rollout and bank integration"
+          }
+        },
+        {
+          "role": "Fintech Payment Provider",
+          "archetype_id": "competitor_exec",
+          "count": 1,
+          "customization": {
+            "context": "Leveraging CBDC for payment innovation"
+          }
+        }
+      ],
+      "round_structure": [
+        "CBDC architecture briefing: Technical and operational requirements",
+        "Payment revenue impact: Fee compression analysis",
+        "Deposit funding risk: Disintermediation scenarios",
+        "Technology integration: Infrastructure and API requirements",
+        "New service opportunities: CBDC-enabled products",
+        "Competitive positioning: First-mover vs. fast-follower",
+        "Customer experience design: Wallet and interface strategy",
+        "Implementation roadmap: Phased rollout plan"
+      ],
+      "seed_material_template": {
+        "required": [
+          "CBDC technical specifications and API documentation",
+          "Current payment revenue breakdown by product",
+          "Deposit base composition and stickiness analysis",
+          "Technology infrastructure readiness assessment"
+        ],
+        "optional": [
+          "CBDC pilot program results from other jurisdictions",
+          "Fintech CBDC integration strategies",
+          "Customer payment behavior research",
+          "Cross-border CBDC implications"
+        ]
+      },
+      "expected_deliverables": [
+        "CBDC integration strategy",
+        "Payment business model adaptation plan",
+        "Technology implementation roadmap",
+        "Deposit retention strategy"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Executive committee with technology steering committee",
+        "escalation_trigger": "Major payment volume loss triggers emergency review",
+        "coalition_dynamics": "Traditional payments business vs. digital innovation advocates"
+      }
+    },
+    {
+      "id": "cybersecurity-breach-response",
+      "name": "Cybersecurity Breach Response",
+      "description": "A major data breach at a financial institution exposes customer data and threatens operational integrity. The bank must execute incident response, manage regulatory notifications, and preserve customer trust.",
+      "category": "Operational Risk",
+      "typical_duration_rounds": [6, 8],
+      "estimated_time_minutes": 25,
+      "environment": "war_room",
+      "agent_roster": [
+        {
+          "role": "Bank CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Leading breach response and reputation recovery"
+          }
+        },
+        {
+          "role": "Chief Information Security Officer",
+          "archetype_id": "cro",
+          "count": 1,
+          "customization": {
+            "context": "Containing breach and securing systems"
+          }
+        },
+        {
+          "role": "General Counsel",
+          "archetype_id": "general_counsel",
+          "count": 1,
+          "customization": {
+            "context": "Managing regulatory notifications and legal exposure"
+          }
+        },
+        {
+          "role": "Chief Communications Officer",
+          "archetype_id": "media_stakeholder",
+          "count": 1,
+          "customization": {
+            "context": "Managing external and internal communications"
+          }
+        },
+        {
+          "role": "Head of Customer Service",
+          "archetype_id": "operations_head",
+          "count": 1,
+          "customization": {
+            "context": "Managing customer inquiries and retention"
+          }
+        },
+        {
+          "role": "Cybersecurity Regulator",
+          "archetype_id": "regulator",
+          "count": 1,
+          "customization": {
+            "context": "Overseeing breach response and enforcement"
+          }
+        }
+      ],
+      "round_structure": [
+        "Breach assessment: Scope and severity determination",
+        "Containment actions: Immediate security measures",
+        "Regulatory notification: Compliance with disclosure requirements",
+        "Customer communication: Transparent and timely disclosure",
+        "Forensic investigation: Root cause and attribution analysis",
+        "Remediation planning: System hardening and control improvements",
+        "Customer protection: Credit monitoring and compensation",
+        "Reputation recovery: Trust rebuilding strategy"
+      ],
+      "seed_material_template": {
+        "required": [
+          "Breach forensics and affected data inventory",
+          "Regulatory notification requirements and timelines",
+          "Customer communication templates and channels",
+          "Incident response plan and team contacts"
+        ],
+        "optional": [
+          "Peer breach response case studies",
+          "Cyber insurance coverage details",
+          "Customer sentiment monitoring data",
+          "Threat actor intelligence reports"
+        ]
+      },
+      "expected_deliverables": [
+        "Incident response action plan",
+        "Regulatory notification package",
+        "Customer communication strategy",
+        "Security remediation roadmap"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Crisis management committee with 24/7 operations",
+        "escalation_trigger": "System compromise or data exfiltration triggers emergency protocols",
+        "coalition_dynamics": "Transparent disclosure vs. legal risk minimization tensions"
+      }
+    },
+    {
+      "id": "cross-border-regulatory-divergence",
+      "name": "Cross-Border Regulatory Divergence",
+      "description": "Conflicting regulations across jurisdictions create compliance complexity for global financial institutions. Banks must navigate divergent capital, liquidity, and conduct requirements.",
+      "category": "Regulatory Compliance",
+      "typical_duration_rounds": [7, 9],
+      "estimated_time_minutes": 30,
+      "environment": "negotiation",
+      "agent_roster": [
+        {
+          "role": "Global Bank CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Managing global operations under regulatory fragmentation"
+          }
+        },
+        {
+          "role": "Global Chief Risk Officer",
+          "archetype_id": "cro",
+          "count": 1,
+          "customization": {
+            "context": "Harmonizing risk frameworks across jurisdictions"
+          }
+        },
+        {
+          "role": "Head of Regulatory Affairs",
+          "archetype_id": "general_counsel",
+          "count": 1,
+          "customization": {
+            "context": "Coordinating multi-jurisdictional compliance"
+          }
+        },
+        {
+          "role": "Regional CEO - Americas",
+          "archetype_id": "strategy_vp",
+          "count": 1,
+          "customization": {
+            "context": "Navigating US-specific regulatory requirements"
+          }
+        },
+        {
+          "role": "Regional CEO - EMEA",
+          "archetype_id": "operations_head",
+          "count": 1,
+          "customization": {
+            "context": "Managing EU regulatory complexity"
+          }
+        },
+        {
+          "role": "International Banking Regulator",
+          "archetype_id": "regulator",
+          "count": 1,
+          "customization": {
+            "context": "Coordinating cross-border supervisory approach"
+          }
+        }
+      ],
+      "round_structure": [
+        "Regulatory mapping: Divergence analysis by jurisdiction",
+        "Capital and liquidity requirements: Basel implementation gaps",
+        "Conduct and consumer protection: Conflicting standards",
+        "Data and privacy: Cross-border transfer restrictions",
+        "Structural options: Subsidiary vs. branch models",
+        "Compliance architecture: Global vs. local frameworks",
+        "Regulatory engagement: Coordination and advocacy",
+        "Strategic positioning: Market prioritization decisions"
+      ],
+      "seed_material_template": {
+        "required": [
+          "Regulatory divergence matrix by jurisdiction",
+          "Current legal entity structure and capital allocation",
+          "Basel implementation differences across regions",
+          "Data localization and privacy requirements"
+        ],
+        "optional": [
+          "Regulatory equivalence and recognition agreements",
+          "Peer bank structural responses",
+          "International regulatory coordination forums",
+          "Jurisdiction profitability and strategic importance"
+        ]
+      },
+      "expected_deliverables": [
+        "Regulatory divergence response strategy",
+        "Legal entity structure recommendations",
+        "Compliance framework harmonization plan",
+        "Market prioritization analysis"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Global executive committee with regional representation",
+        "escalation_trigger": "Regulatory enforcement action triggers immediate response",
+        "coalition_dynamics": "Global efficiency vs. local regulatory autonomy tensions"
+      }
+    }
+  ]
+}

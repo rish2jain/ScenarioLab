@@ -1,0 +1,194 @@
+{
+  "vertical": "tech",
+  "scenarios": [
+    {
+      "id": "ai-talent-flight",
+      "name": "AI Talent Flight Crisis",
+      "description": "Key AI researchers and engineers are leaving for competitors and startups, threatening critical machine learning initiatives. The tech company must respond to retain talent and maintain competitive edge.",
+      "category": "Talent & Retention",
+      "typical_duration_rounds": [6, 8],
+      "estimated_time_minutes": 22,
+      "environment": "war_room",
+      "agent_roster": [
+        {
+          "role": "CTO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Responsible for technical strategy and AI roadmap"
+          }
+        },
+        {
+          "role": "VP of AI Research",
+          "archetype_id": "strategy_vp",
+          "count": 1,
+          "customization": {
+            "context": "Leading AI research initiatives and team"
+          }
+        },
+        {
+          "role": "Chief People Officer",
+          "archetype_id": "hr_head",
+          "count": 1,
+          "customization": {
+            "context": "Managing talent retention and compensation"
+          }
+        },
+        {
+          "role": "CFO",
+          "archetype_id": "cfo",
+          "count": 1,
+          "customization": {
+            "context": "Evaluating retention program costs and ROI"
+          }
+        },
+        {
+          "role": "Engineering Director",
+          "archetype_id": "operations_head",
+          "count": 1,
+          "customization": {
+            "context": "Managing AI product delivery and team morale"
+          }
+        },
+        {
+          "role": "Key AI Researcher",
+          "archetype_id": "media_stakeholder",
+          "count": 1,
+          "customization": {
+            "context": "High-value employee considering departure"
+          }
+        }
+      ],
+      "round_structure": [
+        "Talent flight assessment: Departures and at-risk employees",
+        "Competitive landscape: Where talent is going and why",
+        "Compensation benchmarking: Market rates and equity packages",
+        "Non-monetary retention: Culture, mission, and growth opportunities",
+        "Organizational changes: Reporting structures and autonomy",
+        "Acqui-hire options: Startup acquisition considerations",
+        "Communication strategy: Internal and external messaging",
+        "Retention program rollout: Immediate and long-term actions"
+      ],
+      "seed_material_template": {
+        "required": [
+          "List of departed and at-risk AI talent",
+          "Competitor compensation and offer data",
+          "Current AI team org chart and criticality ratings",
+          "AI project roadmap and talent dependencies"
+        ],
+        "optional": [
+          "Exit interview summaries",
+          "Startup acquisition target profiles",
+          "Employee engagement survey results",
+          "Industry talent market analysis"
+        ]
+      },
+      "expected_deliverables": [
+        "Talent retention action plan",
+        "Compensation adjustment recommendations",
+        "Organizational change proposals",
+        "Communication strategy"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Executive team consensus on retention investments",
+        "escalation_trigger": "Critical talent departure triggers emergency response",
+        "coalition_dynamics": "Finance-controlled costs vs. engineering talent needs"
+      }
+    },
+    {
+      "id": "platform-antitrust-response",
+      "name": "Platform Antitrust Response",
+      "description": "Regulatory authorities are investigating the tech platform for anti-competitive practices. The company must develop a response strategy that addresses concerns while preserving business model viability.",
+      "category": "Regulatory & Legal",
+      "typical_duration_rounds": [7, 9],
+      "estimated_time_minutes": 30,
+      "environment": "negotiation",
+      "agent_roster": [
+        {
+          "role": "CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Defending company against regulatory challenges"
+          }
+        },
+        {
+          "role": "General Counsel",
+          "archetype_id": "general_counsel",
+          "count": 1,
+          "customization": {
+            "context": "Leading legal defense and regulatory negotiations"
+          }
+        },
+        {
+          "role": "Chief Strategy Officer",
+          "archetype_id": "strategy_vp",
+          "count": 1,
+          "customization": {
+            "context": "Evaluating structural and business model changes"
+          }
+        },
+        {
+          "role": "Product VP",
+          "archetype_id": "operations_head",
+          "count": 1,
+          "customization": {
+            "context": "Assessing product integration and unbundling options"
+          }
+        },
+        {
+          "role": "Public Policy Head",
+          "archetype_id": "media_stakeholder",
+          "count": 1,
+          "customization": {
+            "context": "Managing government relations and public narrative"
+          }
+        },
+        {
+          "role": "Antitrust Regulator",
+          "archetype_id": "regulator",
+          "count": 1,
+          "customization": {
+            "context": "Enforcing competition law and market fairness"
+          }
+        }
+      ],
+      "round_structure": [
+        "Investigation briefing: Allegations and evidence review",
+        "Legal defense strategy: Arguments and precedents",
+        "Business model analysis: Integration vs. separation options",
+        "Remedy scenario planning: Potential outcomes and responses",
+        "Competitor and market impact assessment",
+        "Settlement negotiation: Terms and concessions",
+        "Structural remedy preparation: Operational separation plans",
+        "Public communication: Narrative and stakeholder management",
+        "Strategic decision: Fight vs. settle commitment"
+      ],
+      "seed_material_template": {
+        "required": [
+          "Regulatory complaint and investigation documents",
+          "Market share and competitive analysis data",
+          "Product integration architecture documentation",
+          "Legal precedent cases and outcomes"
+        ],
+        "optional": [
+          "Competitor complaint submissions",
+          "Economic impact studies",
+          "Political landscape analysis",
+          "International regulatory coordination status"
+        ]
+      },
+      "expected_deliverables": [
+        "Antitrust response strategy",
+        "Legal defense approach",
+        "Structural remedy contingency plans",
+        "Public affairs strategy"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Board-level decision on settlement vs. litigation",
+        "escalation_trigger": "Enforcement action filing triggers emergency response",
+        "coalition_dynamics": "Legal caution vs. aggressive defense advocates"
+      }
+    }
+  ]
+}

@@ -1,0 +1,192 @@
+{
+  "vertical": "fintech",
+  "scenarios": [
+    {
+      "id": "fintech-disruption-banking",
+      "name": "Fintech Disruption in Banking",
+      "description": "A challenger bank with innovative digital services threatens to capture significant market share from established incumbent banks. Incumbents must decide whether to acquire, partner, compete directly, or pivot their strategy.",
+      "category": "Competitive Strategy",
+      "typical_duration_rounds": [6, 8],
+      "estimated_time_minutes": 25,
+      "environment": "war_room",
+      "agent_roster": [
+        {
+          "role": "Incumbent Bank CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Leading a traditional bank facing digital disruption"
+          }
+        },
+        {
+          "role": "Incumbent Bank CFO",
+          "archetype_id": "cfo",
+          "count": 1,
+          "customization": {
+            "context": "Evaluating acquisition and investment scenarios"
+          }
+        },
+        {
+          "role": "Challenger Bank CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Aggressive fintech disruptor seeking market share"
+          }
+        },
+        {
+          "role": "Chief Digital Officer",
+          "archetype_id": "strategy_vp",
+          "count": 1,
+          "customization": {
+            "context": "Championing digital transformation initiatives"
+          }
+        },
+        {
+          "role": "Regulatory Affairs Head",
+          "archetype_id": "general_counsel",
+          "count": 1,
+          "customization": {
+            "context": "Navigating banking regulations and compliance"
+          }
+        },
+        {
+          "role": "Private Equity Investor",
+          "archetype_id": "activist_investor",
+          "count": 1,
+          "customization": {
+            "context": "Evaluating investment opportunities in the sector"
+          }
+        }
+      ],
+      "round_structure": [
+        "Market assessment: Current competitive position analysis",
+        "Strategic options presentation: M&A, partnership, or organic growth",
+        "Financial modeling: Cost-benefit analysis of each approach",
+        "Regulatory review: Compliance implications of each strategy",
+        "Technology evaluation: Digital capabilities assessment",
+        "Investor perspective: shareholder value implications",
+        "Strategic decision: Commitment to chosen path",
+        "Implementation planning: Resource allocation and timeline"
+      ],
+      "seed_material_template": {
+        "required": [
+          "Market share data and customer demographics",
+          "Financial projections for each strategic option",
+          "Technology capability assessment",
+          "Regulatory landscape overview"
+        ],
+        "optional": [
+          "Competitor product feature comparison",
+          "Customer satisfaction survey data",
+          "Technology stack architecture details",
+          "M&A precedents in the sector"
+        ]
+      },
+      "expected_deliverables": [
+        "Strategic recommendation with rationale",
+        "Financial impact analysis",
+        "Implementation roadmap",
+        "Risk mitigation plan"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Board approval required for major strategic shifts",
+        "escalation_trigger": "Regulatory concerns trigger compliance review",
+        "coalition_dynamics": "CEO-CFO alliance vs. Digital transformation advocates"
+      }
+    },
+    {
+      "id": "digital-payment-regulation",
+      "name": "Digital Payment Regulation Impact",
+      "description": "New payment regulations (similar to PSD2/Open Banking) mandate data sharing and interoperability. Payment providers must adapt business models while maintaining competitive advantage.",
+      "category": "Regulatory Response",
+      "typical_duration_rounds": [5, 7],
+      "estimated_time_minutes": 20,
+      "environment": "negotiation",
+      "agent_roster": [
+        {
+          "role": "Payment Platform CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Leading a major digital payment platform"
+          }
+        },
+        {
+          "role": "Chief Compliance Officer",
+          "archetype_id": "general_counsel",
+          "count": 1,
+          "customization": {
+            "context": "Ensuring regulatory compliance"
+          }
+        },
+        {
+          "role": "Product Strategy VP",
+          "archetype_id": "strategy_vp",
+          "count": 1,
+          "customization": {
+            "context": "Adapting product roadmap to regulatory changes"
+          }
+        },
+        {
+          "role": "Data Privacy Officer",
+          "archetype_id": "cro",
+          "count": 1,
+          "customization": {
+            "context": "Protecting customer data while enabling sharing"
+          }
+        },
+        {
+          "role": "Banking Partner Representative",
+          "archetype_id": "board_member",
+          "count": 1,
+          "customization": {
+            "context": "Representing traditional banking partner interests"
+          }
+        },
+        {
+          "role": "Regulator",
+          "archetype_id": "regulator",
+          "count": 1,
+          "customization": {
+            "context": "Enforcing new payment regulations"
+          }
+        }
+      ],
+      "round_structure": [
+        "Regulatory briefing: Understanding new requirements",
+        "Impact assessment: Business model implications",
+        "Technical architecture review: Compliance implementation",
+        "Partner negotiation: Data sharing agreements",
+        "Competitive analysis: Market positioning post-regulation",
+        "Compliance roadmap: Implementation timeline",
+        "Strategic adaptation: New revenue model finalization"
+      ],
+      "seed_material_template": {
+        "required": [
+          "Full text of new payment regulations",
+          "Current business model and revenue streams",
+          "Technical architecture documentation",
+          "Partner agreement frameworks"
+        ],
+        "optional": [
+          "Competitor responses to similar regulations",
+          "Customer data usage analytics",
+          "Implementation cost estimates",
+          "Legal opinion on regulatory interpretation"
+        ]
+      },
+      "expected_deliverables": [
+        "Compliance implementation plan",
+        "Revised business model proposal",
+        "Partner negotiation strategy",
+        "Risk assessment and mitigations"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Executive team consensus with regulatory approval",
+        "escalation_trigger": "Regulatory non-compliance triggers immediate action",
+        "coalition_dynamics": "Compliance officers vs. business growth advocates"
+      }
+    }
+  ]
+}

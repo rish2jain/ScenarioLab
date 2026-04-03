@@ -1,0 +1,196 @@
+{
+  "vertical": "oil_gas",
+  "scenarios": [
+    {
+      "id": "esg-regulatory-tightening",
+      "name": "ESG Regulatory Tightening",
+      "description": "New environmental regulations threaten to significantly increase operational costs and limit extraction permits. The energy company must balance compliance, profitability, and stakeholder expectations.",
+      "category": "Regulatory Compliance",
+      "typical_duration_rounds": [7, 9],
+      "estimated_time_minutes": 28,
+      "environment": "boardroom",
+      "agent_roster": [
+        {
+          "role": "CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Navigating energy transition while maintaining profitability"
+          }
+        },
+        {
+          "role": "Chief Sustainability Officer",
+          "archetype_id": "cro",
+          "count": 1,
+          "customization": {
+            "context": "Leading ESG strategy and environmental compliance"
+          }
+        },
+        {
+          "role": "Operations Head",
+          "archetype_id": "operations_head",
+          "count": 1,
+          "customization": {
+            "context": "Managing field operations and extraction efficiency"
+          }
+        },
+        {
+          "role": "CFO",
+          "archetype_id": "cfo",
+          "count": 1,
+          "customization": {
+            "context": "Modeling compliance costs and capital requirements"
+          }
+        },
+        {
+          "role": "General Counsel",
+          "archetype_id": "general_counsel",
+          "count": 1,
+          "customization": {
+            "context": "Advising on regulatory compliance and legal exposure"
+          }
+        },
+        {
+          "role": "ESG Investor",
+          "archetype_id": "activist_investor",
+          "count": 1,
+          "customization": {
+            "context": "Pushing for accelerated decarbonization commitments"
+          }
+        }
+      ],
+      "round_structure": [
+        "Regulatory landscape briefing: New requirements overview",
+        "Compliance cost assessment: Financial impact modeling",
+        "Operational impact analysis: Field operations constraints",
+        "Technology solutions: Carbon capture and efficiency improvements",
+        "Asset portfolio review: Stranded asset risk assessment",
+        "Stakeholder mapping: Investor and community expectations",
+        "Competitive positioning: Peer company responses",
+        "Strategic options: Compliance vs. transformation paths",
+        "Capital allocation: Investment prioritization decision"
+      ],
+      "seed_material_template": {
+        "required": [
+          "Full text of new environmental regulations",
+          "Current emissions baseline and compliance status",
+          "Asset-level emissions and production data",
+          "Compliance technology cost estimates"
+        ],
+        "optional": [
+          "Peer company ESG commitments and actions",
+          "Investor ESG scoring methodologies",
+          "Community and NGO position statements",
+          "Carbon credit market pricing scenarios"
+        ]
+      },
+      "expected_deliverables": [
+        "ESG compliance strategy",
+        "Capital expenditure plan",
+        "Stakeholder communication approach",
+        "Asset portfolio optimization recommendations"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Board approval for major capital commitments",
+        "escalation_trigger": "Regulatory violation risks trigger emergency review",
+        "coalition_dynamics": "Traditional operations vs. sustainability advocates"
+      }
+    },
+    {
+      "id": "energy-transition-strategy",
+      "name": "Energy Transition Strategy",
+      "description": "With accelerating global energy transition, the oil & gas company must decide how aggressively to pivot toward renewables while managing legacy hydrocarbon assets.",
+      "category": "Strategic Transformation",
+      "typical_duration_rounds": [8, 10],
+      "estimated_time_minutes": 35,
+      "environment": "war_room",
+      "agent_roster": [
+        {
+          "role": "CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Leading company through fundamental transformation"
+          }
+        },
+        {
+          "role": "Strategy VP",
+          "archetype_id": "strategy_vp",
+          "count": 1,
+          "customization": {
+            "context": "Developing new energy business strategies"
+          }
+        },
+        {
+          "role": "Upstream Operations Head",
+          "archetype_id": "operations_head",
+          "count": 1,
+          "customization": {
+            "context": "Managing traditional oil & gas operations"
+          }
+        },
+        {
+          "role": "New Energy VP",
+          "archetype_id": "strategy_vp",
+          "count": 1,
+          "customization": {
+            "context": "Building renewable energy and low-carbon businesses"
+          }
+        },
+        {
+          "role": "CFO",
+          "archetype_id": "cfo",
+          "count": 1,
+          "customization": {
+            "context": "Balancing dividend commitments with transformation investment"
+          }
+        },
+        {
+          "role": "Climate Activist Board Member",
+          "archetype_id": "activist_investor",
+          "count": 1,
+          "customization": {
+            "context": "Pushing for faster decarbonization and transition"
+          }
+        }
+      ],
+      "round_structure": [
+        "Market outlook: Energy transition scenarios and timing",
+        "Portfolio assessment: Core vs. non-core asset classification",
+        "Renewable opportunities: Market entry options analysis",
+        "Capital allocation: Traditional vs. new energy investment split",
+        "Competitive benchmarking: Peer transformation strategies",
+        "Technology partnerships: Collaboration and acquisition targets",
+        "Talent and capabilities: Organizational transformation needs",
+        "Investor messaging: Communicating transition strategy",
+        "Implementation roadmap: Phased transition plan",
+        "Strategic commitment: Final transformation decision"
+      ],
+      "seed_material_template": {
+        "required": [
+          "Energy transition scenario forecasts",
+          "Current asset portfolio valuation",
+          "Renewable energy market analysis",
+          "Competitor transition strategy summaries"
+        ],
+        "optional": [
+          "Technology partnership opportunities",
+          "Green financing and subsidy landscape",
+          "Employee transition and retraining plans",
+          "Carbon pricing and policy forecasts"
+        ]
+      },
+      "expected_deliverables": [
+        "Energy transition strategy",
+        "Capital allocation framework",
+        "Asset divestiture/pivot plan",
+        "Renewable energy entry roadmap"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Board resolution on strategic direction",
+        "escalation_trigger": "Major asset impairment or opportunity triggers review",
+        "coalition_dynamics": "Traditional energy vs. new energy business tensions"
+      }
+    }
+  ]
+}

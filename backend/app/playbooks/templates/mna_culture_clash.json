@@ -1,0 +1,99 @@
+{
+  "id": "mna-culture-clash",
+  "name": "M&A Culture Clash Simulation",
+  "description": "Pre-deal cultural integration assessment simulating the collision of two organizational cultures during a merger or acquisition. Tests compatibility of decision-making styles, communication norms, and risk appetites.",
+  "category": "M&A",
+  "typical_duration_rounds": [10, 15],
+  "estimated_time_minutes": 25,
+  "environment": "integration",
+  "agent_roster": [
+    {
+      "role": "Acquirer CEO",
+      "archetype_id": "ceo",
+      "count": 1,
+      "customization": {
+        "context": "Leading aggressive acquisition to expand market position"
+      }
+    },
+    {
+      "role": "Target CEO",
+      "archetype_id": "ceo",
+      "count": 1,
+      "customization": {
+        "context": "Defending company legacy and protecting employee interests"
+      }
+    },
+    {
+      "role": "CFO",
+      "archetype_id": "cfo",
+      "count": 1,
+      "customization": {
+        "context": "Analyzing synergy targets and integration costs"
+      }
+    },
+    {
+      "role": "HR Head",
+      "archetype_id": "hr_head",
+      "count": 1,
+      "customization": {
+        "context": "Assessing cultural fit and talent retention risks"
+      }
+    },
+    {
+      "role": "Strategy VP",
+      "archetype_id": "strategy_vp",
+      "count": 1,
+      "customization": {
+        "context": "Evaluating strategic rationale and integration roadmap"
+      }
+    },
+    {
+      "role": "Integration PMO",
+      "archetype_id": "operations_head",
+      "count": 1,
+      "customization": {
+        "context": "Managing day-to-day integration execution and timeline"
+      }
+    }
+  ],
+  "round_structure": [
+    "Position statements: Each stakeholder articulates their primary concerns and non-negotiables",
+    "Cultural values mapping: Identify alignment and friction points between organizational cultures",
+    "Synergy pressure-test: CFO challenges revenue and cost synergy assumptions",
+    "Retention risk analysis: HR identifies key talent flight risks and mitigation strategies",
+    "Integration governance: Define decision rights and escalation protocols",
+    "Communication cascade: Plan internal and external messaging strategy",
+    "Go/no-go assessment: Final recommendation on deal proceed with conditions"
+  ],
+  "seed_material_template": {
+    "required": [
+      "Deal thesis and strategic rationale",
+      "Organizational charts for both companies",
+      "Cultural assessment surveys or interviews",
+      "Synergy target breakdown (revenue and cost)"
+    ],
+    "optional": [
+      "Due diligence findings summary",
+      "Integration timeline and key milestones",
+      "Historical M&A integration lessons learned",
+      "Compensation and benefits comparison"
+    ]
+  },
+  "expected_deliverables": [
+    "Cultural alignment heatmap highlighting friction zones",
+    "Integration risk register with mitigation owners",
+    "Key talent retention plan with incentives",
+    "Decision rights matrix for post-close governance",
+    "Communication playbook for internal stakeholders"
+  ],
+  "environment_config": {
+    "visibility_rules": {
+      "information_asymmetry": true,
+      "private_concerns": "Each stakeholder has hidden agenda items revealed in private messages",
+      "public_commitments": "All formal positions are visible to all participants"
+    },
+    "decision_mechanism": "Priority matrix scoring with CFO veto on budget exceedance",
+    "escalation_trigger": "If cultural conflict score exceeds threshold, mandatory mediation round",
+    "coalition_dynamics": "CEO coalition bonus when both CEOs align; HR-Strategy coalition for talent retention"
+  }
+}

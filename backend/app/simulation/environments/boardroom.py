@@ -1,0 +1,260 @@
+"""Boardroom environment for formal decision-making simulations."""
+
+import logging
+
+from app.simulation.agent import SimulationAgent
+from app.simulation.environments.base import BaseEnvironment
+from app.simulation.models import EnvironmentType, RoundState
+from app.simulation.turn_rules import TurnManager
+from app.simulation.visibility import VisibilityManager
+
+logger = logging.getLogger(__name__)
+
+
+class BoardroomEnvironment(BaseEnvironment):
+    """
+    Boardroom environment for formal decision-making.
+
+    Phases:
+    - presentation: CEO/proposer presents
+    - qa: Others ask clarifying questions (strict rotation)
+    - objection: Any agent can raise objections
+    - rebuttal: Proposer addresses objections
+    - vote: Majority vote (51%), Chair tie-breaker, CEO override option
+    """
+
+    env_type = EnvironmentType.BOARDROOM
+    phases = ["presentation", "qa", "objection", "rebuttal", "vote"]
+
+    def __init__(self):
+        super().__init__()
+        self._proposer_id: str | None = None
+
+    async def run_phase(
+        self,
+        phase: str,
+        round_number: int,
+        agents: list[SimulationAgent],
+        visibility: VisibilityManager,
+        turn_manager: TurnManager,
+        round_state: RoundState,
+    ) -> RoundState:
+        """Execute a single phase of a boardroom round."""
+        logger.info(f"Running boardroom phase: {phase} (round {round_number})")
+
+        # Get speaking order
+        speaking_order = turn_manager.get_speaking_order(phase, round_number)
+        participants = turn_manager.get_phase_participants(phase)
+
+        if phase == "presentation":
+            await self._run_presentation_phase(
+                agents, speaking_order, round_state, visibility
+            )
+        elif phase == "qa":
+            await self._run_qa_phase(
+                agents, speaking_order, participants, round_state, visibility
+            )
+        elif phase == "objection":
+            await self._run_objection_phase(
+                agents, speaking_order, round_state, visibility
+            )
+        elif phase == "rebuttal":
+            await self._run_rebuttal_phase(
+                agents, speaking_order, round_state, visibility
+            )
+        elif phase == "vote":
+            await self._run_vote_phase(agents, round_state)
+
+        round_state.phase = phase
+        round_state.phase_complete = True
+
+        return round_state
+
+    async def _run_presentation_phase(
+        self,
+        agents: list[SimulationAgent],
+        speaking_order: list[str],
+        round_state: RoundState,
+        visibility: VisibilityManager,
+    ):
+        """Run the presentation phase - proposer presents."""
+        # Find the proposer (CEO or first agent)
+        proposer = None
+        for agent in agents:
+            if agent.archetype.id == "ceo":
+                proposer = agent
+                break
+
+        if not proposer and agents:
+            proposer = agents[0]
+
+        if proposer:
+            self._proposer_id = proposer.id
+            message = await self._process_agent_turn(
+                agent=proposer,
+                phase="presentation",
+                round_number=round_state.round_number,
+                visibility=visibility,
+                round_state=round_state,
+                context="You are presenting a proposal to the board.",
+            )
+            if message:
+                round_state.messages.append(message)
+
+    async def _run_qa_phase(
+        self,
+        agents: list[SimulationAgent],
+        speaking_order: list[str],
+        participants: list[str],
+        round_state: RoundState,
+        visibility: VisibilityManager,
+    ):
+        """Run the Q&A phase - strict rotation."""
+        agent_map = {a.id: a for a in agents}
+
+        for agent_id in speaking_order:
+            if agent_id not in participants:
+                continue
+            if agent_id == self._proposer_id:
+                continue  # Proposer doesn't ask questions
+
+            agent = agent_map.get(agent_id)
+            if not agent:
+                continue
+
+            message = await self._process_agent_turn(
+                agent=agent,
+                phase="qa",
+                round_number=round_state.round_number,
+                visibility=visibility,
+                round_state=round_state,
+                context="Ask a clarifying question about the proposal.",
+            )
+            if message:
+                round_state.messages.append(message)
+
+    async def _run_objection_phase(
+        self,
+        agents: list[SimulationAgent],
+        speaking_order: list[str],
+        round_state: RoundState,
+        visibility: VisibilityManager,
+    ):
+        """Run the objection phase - any agent can raise objections."""
+        agent_map = {a.id: a for a in agents}
+
+        for agent_id in speaking_order:
+            agent = agent_map.get(agent_id)
+            if not agent:
+                continue
+
+            message = await self._process_agent_turn(
+                agent=agent,
+                phase="objection",
+                round_number=round_state.round_number,
+                visibility=visibility,
+                round_state=round_state,
+                context="Raise any objections or concerns about the proposal.",
+            )
+            if message:
+                round_state.messages.append(message)
+
+    async def _run_rebuttal_phase(
+        self,
+        agents: list[SimulationAgent],
+        speaking_order: list[str],
+        round_state: RoundState,
+        visibility: VisibilityManager,
+    ):
+        """Run the rebuttal phase - proposer addresses objections."""
+        if not self._proposer_id:
+            return
+
+        agent_map = {a.id: a for a in agents}
+        proposer = agent_map.get(self._proposer_id)
+
+        if proposer:
+            message = await self._process_agent_turn(
+                agent=proposer,
+                phase="rebuttal",
+                round_number=round_state.round_number,
+                visibility=visibility,
+                round_state=round_state,
+                context="Address the objections raised against your proposal.",
+            )
+            if message:
+                round_state.messages.append(message)
+
+    async def _run_vote_phase(
+        self,
+        agents: list[SimulationAgent],
+        round_state: RoundState,
+    ):
+        """Run the voting phase."""
+        # Get proposal text from presentation
+        proposal = "the proposal"
+        for msg in round_state.messages:
+            if msg.phase == "presentation":
+                proposal = msg.content[:200]  # First 200 chars
+                break
+
+        votes = await self._run_voting_phase(proposal, agents, round_state)
+        vote_result = self._count_votes(votes)
+
+        round_state.decisions.append({
+            "type": "vote",
+            "result": vote_result,
+            "votes": votes,
+        })
+
+        logger.info(f"Vote result: {vote_result['result']}")
+
+    async def evaluate_round(self, round_state: RoundState) -> dict:
+        """Evaluate boardroom round outcomes."""
+        evaluation = {
+            "round_number": round_state.round_number,
+            "phase": round_state.phase,
+            "message_count": len(round_state.messages),
+            "decisions": [],
+        }
+
+        # Check for vote decision
+        for decision in round_state.decisions:
+            if decision.get("type") == "vote":
+                evaluation["vote_result"] = decision["result"]
+                evaluation["decisions"].append(decision)
+
+        # Determine if proposal passed
+        if "vote_result" in evaluation:
+            result = evaluation["vote_result"]
+            if result.get("result") == "passed":
+                evaluation["outcome"] = "proposal_accepted"
+            elif result.get("result") == "rejected":
+                evaluation["outcome"] = "proposal_rejected"
+            else:
+                evaluation["outcome"] = "tie_or_inconclusive"
+
+        return evaluation
+
+    def get_phase_instruction(self, phase: str, agent_role: str) -> str:
+        """Get phase-specific instruction for an agent."""
+        instructions = {
+            "presentation": (
+                "Present your proposal clearly and persuasively. "
+                "Explain the strategic rationale and expected outcomes."
+            ),
+            "qa": (
+                "Ask a clarifying question about the proposal. "
+                "Focus on understanding implications and risks."
+            ),
+            "objection": (
+                "Raise any objections or concerns about the proposal. "
+                "Be specific about your concerns."
+            ),
+            "rebuttal": (
+                "Address the objections raised. Provide counter-arguments "
+                "or acknowledge valid concerns."
+            ),
+            "vote": "Cast your vote on the proposal.",
+        }
+        return instructions.get(phase, "Participate in the discussion.")

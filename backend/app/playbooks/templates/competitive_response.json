@@ -1,0 +1,101 @@
+{
+  "id": "competitive-response",
+  "name": "Competitive Response War Game",
+  "description": "Market scenario simulation where competitors make aggressive moves requiring rapid strategic response. Tests competitive intelligence, scenario planning, and cross-functional alignment under time pressure.",
+  "category": "Strategy",
+  "typical_duration_rounds": [8, 10],
+  "estimated_time_minutes": 18,
+  "environment": "market",
+  "agent_roster": [
+    {
+      "role": "CEO",
+      "archetype_id": "ceo",
+      "count": 1,
+      "customization": {
+        "context": "Setting competitive strategy and resource allocation"
+      }
+    },
+    {
+      "role": "Strategy VP",
+      "archetype_id": "strategy_vp",
+      "count": 1,
+      "customization": {
+        "context": "Analyzing competitive moves and developing counter-strategies"
+      }
+    },
+    {
+      "role": "Competitor Executive",
+      "archetype_id": "competitor_exec",
+      "count": 1,
+      "customization": {
+        "context": "Leading aggressive competitive moves to gain market share"
+      }
+    },
+    {
+      "role": "Market Analysts",
+      "archetype_id": "competitor_exec",
+      "count": 1,
+      "customization": {
+        "context": "Providing competitive intelligence and market insights"
+      }
+    },
+    {
+      "role": "Operations Head",
+      "archetype_id": "operations_head",
+      "count": 1,
+      "customization": {
+        "context": "Assessing operational capacity for competitive response"
+      }
+    },
+    {
+      "role": "CFO",
+      "archetype_id": "cfo",
+      "count": 1,
+      "customization": {
+        "context": "Evaluating financial impact and investment requirements"
+      }
+    }
+  ],
+  "round_structure": [
+    "Market intelligence briefing: Analysts present competitive threat assessment",
+    "Competitor move announcement: Competitor Executive reveals strategic initiative",
+    "Initial response options: Strategy VP presents counter-move alternatives",
+    "Financial impact modeling: CFO analyzes cost and revenue implications",
+    "Operational feasibility check: Operations Head assesses execution capacity",
+    "Strategic decision: CEO selects response strategy and resource commitment",
+    "Competitor reaction prediction: Anticipate competitor counter-moves",
+    "Implementation kickoff: Define immediate actions and accountability"
+  ],
+  "seed_material_template": {
+    "required": [
+      "Competitive landscape analysis",
+      "Market share and growth data",
+      "Competitor financial and strategic profile",
+      "Internal capabilities assessment"
+    ],
+    "optional": [
+      "Historical competitive response case studies",
+      "Customer switching cost analysis",
+      "Pricing elasticity data",
+      "Supply chain and capacity constraints"
+    ]
+  },
+  "expected_deliverables": [
+    "Competitive response strategy with scenarios",
+    "Financial impact model and ROI analysis",
+    "Operational execution plan with milestones",
+    "Risk assessment and mitigation strategies",
+    "Board/investor communication summary"
+  ],
+  "environment_config": {
+    "visibility_rules": {
+      "information_asymmetry": true,
+      "competitor_intel": "Competitor has private information about their capabilities",
+      "market_uncertainty": "Some market dynamics are revealed progressively"
+    },
+    "decision_mechanism": "Fast-cycle CEO decision with CFO budget constraint",
+    "time_pressure": "Rounds have strict time limits simulating market urgency",
+    "escalation_trigger": "If response cost exceeds threshold, board notification required",
+    "coalition_dynamics": "CEO-Strategy coalition for aggressive moves; CFO-Operations for measured response"
+  }
+}

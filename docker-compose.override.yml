@@ -1,0 +1,14 @@
+# Development overrides — automatically merged by docker compose
+# Use `docker compose up` for dev, `docker compose -f docker-compose.yml up` for prod-like
+
+services:
+  backend:
+    volumes:
+      - ./backend:/app
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 5001 --reload
+
+  frontend:
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev

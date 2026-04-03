@@ -1,0 +1,103 @@
+{
+  "id": "boardroom-rehearsal",
+  "name": "Boardroom Decision Rehearsal",
+  "description": "High-stakes board meeting simulation for major strategic decisions. Tests management's ability to present, defend, and gain approval for significant initiatives while addressing diverse director perspectives.",
+  "category": "Governance",
+  "typical_duration_rounds": [6, 10],
+  "estimated_time_minutes": 22,
+  "environment": "boardroom",
+  "agent_roster": [
+    {
+      "role": "Board Chair",
+      "archetype_id": "board_member",
+      "count": 1,
+      "customization": {
+        "governance_style": "chair",
+        "context": "Facilitating board discussion and managing decision process"
+      }
+    },
+    {
+      "role": "Independent Director",
+      "archetype_id": "board_member",
+      "count": 2,
+      "customization": {
+        "governance_style": "independent",
+        "context": "Providing objective oversight and challenging assumptions"
+      }
+    },
+    {
+      "role": "Activist Director",
+      "archetype_id": "activist_investor",
+      "count": 1,
+      "customization": {
+        "context": "Pushing for immediate value creation and strategic changes"
+      }
+    },
+    {
+      "role": "CEO",
+      "archetype_id": "ceo",
+      "count": 1,
+      "customization": {
+        "context": "Presenting proposal and defending management recommendations"
+      }
+    },
+    {
+      "role": "CFO",
+      "archetype_id": "cfo",
+      "count": 1,
+      "customization": {
+        "context": "Supporting financial analysis and risk assessment"
+      }
+    },
+    {
+      "role": "General Counsel",
+      "archetype_id": "general_counsel",
+      "count": 1,
+      "customization": {
+        "context": "Advising on legal and governance implications"
+      }
+    }
+  ],
+  "round_structure": [
+    "Management presentation: CEO and CFO present the proposal with supporting analysis",
+    "Clarifying questions: Directors seek additional information and context",
+    "Independent analysis: Directors share perspectives and concerns",
+    "Activist challenge: Activist Director pushes for modifications or alternatives",
+    "Risk and governance review: General Counsel addresses legal and fiduciary issues",
+    "Deliberation and debate: Open discussion of merits and concerns",
+    "Chair synthesis: Board Chair summarizes key points and areas of agreement",
+    "Formal motion and vote: Board votes on proposal with conditions or amendments"
+  ],
+  "seed_material_template": {
+    "required": [
+      "Board proposal and supporting materials",
+      "Financial projections and sensitivity analysis",
+      "Risk assessment and mitigation plans",
+      "Governance and legal review memo"
+    ],
+    "optional": [
+      "Board member background and priority profiles",
+      "Shareholder sentiment analysis",
+      "Competitor and market context",
+      "Historical board decision precedents"
+    ]
+  },
+  "expected_deliverables": [
+    "Board resolution with approval conditions",
+    "Action item list with owners and deadlines",
+    "Risk mitigation commitments from management",
+    "Communication plan for shareholders and market",
+    "Follow-up reporting and monitoring framework"
+  ],
+  "environment_config": {
+    "visibility_rules": {
+      "information_asymmetry": true,
+      "director_priors": "Each director has private concerns based on their background",
+      "management_intel": "Management has additional operational details not in board pack"
+    },
+    "decision_mechanism": "Formal board vote requiring majority; Chair breaks ties",
+    "governance_constraints": "Activist Director can force recorded dissent; Independent Directors can request special review",
+    "escalation_trigger": "If legal risk exceeds threshold, mandatory Counsel review before vote",
+    "coalition_dynamics": "Independent Directors coalition for balanced view; CEO-CFO for management position"
+  }
+}

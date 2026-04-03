@@ -1,0 +1,665 @@
+{
+  "vertical": "political",
+  "scenarios": [
+    {
+      "id": "election-impact-assessment",
+      "name": "Election Impact Assessment",
+      "description": "A major election outcome shifts the political landscape, threatening corporate strategy assumptions. Organizations must assess policy implications and adapt strategic plans.",
+      "category": "Political Risk",
+      "typical_duration_rounds": [6, 8],
+      "estimated_time_minutes": 25,
+      "environment": "war_room",
+      "agent_roster": [
+        {
+          "role": "CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Leading corporate response to political transition"
+          }
+        },
+        {
+          "role": "Chief Strategy Officer",
+          "archetype_id": "strategy_vp",
+          "count": 1,
+          "customization": {
+            "context": "Reassessing strategic assumptions and scenarios"
+          }
+        },
+        {
+          "role": "Government Affairs Director",
+          "archetype_id": "lobbyist",
+          "count": 1,
+          "customization": {
+            "context": "Engaging with new administration and policy priorities"
+          }
+        },
+        {
+          "role": "Policymaker - Transition Team",
+          "archetype_id": "policymaker",
+          "count": 1,
+          "customization": {
+            "context": "Advising on incoming administration policy agenda"
+          }
+        },
+        {
+          "role": "General Counsel",
+          "archetype_id": "general_counsel",
+          "count": 1,
+          "customization": {
+            "context": "Assessing regulatory and legal environment changes"
+          }
+        },
+        {
+          "role": "NGO Policy Advocate",
+          "archetype_id": "ngo_representative",
+          "count": 1,
+          "customization": {
+            "context": "Advocating for social and environmental policy priorities"
+          }
+        }
+      ],
+      "round_structure": [
+        "Election outcome briefing: Policy platform analysis",
+        "Sector impact assessment: Industry-specific implications",
+        "Regulatory forecast: Agency leadership and agenda priorities",
+        "Tax and fiscal policy: Budget and legislative priorities",
+        "Trade and international: Foreign policy implications",
+        "Stakeholder mapping: New power centers and influencers",
+        "Scenario planning: Best, base, and worst case outcomes",
+        "Strategic adaptation: Corporate positioning and response"
+      ],
+      "seed_material_template": {
+        "required": [
+          "Election results and government composition",
+          "Campaign policy platform commitments",
+          "Sector regulatory exposure analysis",
+          "Key appointee backgrounds and priorities"
+        ],
+        "optional": [
+          "Historical policy implementation patterns",
+          "Legislative coalition analysis",
+          "State-level political dynamics",
+          "International reaction assessments"
+        ]
+      },
+      "expected_deliverables": [
+        "Election impact assessment report",
+        "Policy scenario analysis",
+        "Government engagement strategy",
+        "Strategic adaptation roadmap"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Executive committee with government affairs input",
+        "escalation_trigger": "Major policy threat triggers emergency response",
+        "coalition_dynamics": "Proactive engagement vs. wait-and-see factions"
+      }
+    },
+    {
+      "id": "trade-war-escalation",
+      "name": "Trade War Escalation",
+      "description": "Tariff escalation between major economies disrupts supply chains, market access, and cost structures. Companies must evaluate sourcing alternatives and market strategies.",
+      "category": "Geopolitical Risk",
+      "typical_duration_rounds": [7, 9],
+      "estimated_time_minutes": 30,
+      "environment": "war_room",
+      "agent_roster": [
+        {
+          "role": "CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Navigating trade conflict impact on global operations"
+          }
+        },
+        {
+          "role": "Chief Supply Chain Officer",
+          "archetype_id": "operations_head",
+          "count": 1,
+          "customization": {
+            "context": "Managing sourcing disruption and logistics challenges"
+          }
+        },
+        {
+          "role": "CFO",
+          "archetype_id": "cfo",
+          "count": 1,
+          "customization": {
+            "context": "Modeling tariff costs and margin impact"
+          }
+        },
+        {
+          "role": "Trade Policy Advisor",
+          "archetype_id": "lobbyist",
+          "count": 1,
+          "customization": {
+            "context": "Advocating for tariff relief and trade solutions"
+          }
+        },
+        {
+          "role": "Foreign Diplomat - Trade",
+          "archetype_id": "foreign_diplomat",
+          "count": 1,
+          "customization": {
+            "context": "Facilitating bilateral trade discussions"
+          }
+        },
+        {
+          "role": "Regional Head - Affected Market",
+          "archetype_id": "strategy_vp",
+          "count": 1,
+          "customization": {
+            "context": "Managing market access and local operations"
+          }
+        }
+      ],
+      "round_structure": [
+        "Tariff impact assessment: Product and market exposure",
+        "Supply chain vulnerability: Concentration and dependency analysis",
+        "Sourcing alternatives: Supplier diversification options",
+        "Pricing strategy: Cost pass-through vs. absorption",
+        "Market access evaluation: Revenue at risk by geography",
+        "Government engagement: Exclusion requests and advocacy",
+        "Operational restructuring: Nearshoring and reshoring",
+        "Strategic positioning: Long-term trade architecture"
+      ],
+      "seed_material_template": {
+        "required": [
+          "Tariff schedules and product classifications",
+          "Supply chain mapping and country of origin data",
+          "Revenue exposure by affected market",
+          "Alternative supplier capabilities and costs"
+        ],
+        "optional": [
+          "Trade war escalation scenarios",
+          "Competitor sourcing strategies",
+          "Government exclusion request precedents",
+          "Free trade agreement utilization analysis"
+        ]
+      },
+      "expected_deliverables": [
+        "Trade impact assessment",
+        "Supply chain restructuring plan",
+        "Government advocacy strategy",
+        "Pricing and margin management plan"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Executive committee with supply chain and finance input",
+        "escalation_trigger": "Critical supply disruption triggers emergency response",
+        "coalition_dynamics": "Cost efficiency vs. supply resilience priorities"
+      }
+    },
+    {
+      "id": "sanctions-response-planning",
+      "name": "Sanctions Response Planning",
+      "description": "New sanctions regime impacts global operations, customer relationships, and financial flows. Organizations must ensure compliance while minimizing business disruption.",
+      "category": "Regulatory Compliance",
+      "typical_duration_rounds": [6, 8],
+      "estimated_time_minutes": 25,
+      "environment": "negotiation",
+      "agent_roster": [
+        {
+          "role": "CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Managing sanctions compliance and business continuity"
+          }
+        },
+        {
+          "role": "Chief Compliance Officer",
+          "archetype_id": "cro",
+          "count": 1,
+          "customization": {
+            "context": "Implementing sanctions screening and controls"
+          }
+        },
+        {
+          "role": "General Counsel",
+          "archetype_id": "general_counsel",
+          "count": 1,
+          "customization": {
+            "context": "Advising on sanctions law and enforcement risks"
+          }
+        },
+        {
+          "role": "Head of International Operations",
+          "archetype_id": "operations_head",
+          "count": 1,
+          "customization": {
+            "context": "Managing affected business relationships"
+          }
+        },
+        {
+          "role": "Sanctions Regulator",
+          "archetype_id": "regulator",
+          "count": 1,
+          "customization": {
+            "context": "Enforcing sanctions compliance and investigating violations"
+          }
+        },
+        {
+          "role": "Foreign Diplomat",
+          "archetype_id": "foreign_diplomat",
+          "count": 1,
+          "customization": {
+            "context": "Advising on diplomatic implications and waivers"
+          }
+        }
+      ],
+      "round_structure": [
+        "Sanctions briefing: Scope and applicability analysis",
+        "Exposure assessment: Customers, suppliers, and transactions",
+        "Compliance gap analysis: Current controls vs. requirements",
+        "Business impact evaluation: Revenue and relationship risks",
+        "Wind-down planning: Contractual and operational exits",
+        "License and waiver strategy: Exemption applications",
+        "Systems and controls: Screening and monitoring enhancements",
+        "Training and communication: Organization-wide awareness"
+      ],
+      "seed_material_template": {
+        "required": [
+          "Full text of sanctions regulations and guidance",
+          "Customer and supplier screening against sanctions lists",
+          "Transaction flow analysis for affected jurisdictions",
+          "Current sanctions compliance program documentation"
+        ],
+        "optional": [
+          "Sanctions enforcement case studies",
+          "License application precedents and timelines",
+          "Peer bank compliance approaches",
+          "Geopolitical escalation scenarios"
+        ]
+      },
+      "expected_deliverables": [
+        "Sanctions compliance assessment",
+        "Exposure mitigation plan",
+        "License application strategy",
+        "Enhanced controls implementation roadmap"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Compliance committee with board risk oversight",
+        "escalation_trigger": "Potential violation discovery triggers immediate response",
+        "coalition_dynamics": "Business retention vs. strict compliance priorities"
+      }
+    },
+    {
+      "id": "policy-reform-impact",
+      "name": "Policy Reform Impact",
+      "description": "Major regulatory or policy reform (healthcare, energy, tax) fundamentally changes industry economics. Companies must assess strategic implications and adaptation requirements.",
+      "category": "Regulatory Strategy",
+      "typical_duration_rounds": [7, 9],
+      "estimated_time_minutes": 30,
+      "environment": "negotiation",
+      "agent_roster": [
+        {
+          "role": "CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Leading company through fundamental policy transformation"
+          }
+        },
+        {
+          "role": "Chief Strategy Officer",
+          "archetype_id": "strategy_vp",
+          "count": 1,
+          "customization": {
+            "context": "Evaluating strategic repositioning options"
+          }
+        },
+        {
+          "role": "Industry Association Lead",
+          "archetype_id": "lobbyist",
+          "count": 1,
+          "customization": {
+            "context": "Coordinating industry response to policy reform"
+          }
+        },
+        {
+          "role": "Policymaker - Legislative",
+          "archetype_id": "policymaker",
+          "count": 1,
+          "customization": {
+            "context": "Shaping and implementing policy reform"
+          }
+        },
+        {
+          "role": "CFO",
+          "archetype_id": "cfo",
+          "count": 1,
+          "customization": {
+            "context": "Modeling financial impact of policy changes"
+          }
+        },
+        {
+          "role": "Advocacy Group Representative",
+          "archetype_id": "ngo_representative",
+          "count": 1,
+          "customization": {
+            "context": "Advocating for public interest in policy outcomes"
+          }
+        }
+      ],
+      "round_structure": [
+        "Policy reform briefing: Legislative text and implementation timeline",
+        "Economic impact modeling: Cost and revenue implications",
+        "Competitive landscape: Winners and losers analysis",
+        "Strategic option generation: Adaptation and pivot scenarios",
+        "Stakeholder engagement: Coalition building and advocacy",
+        "Implementation planning: Operational and system changes",
+        "Scenario testing: Sensitivity and contingency planning",
+        "Strategic commitment: Resource allocation decisions"
+      ],
+      "seed_material_template": {
+        "required": [
+          "Draft or enacted policy reform legislation",
+          "Industry economic model and baseline projections",
+          "Implementation timeline and regulatory guidance",
+          "Competitor positioning and response analysis"
+        ],
+        "optional": [
+          "Historical policy reform case studies",
+          "Stakeholder position mapping",
+          "Political scenario forecasts",
+          "International policy comparisons"
+        ]
+      },
+      "expected_deliverables": [
+        "Policy impact assessment",
+        "Strategic adaptation options",
+        "Stakeholder engagement plan",
+        "Implementation roadmap"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Executive committee with policy advisory input",
+        "escalation_trigger": "Adverse policy finalization triggers immediate response",
+        "coalition_dynamics": "Industry unity vs. competitive opportunism tensions"
+      }
+    },
+    {
+      "id": "geopolitical-crisis-response",
+      "name": "Geopolitical Crisis Response",
+      "description": "Regional conflict disrupts supply chains, energy flows, and market stability. Organizations must ensure employee safety, business continuity, and strategic adaptation.",
+      "category": "Crisis Management",
+      "typical_duration_rounds": [7, 10],
+      "estimated_time_minutes": 35,
+      "environment": "war_room",
+      "agent_roster": [
+        {
+          "role": "CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Leading crisis response and business continuity"
+          }
+        },
+        {
+          "role": "Chief Security Officer",
+          "archetype_id": "cro",
+          "count": 1,
+          "customization": {
+            "context": "Managing employee safety and asset protection"
+          }
+        },
+        {
+          "role": "Chief Supply Chain Officer",
+          "archetype_id": "operations_head",
+          "count": 1,
+          "customization": {
+            "context": "Managing supply disruption and alternative sourcing"
+          }
+        },
+        {
+          "role": "Head of Government Affairs",
+          "archetype_id": "lobbyist",
+          "count": 1,
+          "customization": {
+            "context": "Coordinating with government evacuation and support"
+          }
+        },
+        {
+          "role": "Foreign Diplomat - Crisis",
+          "archetype_id": "foreign_diplomat",
+          "count": 1,
+          "customization": {
+            "context": "Facilitating safe passage and consular support"
+          }
+        },
+        {
+          "role": "Communications Director",
+          "archetype_id": "media_stakeholder",
+          "count": 1,
+          "customization": {
+            "context": "Managing internal and external crisis communications"
+          }
+        }
+      ],
+      "round_structure": [
+        "Crisis briefing: Conflict status and affected operations",
+        "Employee safety assessment: Evacuation and protection needs",
+        "Supply chain disruption: Critical path and alternative sourcing",
+        "Asset protection: Facilities, inventory, and IP security",
+        "Government coordination: Diplomatic and military support",
+        "Business continuity: Critical function maintenance",
+        "Financial impact: Insurance, write-offs, and recovery costs",
+        "Strategic repositioning: Market exit or temporary suspension",
+        "Recovery planning: Post-crisis re-entry strategy"
+      ],
+      "seed_material_template": {
+        "required": [
+          "Crisis situation reports and conflict mapping",
+          "Employee locations and evacuation plans",
+          "Supply chain exposure to affected region",
+          "Asset inventory and insurance coverage"
+        ],
+        "optional": [
+          "Historical geopolitical crisis responses",
+          "Government travel advisory and support options",
+          "Alternative supplier capabilities",
+          "Scenario forecasts for conflict escalation"
+        ]
+      },
+      "expected_deliverables": [
+        "Crisis response action plan",
+        "Employee safety and evacuation protocol",
+        "Supply chain continuity plan",
+        "Business continuity and recovery strategy"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Crisis management team with board notification",
+        "escalation_trigger": "Employee safety threat triggers immediate evacuation",
+        "coalition_dynamics": "Employee safety vs. business continuity priorities"
+      }
+    },
+    {
+      "id": "climate-policy-transition",
+      "name": "Climate Policy Transition",
+      "description": "Carbon pricing or cap-and-trade implementation transforms industry economics. Companies must assess carbon exposure, compliance strategies, and competitive positioning.",
+      "category": "Regulatory Strategy",
+      "typical_duration_rounds": [7, 9],
+      "estimated_time_minutes": 30,
+      "environment": "negotiation",
+      "agent_roster": [
+        {
+          "role": "CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Leading decarbonization strategy and carbon compliance"
+          }
+        },
+        {
+          "role": "Chief Sustainability Officer",
+          "archetype_id": "cro",
+          "count": 1,
+          "customization": {
+            "context": "Developing carbon reduction and offset strategies"
+          }
+        },
+        {
+          "role": "CFO",
+          "archetype_id": "cfo",
+          "count": 1,
+          "customization": {
+            "context": "Modeling carbon cost impact and compliance economics"
+          }
+        },
+        {
+          "role": "Climate Policy Advisor",
+          "archetype_id": "lobbyist",
+          "count": 1,
+          "customization": {
+            "context": "Engaging on carbon pricing design and implementation"
+          }
+        },
+        {
+          "role": "Environmental Regulator",
+          "archetype_id": "regulator",
+          "count": 1,
+          "customization": {
+            "context": "Implementing carbon pricing and monitoring compliance"
+          }
+        },
+        {
+          "role": "Environmental NGO Lead",
+          "archetype_id": "ngo_representative",
+          "count": 1,
+          "customization": {
+            "context": "Advocating for ambitious climate action and transparency"
+          }
+        }
+      ],
+      "round_structure": [
+        "Policy briefing: Carbon pricing mechanism and timeline",
+        "Carbon footprint assessment: Scope 1, 2, and 3 emissions",
+        "Cost impact modeling: Carbon price scenarios and pass-through",
+        "Abatement opportunity analysis: Reduction options and costs",
+        "Compliance strategy: Allowances, offsets, and trading",
+        "Competitive positioning: Carbon intensity vs. peers",
+        "Stakeholder engagement: Policy advocacy and disclosure",
+        "Transition planning: Net-zero pathway and milestones"
+      ],
+      "seed_material_template": {
+        "required": [
+          "Carbon pricing legislation and regulatory guidance",
+          "Greenhouse gas emissions inventory and verification",
+          "Abatement cost curve and reduction opportunities",
+          "Carbon market price forecasts and trading mechanisms"
+        ],
+        "optional": [
+          "Peer carbon strategies and disclosures",
+          "Climate scenario analysis (TCFD)",
+          "Carbon offset project opportunities",
+          "Green technology investment options"
+        ]
+      },
+      "expected_deliverables": [
+        "Carbon compliance strategy",
+        "Emissions reduction roadmap",
+        "Carbon cost management plan",
+        "Climate disclosure and communication plan"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Sustainability committee with executive oversight",
+        "escalation_trigger": "Compliance shortfall triggers emergency abatement",
+        "coalition_dynamics": "Minimum compliance vs. climate leadership ambitions"
+      }
+    },
+    {
+      "id": "technology-regulation-wave",
+      "name": "Technology Regulation Wave",
+      "description": "Comprehensive technology regulation covering AI, data privacy, and antitrust fundamentally changes digital business models. Tech companies must navigate multi-dimensional compliance.",
+      "category": "Regulatory Response",
+      "typical_duration_rounds": [8, 10],
+      "estimated_time_minutes": 35,
+      "environment": "negotiation",
+      "agent_roster": [
+        {
+          "role": "Tech CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Navigating comprehensive tech regulatory transformation"
+          }
+        },
+        {
+          "role": "Chief Technology Officer",
+          "archetype_id": "strategy_vp",
+          "count": 1,
+          "customization": {
+            "context": "Implementing AI governance and data protection"
+          }
+        },
+        {
+          "role": "General Counsel",
+          "archetype_id": "general_counsel",
+          "count": 1,
+          "customization": {
+            "context": "Managing antitrust, privacy, and AI regulatory compliance"
+          }
+        },
+        {
+          "role": "Chief Data Officer",
+          "archetype_id": "cro",
+          "count": 1,
+          "customization": {
+            "context": "Ensuring data governance and privacy compliance"
+          }
+        },
+        {
+          "role": "Tech Policy Regulator",
+          "archetype_id": "regulator",
+          "count": 1,
+          "customization": {
+            "context": "Enforcing AI, privacy, and competition regulations"
+          }
+        },
+        {
+          "role": "Digital Rights Advocate",
+          "archetype_id": "ngo_representative",
+          "count": 1,
+          "customization": {
+            "context": "Advocating for user rights and algorithmic accountability"
+          }
+        }
+      ],
+      "round_structure": [
+        "Regulatory landscape briefing: AI, privacy, and antitrust requirements",
+        "AI governance: Algorithmic transparency and accountability",
+        "Data protection: Privacy by design and user rights",
+        "Antitrust assessment: Market power and remedy implications",
+        "Business model impact: Revenue and growth implications",
+        "Technical implementation: Architecture and system changes",
+        "Competitive positioning: Compliance as advantage or burden",
+        "Stakeholder engagement: Regulatory dialogue and advocacy",
+        "Implementation roadmap: Phased compliance and investment"
+      ],
+      "seed_material_template": {
+        "required": [
+          "Draft or enacted tech regulation texts",
+          "AI system inventory and risk classification",
+          "Data processing records and privacy impact assessments",
+          "Market share and competitive analysis"
+        ],
+        "optional": [
+          "Tech regulation enforcement precedents",
+          "Peer compliance strategies and disclosures",
+          "Technical standards and certification options",
+          "International regulatory coordination status"
+        ]
+      },
+      "expected_deliverables": [
+        "Tech regulation compliance strategy",
+        "AI governance framework",
+        "Privacy enhancement roadmap",
+        "Antitrust response plan"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Executive committee with legal and technology input",
+        "escalation_trigger": "Enforcement action or major fine triggers emergency response",
+        "coalition_dynamics": "Innovation speed vs. regulatory compliance tensions"
+      }
+    }
+  ]
+}

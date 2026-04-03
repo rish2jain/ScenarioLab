@@ -1,0 +1,195 @@
+{
+  "vertical": "pharma",
+  "scenarios": [
+    {
+      "id": "drug-patent-cliff",
+      "name": "Drug Patent Cliff Response",
+      "description": "A blockbuster drug faces imminent patent expiration with generic competitors ready to enter. The pharmaceutical company must decide between defensive strategies, pipeline acceleration, or business model pivot.",
+      "category": "Portfolio Strategy",
+      "typical_duration_rounds": [7, 10],
+      "estimated_time_minutes": 30,
+      "environment": "boardroom",
+      "agent_roster": [
+        {
+          "role": "Pharma CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Leading company facing major patent expiration"
+          }
+        },
+        {
+          "role": "Chief Scientific Officer",
+          "archetype_id": "strategy_vp",
+          "count": 1,
+          "customization": {
+            "context": "Managing R&D pipeline and lifecycle strategies"
+          }
+        },
+        {
+          "role": "Chief Commercial Officer",
+          "archetype_id": "operations_head",
+          "count": 1,
+          "customization": {
+            "context": "Overseeing market access and commercial strategy"
+          }
+        },
+        {
+          "role": "General Counsel",
+          "archetype_id": "general_counsel",
+          "count": 1,
+          "customization": {
+            "context": "Managing patent strategy and legal defenses"
+          }
+        },
+        {
+          "role": "CFO",
+          "archetype_id": "cfo",
+          "count": 1,
+          "customization": {
+            "context": "Modeling revenue impact and investment requirements"
+          }
+        },
+        {
+          "role": "Board Member",
+          "archetype_id": "board_member",
+          "count": 1,
+          "customization": {
+            "context": "Overseeing long-term shareholder value protection"
+          }
+        }
+      ],
+      "round_structure": [
+        "Patent cliff briefing: Revenue at risk analysis",
+        "Pipeline review: Next-generation drug candidates",
+        "Lifecycle management options: Reformulation, combinations",
+        "Legal defense strategies: Patent extension tactics",
+        "Biosimilar competitive assessment",
+        "M&A opportunities: Pipeline acquisition targets",
+        "Geographic strategy: Market prioritization",
+        "Portfolio rebalancing: Resource allocation",
+        "Board presentation: Strategic recommendation",
+        "Implementation vote: Commitment to chosen strategy"
+      ],
+      "seed_material_template": {
+        "required": [
+          "Patent expiration timeline and geographic coverage",
+          "Current drug revenue forecasts",
+          "R&D pipeline status and probabilities",
+          "Competitive landscape and biosimilar entrants"
+        ],
+        "optional": [
+          "Historical patent cliff case studies",
+          "Regulatory pathway analysis for pipeline drugs",
+          "M&A target company profiles",
+          "Patient advocacy group positions"
+        ]
+      },
+      "expected_deliverables": [
+        "Patent cliff response strategy",
+        "Revenue protection plan",
+        "Pipeline acceleration roadmap",
+        "M&A target prioritization"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Board approval for major strategic investments",
+        "escalation_trigger": "Regulatory approval risks trigger review",
+        "coalition_dynamics": "R&D vs. Commercial priorities tension"
+      }
+    },
+    {
+      "id": "fda-fast-track",
+      "name": "FDA Fast-Track Approval Pathway",
+      "description": "A promising but early-stage drug candidate shows breakthrough potential for an unmet medical need. The company must decide whether to pursue accelerated approval pathways and manage associated risks.",
+      "category": "Regulatory Strategy",
+      "typical_duration_rounds": [6, 8],
+      "estimated_time_minutes": 25,
+      "environment": "negotiation",
+      "agent_roster": [
+        {
+          "role": "Chief Medical Officer",
+          "archetype_id": "cro",
+          "count": 1,
+          "customization": {
+            "context": "Evaluating clinical evidence and patient safety"
+          }
+        },
+        {
+          "role": "Regulatory Affairs VP",
+          "archetype_id": "general_counsel",
+          "count": 1,
+          "customization": {
+            "context": "Navigating FDA accelerated approval pathways"
+          }
+        },
+        {
+          "role": "CEO",
+          "archetype_id": "ceo",
+          "count": 1,
+          "customization": {
+            "context": "Balancing speed to market with risk management"
+          }
+        },
+        {
+          "role": "CFO",
+          "archetype_id": "cfo",
+          "count": 1,
+          "customization": {
+            "context": "Evaluating investment and revenue timing scenarios"
+          }
+        },
+        {
+          "role": "Patient Advocacy Representative",
+          "archetype_id": "media_stakeholder",
+          "count": 1,
+          "customization": {
+            "context": "Representing patient needs for urgent treatments"
+          }
+        },
+        {
+          "role": "FDA Liaison",
+          "archetype_id": "regulator",
+          "count": 1,
+          "customization": {
+            "context": "Advising on regulatory requirements and expectations"
+          }
+        }
+      ],
+      "round_structure": [
+        "Clinical data review: Efficacy and safety evidence",
+        "Unmet need assessment: Patient population analysis",
+        "Regulatory pathway options: Standard vs. accelerated",
+        "Risk-benefit analysis: Speed vs. evidence requirements",
+        "Manufacturing readiness: Scale-up capabilities",
+        "Post-market commitment planning: Confirmatory trials",
+        "Commercial preparation: Launch readiness",
+        "Go/No-Go decision: Approval pathway commitment"
+      ],
+      "seed_material_template": {
+        "required": [
+          "Clinical trial data summary",
+          "Disease area unmet need analysis",
+          "FDA accelerated approval guidance",
+          "Manufacturing capability assessment"
+        ],
+        "optional": [
+          "Competitor drug approval timelines",
+          "Patient advocacy group letters",
+          "KOL opinions on clinical significance",
+          "Regulatory consultant recommendations"
+        ]
+      },
+      "expected_deliverables": [
+        "Regulatory pathway recommendation",
+        "Risk mitigation strategy",
+        "Clinical development plan",
+        "Commercial launch timeline"
+      ],
+      "environment_config": {
+        "decision_mechanism": "Executive committee decision with board notification",
+        "escalation_trigger": "Safety signals trigger immediate review",
+        "coalition_dynamics": "Medical safety vs. commercial urgency tension"
+      }
+    }
+  ]
+}

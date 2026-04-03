@@ -1,0 +1,101 @@
+{
+  "id": "regulatory-shock-test",
+  "name": "Regulatory Shock Test",
+  "description": "Crisis simulation where new regulations or enforcement actions threaten core business models. Tests organizational response to compliance emergencies and stakeholder alignment under pressure.",
+  "category": "Risk & Compliance",
+  "typical_duration_rounds": [8, 12],
+  "estimated_time_minutes": 20,
+  "environment": "crisis",
+  "agent_roster": [
+    {
+      "role": "CEO",
+      "archetype_id": "ceo",
+      "count": 1,
+      "customization": {
+        "context": "Balancing business continuity with regulatory compliance"
+      }
+    },
+    {
+      "role": "General Counsel",
+      "archetype_id": "general_counsel",
+      "count": 1,
+      "customization": {
+        "context": "Managing legal exposure and regulatory negotiations"
+      }
+    },
+    {
+      "role": "CRO",
+      "archetype_id": "cro",
+      "count": 1,
+      "customization": {
+        "context": "Quantifying operational and compliance risks"
+      }
+    },
+    {
+      "role": "Chief Compliance Officer",
+      "archetype_id": "general_counsel",
+      "count": 1,
+      "customization": {
+        "context": "Implementing compliance program changes"
+      }
+    },
+    {
+      "role": "Regulator",
+      "archetype_id": "regulator",
+      "count": 1,
+      "customization": {
+        "context": "Enforcing new regulations with limited flexibility"
+      }
+    },
+    {
+      "role": "Board Member",
+      "archetype_id": "board_member",
+      "count": 1,
+      "customization": {
+        "context": "Overseeing governance and fiduciary response"
+      }
+    }
+  ],
+  "round_structure": [
+    "Shock introduction: Regulator announces enforcement action or new rule",
+    "Initial impact assessment: Legal and risk teams quantify exposure",
+    "Stakeholder mapping: Identify affected parties and communication priorities",
+    "Response option generation: Develop compliance and mitigation strategies",
+    "Regulatory negotiation: Engage with regulator on timeline and remediation",
+    "Board escalation: Present options and recommendations to board",
+    "Implementation planning: Define action items, owners, and deadlines",
+    "Reputation management: Craft external messaging and investor communication"
+  ],
+  "seed_material_template": {
+    "required": [
+      "Regulatory announcement or enforcement letter",
+      "Current compliance program documentation",
+      "Business impact analysis framework",
+      "Organizational risk register"
+    ],
+    "optional": [
+      "Historical regulatory precedents and outcomes",
+      "Competitor response examples",
+      "Legal budget and resource constraints",
+      "Board charter and governance policies"
+    ]
+  },
+  "expected_deliverables": [
+    "Regulatory response timeline with milestones",
+    "Compliance gap remediation plan",
+    "Stakeholder communication strategy",
+    "Risk-adjusted business impact assessment",
+    "Board resolution and governance actions"
+  ],
+  "environment_config": {
+    "visibility_rules": {
+      "information_asymmetry": true,
+      "regulator_intel": "Regulator has private information about investigation scope",
+      "legal_privilege": "Attorney-client communications are private"
+    },
+    "decision_mechanism": "Legal risk veto by General Counsel; CEO override requires board notification",
+    "escalation_trigger": "If compliance cost exceeds revenue threshold, mandatory board review",
+    "time_pressure": "Regulator-imposed deadlines create round time limits",
+    "coalition_dynamics": "Legal-Compliance coalition for conservative approach; CEO-CFO for business preservation"
+  }
+}
