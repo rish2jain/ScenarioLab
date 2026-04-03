@@ -113,6 +113,7 @@ async def create_simulation(
             agents=request.agents,
             total_rounds=request.total_rounds,
             seed_id=request.seed_id,
+            seed_ids=request.seed_ids,
             parameters=request.parameters,
         )
 

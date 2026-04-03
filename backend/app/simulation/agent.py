@@ -70,11 +70,21 @@ class SimulationAgent:
             prompt = template.replace("{role}", self.archetype.role)
             prompt = prompt.replace("{context}", context)
 
+        # Add seed document context
+        seed_ctx = customization.get("seed_context", "")
+        if seed_ctx:
+            prompt += (
+                "\n\nSEED DOCUMENTS (reference material for "
+                "this simulation):\n"
+                f"{seed_ctx}\n"
+            )
+
         # Add customization overrides
         if customization:
             prompt += "\n\nCUSTOMIZATION:\n"
+            skip = {"context", "seed_context"}
             for key, value in customization.items():
-                if key != "context":
+                if key not in skip:
                     prompt += f"- {key}: {value}\n"
 
         return prompt

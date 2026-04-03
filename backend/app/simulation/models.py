@@ -52,7 +52,8 @@ class SimulationConfig(BaseModel):
     environment_type: EnvironmentType = EnvironmentType.BOARDROOM
     agents: list[AgentConfig] = []
     total_rounds: int = 10
-    seed_id: str | None = None  # Reference to uploaded seed material
+    seed_id: str | None = None  # Legacy single seed reference
+    seed_ids: list[str] = []  # References to uploaded seed materials
     parameters: dict = {}  # Additional parameters
 
     def model_post_init(self, __context):
@@ -153,7 +154,8 @@ class SimulationCreateRequest(BaseModel):
     environment_type: EnvironmentType = EnvironmentType.BOARDROOM
     agents: list[AgentConfig] = []
     total_rounds: int = 10
-    seed_id: str | None = None
+    seed_id: str | None = None  # Legacy single seed reference
+    seed_ids: list[str] = []  # Multiple seed document references
     parameters: dict = {}
 
 

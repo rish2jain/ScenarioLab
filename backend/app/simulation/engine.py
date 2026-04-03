@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime, timezone
 
 from app.database import SimulationRepository
+from app.graph.seed_processor import SeedProcessor
 from app.llm.factory import get_llm_provider
 from app.personas.library import get_archetype
 from app.simulation.agent import SimulationAgent
@@ -47,8 +48,13 @@ class SimulationEngine:
 
         logger.info(f"Creating simulation: {config.name} ({config.id})")
 
+        # Load seed documents and build context
+        seed_context = await self._load_seed_context(config)
+
         # Initialize agents from config + archetypes
-        agents = await self._initialize_agents(config.agents)
+        agents = await self._initialize_agents(
+            config.agents, seed_context=seed_context
+        )
 
         # Create simulation state
         sim_state = SimulationState(
@@ -75,9 +81,46 @@ class SimulationEngine:
         )
         return sim_state
 
+    async def _load_seed_context(
+        self,
+        config: SimulationConfig,
+    ) -> str:
+        """Load and combine seed document content for a simulation.
+
+        Resolves seed_ids (and legacy seed_id) into a single
+        context string that gets injected into agent prompts.
+        """
+        all_ids: list[str] = list(config.seed_ids)
+        if config.seed_id and config.seed_id not in all_ids:
+            all_ids.append(config.seed_id)
+
+        if not all_ids:
+            # Fall back to inline seed_material in parameters
+            return config.parameters.get("seed_material", "")
+
+        processor = SeedProcessor()
+        parts: list[str] = []
+
+        for seed_id in all_ids:
+            seed = await processor.get_seed(seed_id)
+            if seed is None:
+                logger.warning(f"Seed {seed_id} not found, skipping")
+                continue
+
+            content = seed.processed_content or seed.raw_content
+            if content:
+                header = f"--- Document: {seed.filename} ---"
+                parts.append(f"{header}\n{content}")
+
+        if not parts:
+            return config.parameters.get("seed_material", "")
+
+        return "\n\n".join(parts)
+
     async def _initialize_agents(
         self,
         agent_configs: list[AgentConfig],
+        seed_context: str = "",
     ) -> list[SimulationAgent]:
         """Initialize simulation agents from configurations."""
         agents = []
@@ -87,8 +130,22 @@ class SimulationEngine:
             # Get archetype
             archetype = get_archetype(config.archetype_id)
             if not archetype:
-                logger.warning(f"Archetype not found: {config.archetype_id}")
+                logger.warning(
+                    f"Archetype not found: {config.archetype_id}"
+                )
                 continue
+
+            # Inject seed context into agent customization
+            if seed_context:
+                config = AgentConfig(
+                    id=config.id,
+                    name=config.name,
+                    archetype_id=config.archetype_id,
+                    customization={
+                        **config.customization,
+                        "seed_context": seed_context,
+                    },
+                )
 
             # Create agent
             agent = SimulationAgent(
