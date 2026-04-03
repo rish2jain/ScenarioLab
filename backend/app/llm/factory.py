@@ -4,6 +4,9 @@ import logging
 
 from app.config import settings
 from app.llm.anthropic_provider import AnthropicProvider
+from app.llm.cli_chatgpt_provider import CLIChatGPTProvider
+from app.llm.cli_claude_provider import CLIClaudeProvider
+from app.llm.cli_gemini_provider import CLIGeminiProvider
 from app.llm.llamacpp_provider import DEFAULT_LLAMACPP_URL, LlamaCppProvider
 from app.llm.ollama_provider import DEFAULT_OLLAMA_URL, OllamaProvider
 from app.llm.openai_provider import OpenAIProvider
@@ -87,6 +90,21 @@ def create_llamacpp_provider() -> LlamaCppProvider:
     )
 
 
+def create_cli_claude_provider() -> CLIClaudeProvider:
+    """Create a Claude CLI provider."""
+    return CLIClaudeProvider(model=settings.llm_model_name)
+
+
+def create_cli_gemini_provider() -> CLIGeminiProvider:
+    """Create a Gemini CLI provider."""
+    return CLIGeminiProvider(model=settings.llm_model_name)
+
+
+def create_cli_chatgpt_provider() -> CLIChatGPTProvider:
+    """Create a ChatGPT/OpenAI CLI provider."""
+    return CLIChatGPTProvider(model=settings.llm_model_name)
+
+
 def get_llm_provider() -> LLMProvider:
     """Create LLM provider based on settings.
 
@@ -103,6 +121,9 @@ def get_llm_provider() -> LLMProvider:
         "qwen": create_openai_provider,  # Qwen via OpenAI-compatible
         "ollama": create_ollama_provider,
         "llamacpp": create_llamacpp_provider,
+        "cli-claude": create_cli_claude_provider,
+        "cli-gemini": create_cli_gemini_provider,
+        "cli-chatgpt": create_cli_chatgpt_provider,
     }
 
     provider_name = settings.llm_provider.lower()
