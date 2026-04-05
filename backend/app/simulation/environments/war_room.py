@@ -5,6 +5,7 @@ import logging
 from app.simulation.agent import SimulationAgent
 from app.simulation.environments.base import BaseEnvironment
 from app.simulation.models import EnvironmentType, RoundState
+from app.simulation.objectives import build_round_agenda_line
 from app.simulation.turn_rules import TurnManager
 from app.simulation.visibility import VisibilityManager
 
@@ -94,7 +95,7 @@ class WarRoomEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context=("Share intelligence relevant to the current situation."),
+                context=self._resolve_phase_instruction("intel_briefing", agent.archetype.role),
             )
             if message:
                 round_state.messages.append(message)
@@ -136,7 +137,7 @@ class WarRoomEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context="Assess the threats and risks we face. Rate severity.",
+                context=self._resolve_phase_instruction("threat_assessment", agent.archetype.role),
             )
             if message:
                 round_state.messages.append(message)
@@ -169,7 +170,7 @@ class WarRoomEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context="Propose response options to address the threats.",
+                context=self._resolve_phase_instruction("response_options", agent.archetype.role),
             )
             if message:
                 round_state.messages.append(message)
@@ -200,7 +201,7 @@ class WarRoomEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context="Make a decision on the response strategy.",
+                context=self._resolve_phase_instruction("decision", agent.archetype.role),
             )
             if message:
                 round_state.messages.append(message)
@@ -242,7 +243,7 @@ class WarRoomEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context="Assign specific actions and responsibilities.",
+                context=self._resolve_phase_instruction("action_assignment", agent.archetype.role),
             )
             if message:
                 round_state.messages.append(message)
@@ -278,8 +279,30 @@ class WarRoomEnvironment(BaseEnvironment):
 
         return evaluation
 
-    def _resolve_phase_instruction(self, phase: str, agent_role: str) -> str:
-        """Get phase-specific instruction for an agent."""
+    def get_phase_instruction(
+        self,
+        _phase: str,
+        _agent_role: str,
+        *,
+        round_number: int = 1,
+    ) -> str:
+        """War-room agenda line only.
+
+        ``_phase`` and ``_agent_role`` match the base ``SimulationEnvironment.get_phase_instruction``
+        signature for protocol consistency but are intentionally unused here: phase-specific copy is
+        passed separately as ``context`` from ``_resolve_phase_instruction``. Only ``round_number``
+        and ``build_round_agenda_line(self._sim_config.parameters)`` shape this return value.
+        """
+        line = build_round_agenda_line(
+            round_number,
+            getattr(self._sim_config, "parameters", None) or {},
+        )
+        if line:
+            return f"Round focus (objective hypothesis): {line}"
+        return ""
+
+    def _resolve_phase_instruction(self, phase: str, _agent_role: str) -> str:
+        """Phase-specific copy for ``_process_agent_turn`` ``context`` (and shared instruction text source)."""
         instructions = {
             "intel_briefing": ("Share relevant intelligence or situational updates. " "Be concise and factual."),
             "threat_assessment": (

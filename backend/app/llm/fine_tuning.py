@@ -331,7 +331,7 @@ Respond with a JSON array of examples:
         # For now, simulate completion after a delay would be handled
         # by a background task in a real implementation
 
-        return await self._with_dataset_examples(job)
+        return job
 
     async def get_job_status(self, job_id: str) -> FineTuningJob:
         """Get the status of a fine-tuning job.

@@ -18,8 +18,9 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 # Cache successful Anthropic GET /v1/models results (avoid blocking every wizard poll).
-_ANTHROPIC_CACHE_LOCK = threading.Lock()
+_ANTHROPIC_CACHE_CONDITION = threading.Condition(threading.Lock())
 _ANTHROPIC_CACHE_TTL_SEC = 3600.0
+_ANTHROPIC_FETCH_IN_PROGRESS = False
 _cached_anthropic_wizard_models: tuple[list[dict[str, str]], float] | None = None
 
 # Stable family ids (no dated snapshots) when the Models API is unavailable or has no key.
@@ -109,7 +110,7 @@ def cost_estimator_provider_key() -> str:
 def reset_anthropic_wizard_models_cache() -> None:
     """Clear cached Anthropic model list (e.g. between tests)."""
     global _cached_anthropic_wizard_models
-    with _ANTHROPIC_CACHE_LOCK:
+    with _ANTHROPIC_CACHE_CONDITION:
         _cached_anthropic_wizard_models = None
 
 
@@ -166,22 +167,8 @@ def _fetch_anthropic_wizard_models_from_api() -> list[dict[str, str]] | None:
     ]
 
 
-def _anthropic_wizard_model_entries() -> list[dict[str, str]]:
-    """Prefer live model ids from Anthropic; cache successes; else stable fallbacks."""
-    global _cached_anthropic_wizard_models
-    now = time.monotonic()
-    with _ANTHROPIC_CACHE_LOCK:
-        if _cached_anthropic_wizard_models is not None:
-            entries, ts = _cached_anthropic_wizard_models
-            if now - ts < _ANTHROPIC_CACHE_TTL_SEC:
-                return [dict(row) for row in entries]
-
-    fetched = _fetch_anthropic_wizard_models_from_api()
-    if fetched is not None:
-        with _ANTHROPIC_CACHE_LOCK:
-            _cached_anthropic_wizard_models = (fetched, time.monotonic())
-        return [dict(row) for row in fetched]
-
+def _anthropic_wizard_models_static_fallback_entries() -> list[dict[str, str]]:
+    """Stable rows when GET /v1/models fails or returns nothing (same shape as cached wizard rows)."""
     fb = _ANTHROPIC_WIZARD_MODELS_FALLBACK
     return [
         dict(WIZARD_PROVIDER_DEFAULT_OPTION),
@@ -189,6 +176,62 @@ def _anthropic_wizard_model_entries() -> list[dict[str, str]]:
         dict(fb[1]),
         dict(fb[2]),
     ]
+
+
+def _anthropic_wizard_model_entries() -> list[dict[str, str]]:
+    """Prefer live model ids from Anthropic; cache successes; else stable fallbacks."""
+    global _cached_anthropic_wizard_models, _ANTHROPIC_FETCH_IN_PROGRESS
+    now = time.monotonic()
+    with _ANTHROPIC_CACHE_CONDITION:
+        if _cached_anthropic_wizard_models is not None:
+            entries, ts = _cached_anthropic_wizard_models
+            if now - ts < _ANTHROPIC_CACHE_TTL_SEC:
+                return [dict(row) for row in entries]
+
+        while _ANTHROPIC_FETCH_IN_PROGRESS:
+            _ANTHROPIC_CACHE_CONDITION.wait()
+            now = time.monotonic()
+
+        if _cached_anthropic_wizard_models is not None:
+            entries, ts = _cached_anthropic_wizard_models
+            if now - ts < _ANTHROPIC_CACHE_TTL_SEC:
+                return [dict(row) for row in entries]
+
+    claimed_fetch = False
+    fetched: list[dict[str, str]] | None = None
+    try:
+        with _ANTHROPIC_CACHE_CONDITION:
+            while _ANTHROPIC_FETCH_IN_PROGRESS:
+                _ANTHROPIC_CACHE_CONDITION.wait()
+            now = time.monotonic()
+            if _cached_anthropic_wizard_models is not None:
+                entries, ts = _cached_anthropic_wizard_models
+                if now - ts < _ANTHROPIC_CACHE_TTL_SEC:
+                    return [dict(row) for row in entries]
+            _ANTHROPIC_FETCH_IN_PROGRESS = True
+            claimed_fetch = True
+        fetched = _fetch_anthropic_wizard_models_from_api()
+    finally:
+        if claimed_fetch:
+            with _ANTHROPIC_CACHE_CONDITION:
+                _ANTHROPIC_FETCH_IN_PROGRESS = False
+                ts = time.monotonic()
+                if fetched is not None:
+                    _cached_anthropic_wizard_models = (fetched, ts)
+                else:
+                    # Cache static fallback so waiters do not each repeat the fetch.
+                    _cached_anthropic_wizard_models = (
+                        _anthropic_wizard_models_static_fallback_entries(),
+                        ts,
+                    )
+                _ANTHROPIC_CACHE_CONDITION.notify_all()
+
+    with _ANTHROPIC_CACHE_CONDITION:
+        if _cached_anthropic_wizard_models is not None:
+            entries, _ts = _cached_anthropic_wizard_models
+            return [dict(row) for row in entries]
+
+    return _anthropic_wizard_models_static_fallback_entries()
 
 
 def _looks_like_openai_model(m: str) -> bool:

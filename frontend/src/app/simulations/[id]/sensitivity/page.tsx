@@ -159,8 +159,9 @@ export default function SensitivityPage() {
       setCurrentSimulation(null);
       setChartData(null);
       setLoadError(sensitivityLoadErrorMessage(error));
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   }, [simulationId, setCurrentSimulation]);
 
   useEffect(() => {

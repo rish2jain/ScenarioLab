@@ -1,5 +1,6 @@
 // Analytics domain types
 import type { AgentArchetype } from './simulation';
+import type { SeverityLevel } from './report';
 
 // Network Graph Types
 export interface NetworkNode {
@@ -45,7 +46,7 @@ export interface TimelineEvent {
   agentColor: string;
   type: TimelineEventType;
   content: string;
-  importance: 'low' | 'medium' | 'high' | 'critical';
+  importance: SeverityLevel;
   relatedAgents?: string[];
 }
 

@@ -37,10 +37,16 @@ const ARCHETYPE_AUTHORITY: Record<string, number> = {
   policymaker: 8,
 };
 
-export function toGraphArchetype(raw: string): AgentArchetype {
+function parseKnownGraphArchetype(
+  raw: string | undefined
+): AgentArchetype | undefined {
   const x = (raw ?? '').toLowerCase();
   if (GRAPH_ARCHETYPES.includes(x as AgentArchetype)) return x as AgentArchetype;
-  return 'analyst';
+  return undefined;
+}
+
+export function toGraphArchetype(raw: string): AgentArchetype {
+  return parseKnownGraphArchetype(raw) ?? 'analyst';
 }
 
 /** Overlay roster names/roles from GET /simulations/:id/agents when available. */
@@ -55,21 +61,26 @@ export function mergeSimulationAgentsFromApi(
     agents: sim.agents.map((a) => {
       const r = byId[a.id];
       if (!r) return a;
+      const validated = parseKnownGraphArchetype(r.archetype);
       return {
         ...a,
         name: r.name || a.name,
         role: r.role,
-        archetype: r.archetype as Agent['archetype'],
+        archetype: validated ?? a.archetype,
       };
     }),
   };
 }
 
-export function formatPersonaLabel(agent: Agent): string {
-  const raw = agent.role?.trim() || agent.archetype || 'participant';
+function titleCaseFromSnake(raw: string): string {
   return raw
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export function formatPersonaLabel(agent: Agent): string {
+  const raw = agent.role?.trim() || agent.archetype || 'participant';
+  return titleCaseFromSnake(raw);
 }
 
 function authorityForAgent(agent: Agent): number {
@@ -121,10 +132,6 @@ export function buildNetworkGraphData(
   >();
 
   for (const [, arr] of byRound) {
-    arr.sort(
-      (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
     for (let i = 1; i < arr.length; i++) {
       const prev = arr[i - 1];
       const curr = arr[i];
@@ -242,7 +249,5 @@ export function buildTimelineFromMessages(
 
 function formatRoleString(s: string | undefined): string {
   if (!s?.trim()) return '';
-  return s
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return titleCaseFromSnake(s);
 }

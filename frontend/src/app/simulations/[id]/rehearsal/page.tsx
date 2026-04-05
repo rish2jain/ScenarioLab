@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -15,7 +15,12 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { api } from "@/lib/api";
-import type { RehearsalMessage, Objection, RehearsalFeedback } from "@/lib/types";
+import { parseObjectionsResponse } from "@/lib/api/normalizers";
+import type {
+  Objection,
+  RehearsalMessage,
+  RehearsalFeedback,
+} from "@/lib/types";
 
 export default function RehearsalPage() {
   const params = useParams();
@@ -44,6 +49,8 @@ export default function RehearsalPage() {
   const [feedback, setFeedback] = useState<RehearsalFeedback | null>(null);
   const [isGettingFeedback, setIsGettingFeedback] = useState(false);
 
+  const messageCountRef = useRef(0);
+
   const handleCreateCounterpart = async () => {
     if (!brief.trim()) return;
 
@@ -68,8 +75,9 @@ export default function RehearsalPage() {
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || !counterpartId) return;
 
+    messageCountRef.current += 1;
     const userMessage: RehearsalMessage = {
-      id: `msg-${Date.now()}`,
+      id: `msg-${messageCountRef.current}`,
       is_user: true,
       content: inputMessage,
       timestamp: new Date().toISOString(),
@@ -82,8 +90,9 @@ export default function RehearsalPage() {
     try {
       const result = await api.rehearse(counterpartId, inputMessage);
 
+      messageCountRef.current += 1;
       const agentMessage: RehearsalMessage = {
-        id: `msg-${Date.now() + 1}`,
+        id: `msg-${messageCountRef.current}`,
         is_user: false,
         content: result.response,
         timestamp: new Date().toISOString(),
@@ -109,7 +118,13 @@ export default function RehearsalPage() {
         counterpartId,
         presentationText
       );
-      setObjections(result as Objection[]);
+      const parsed = parseObjectionsResponse(result);
+      if (!parsed.ok) {
+        console.error(parsed.message, result);
+        alert(parsed.message);
+        return;
+      }
+      setObjections(parsed.objections);
     } catch (error) {
       console.error("Failed to generate objections:", error);
       alert("Failed to generate objections. Please try again.");

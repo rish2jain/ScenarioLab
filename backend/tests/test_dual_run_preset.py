@@ -7,25 +7,25 @@ from app.simulation.engine import simulation_engine
 
 
 def test_dual_run_preset_invalid_environment_type_b_emits_structured_warning():
-    client = TestClient(app)
-    r = client.post(
-        "/api/simulations/dual-run-preset",
-        json={
-            "name_a": "Scenario A",
-            "name_b": "Scenario B",
-            "base": {
-                "name": "Comparison base",
-                "description": "",
-                "playbook_id": None,
-                "environment_type": "boardroom",
-                "agents": [{"name": "CEO", "archetype_id": "ceo"}],
-                "total_rounds": 5,
-                "seed_ids": [],
-                "parameters": {},
+    with TestClient(app) as client:
+        r = client.post(
+            "/api/simulations/dual-run-preset",
+            json={
+                "name_a": "Scenario A",
+                "name_b": "Scenario B",
+                "base": {
+                    "name": "Comparison base",
+                    "description": "",
+                    "playbook_id": None,
+                    "environment_type": "boardroom",
+                    "agents": [{"name": "CEO", "archetype_id": "ceo"}],
+                    "total_rounds": 5,
+                    "seed_ids": [],
+                    "parameters": {},
+                },
+                "environment_type_b": "not_a_valid_env",
             },
-            "environment_type_b": "not_a_valid_env",
-        },
-    )
+        )
     assert r.status_code == 200, r.text
     j = r.json()
     assert len(j["warnings"]) == 1
@@ -37,25 +37,25 @@ def test_dual_run_preset_invalid_environment_type_b_emits_structured_warning():
 
 
 def test_dual_run_preset_merges_batch_parent_id_and_json_safe():
-    client = TestClient(app)
-    r = client.post(
-        "/api/simulations/dual-run-preset",
-        json={
-            "name_a": "Scenario A",
-            "name_b": "Scenario B",
-            "base": {
-                "name": "Comparison base",
-                "description": "",
-                "playbook_id": None,
-                "environment_type": "boardroom",
-                "agents": [{"name": "CEO", "archetype_id": "ceo"}],
-                "total_rounds": 5,
-                "seed_ids": [],
-                "parameters": {"foo": 1},
+    with TestClient(app) as client:
+        r = client.post(
+            "/api/simulations/dual-run-preset",
+            json={
+                "name_a": "Scenario A",
+                "name_b": "Scenario B",
+                "base": {
+                    "name": "Comparison base",
+                    "description": "",
+                    "playbook_id": None,
+                    "environment_type": "boardroom",
+                    "agents": [{"name": "CEO", "archetype_id": "ceo"}],
+                    "total_rounds": 5,
+                    "seed_ids": [],
+                    "parameters": {"foo": 1},
+                },
+                "environment_type_b": "war_room",
             },
-            "environment_type_b": "war_room",
-        },
-    )
+        )
     assert r.status_code == 200, r.text
     j = r.json()
     bid = j["batch_parent_id"]

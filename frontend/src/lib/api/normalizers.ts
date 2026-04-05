@@ -3,10 +3,87 @@ import type {
   AgentMessage,
   FairnessAuditResult,
   FairnessMetric,
+  Objection,
   Playbook,
   Report,
   Simulation,
+  Stakeholder,
 } from '../types';
+
+const OBJECTION_SEVERITIES = new Set<Objection['severity']>([
+  'mild',
+  'moderate',
+  'strong',
+]);
+const OBJECTION_CATEGORIES = new Set<Objection['category']>([
+  'strategic',
+  'financial',
+  'operational',
+  'political',
+]);
+
+export type ParseObjectionsResult =
+  | { ok: true; objections: Objection[] }
+  | { ok: false; message: string };
+
+/** Validate counterpart objections API payload before UI state update. */
+export function parseObjectionsResponse(raw: unknown): ParseObjectionsResult {
+  if (!Array.isArray(raw)) {
+    return {
+      ok: false,
+      message: 'Invalid objections response: expected an array.',
+    };
+  }
+
+  const objections: Objection[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const item = raw[i];
+    if (typeof item !== 'object' || item === null) continue;
+    const o = item as Record<string, unknown>;
+    const text = typeof o.text === 'string' ? o.text.trim() : '';
+    if (!text) continue;
+
+    const id =
+      typeof o.id === 'string' && o.id.trim()
+        ? o.id
+        : `objection-${i}`;
+
+    const severityRaw = typeof o.severity === 'string' ? o.severity : '';
+    const severity: Objection['severity'] = OBJECTION_SEVERITIES.has(
+      severityRaw as Objection['severity']
+    )
+      ? (severityRaw as Objection['severity'])
+      : 'moderate';
+
+    const categoryRaw = typeof o.category === 'string' ? o.category : '';
+    const category: Objection['category'] = OBJECTION_CATEGORIES.has(
+      categoryRaw as Objection['category']
+    )
+      ? (categoryRaw as Objection['category'])
+      : 'strategic';
+
+    const suggested_response =
+      typeof o.suggested_response === 'string' ? o.suggested_response : '';
+
+    objections.push({
+      id,
+      text,
+      severity,
+      category,
+      suggested_response,
+    });
+  }
+
+  if (raw.length > 0 && objections.length === 0) {
+    return {
+      ok: false,
+      message:
+        'Invalid objections response: no entries with required fields (text).',
+    };
+  }
+
+  return { ok: true, objections };
+}
 
 function humanizeFairnessDimension(dim: string): string {
   return dim
@@ -167,29 +244,85 @@ export function normalizeSimulation(s: Record<string, unknown>): Simulation {
   };
 }
 
-// Default colors assigned round-robin per agent
+// Default colors assigned round-robin per agent (within a scoped allocator or WeakMap scope)
 const AGENT_COLORS = [
   '#14b8a6', '#f59e0b', '#8b5cf6', '#ef4444',
   '#3b82f6', '#ec4899', '#10b981', '#f97316',
-];
-const agentColorMap = new Map<string, string>();
+] as const;
 
-function getAgentColor(agentId: string): string {
-  if (!agentColorMap.has(agentId)) {
-    agentColorMap.set(agentId, AGENT_COLORS[agentColorMap.size % AGENT_COLORS.length]);
+export type AgentColorResolver = (agentId: string) => string;
+
+function assignRoundRobinColor(map: Map<string, string>, agentId: string): string {
+  const id = agentId.trim();
+  if (!id) return AGENT_COLORS[0];
+  if (!map.has(id)) {
+    map.set(id, AGENT_COLORS[map.size % AGENT_COLORS.length]);
   }
-  return agentColorMap.get(agentId)!;
+  return map.get(id)!;
 }
 
-/** Normalize a backend SimulationMessage dict to the frontend AgentMessage shape. */
-export function normalizeAgentMessage(m: Record<string, unknown>): AgentMessage {
+/** Stable color from agent id without retaining state (used when no allocator/scope is passed). */
+function deterministicAgentColor(agentId: string): string {
+  const id = agentId.trim();
+  if (!id) return AGENT_COLORS[0];
+  let h = 0;
+  for (let i = 0; i < id.length; i += 1) {
+    h = (Math.imul(31, h) + id.charCodeAt(i)) | 0;
+  }
+  const idx = Math.abs(h) % AGENT_COLORS.length;
+  return AGENT_COLORS[idx];
+}
+
+const agentColorMapsByScope = new WeakMap<object, Map<string, string>>();
+
+function resolveAgentColor(
+  colorContext: object | AgentColorResolver | undefined,
+  agentId: string
+): string {
+  if (colorContext === undefined) {
+    return deterministicAgentColor(agentId);
+  }
+  if (typeof colorContext === 'function') {
+    return colorContext(agentId);
+  }
+  let map = agentColorMapsByScope.get(colorContext);
+  if (!map) {
+    map = new Map();
+    agentColorMapsByScope.set(colorContext, map);
+  }
+  return assignRoundRobinColor(map, agentId);
+}
+
+/**
+ * Returns a resolver that assigns AGENT_COLORS round-robin per agentId for one logical context
+ * (e.g. one simulation view). Drop all references to the resolver to allow the inner Map to be GC'd.
+ */
+export function createAgentColorAllocator(): AgentColorResolver {
+  const map = new Map<string, string>();
+  return (agentId: string) => assignRoundRobinColor(map, agentId);
+}
+
+/**
+ * Normalize a backend SimulationMessage dict to the frontend AgentMessage shape.
+ *
+ * @param colorContext Optional round-robin scope: pass `createAgentColorAllocator()` (or the same
+ *   resolver across polls) for stable colors per simulation, or a plain object used as a WeakMap key
+ *   (e.g. `useMemo(() => ({}), [simulationId])`) so colors are GC'd with that scope. If omitted,
+ *   missing `agent_color` uses a deterministic palette slot from `agentId` (no retained map).
+ */
+export function normalizeAgentMessage(
+  m: Record<string, unknown>,
+  colorContext?: object | AgentColorResolver
+): AgentMessage {
   const agentId = (m.agent_id ?? m.agentId ?? '') as string;
   return {
     id: (m.id ?? '') as string,
     agentId,
     agentName: (m.agent_name ?? m.agentName ?? 'Unknown') as string,
     agentRole: (m.agent_role ?? m.agentRole ?? '') as string,
-    agentColor: (m.agent_color ?? m.agentColor ?? getAgentColor(agentId)) as string,
+    agentColor: (m.agent_color ??
+      m.agentColor ??
+      resolveAgentColor(colorContext, agentId)) as string,
     content: (m.content ?? '') as string,
     round: (m.round_number ?? m.round ?? 0) as number,
     timestamp: (m.timestamp ?? new Date().toISOString()) as string,
@@ -230,6 +363,25 @@ export function normalizePlaybook(p: Record<string, unknown>): Playbook {
 }
 
 /** Normalize a backend SimulationReport dict to the frontend Report shape. */
+/**
+ * Map numeric stakeholder influence (typically 0–1 from the report payload) to heatmap band.
+ *
+ * Thresholds (inclusive lower bound): ≥ 0.67 → high, ≥ 0.34 → medium, else low.
+ * Non-finite values (e.g. NaN) are treated as low.
+ */
+export function getInfluenceLevel(influence: number): Stakeholder['influence'] {
+  if (!Number.isFinite(influence)) {
+    return 'low';
+  }
+  if (influence >= 0.67) {
+    return 'high';
+  }
+  if (influence >= 0.34) {
+    return 'medium';
+  }
+  return 'low';
+}
+
 export function normalizeReport(report: Record<string, unknown>): Report {
   const summary =
     (report.executive_summary as Record<string, unknown> | undefined) ?? {};
@@ -293,12 +445,7 @@ export function normalizeReport(report: Record<string, unknown>): Report {
             id: (stakeholder.stakeholder ?? '') as string,
             name: (stakeholder.stakeholder ?? '') as string,
             role: (stakeholder.role ?? '') as string,
-            influence:
-              influence >= 0.67
-                ? 'high'
-                : influence >= 0.34
-                ? 'medium'
-                : 'low',
+            influence: getInfluenceLevel(influence),
             supportLevel: Math.round(
               Number(stakeholder.support_level ?? 0) * 100
             ),

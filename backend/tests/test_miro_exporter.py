@@ -143,8 +143,7 @@ class TestExportReport:
         return _post
 
     async def test_export_returns_miroexportresult(self, exporter, mock_async_client):
-        calls = []
-        mock_post = self._mock_post_factory(calls)
+        mock_post = self._mock_post_factory([])
         mock_async_client.post = mock_post
 
         with patch("httpx.AsyncClient") as mock_client_cls:
@@ -155,7 +154,11 @@ class TestExportReport:
 
         assert isinstance(result, MiroExportResult)
         assert result.board_id.startswith("item-")
-        assert result.frames_created >= 1
+        # _make_report: five layout frames (board is a separate POST); exec summary → 3 stickies
+        assert result.frames_created == 5
+        assert result.sticky_notes_created == 3
+        assert result.cards_created == 0
+        assert result.connectors_created == 0
 
     async def test_export_empty_report_still_returns_result(self, exporter, mock_async_client):
         """A report with no sections must still produce a valid result

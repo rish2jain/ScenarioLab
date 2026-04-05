@@ -123,13 +123,16 @@ export default function ChatPage() {
 
         if (agentsData && agentsData.length > 0) {
           setAgents(
-            agentsData.map((a) => ({
-              id: a.id,
-              name: a.name,
-              role: a.role,
-              archetype: a.archetype as AgentArchetype,
-              color: archetypeColors[a.archetype] || '#6b7280',
-            }))
+            agentsData.map((a) => {
+              const archetype = a.archetype as AgentArchetype;
+              return {
+                id: a.id,
+                name: a.name,
+                role: a.role,
+                archetype,
+                color: archetypeColors[archetype] || DEFAULT_CHAT_AGENT_COLOR,
+              };
+            })
           );
         } else {
           setAgents([]);

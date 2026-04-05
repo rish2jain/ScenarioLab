@@ -143,7 +143,8 @@ class MiroBoardExporter:
         stats["frames_created"] += 1
 
         if report.executive_summary:
-            await self._export_executive_summary(board_id, report.executive_summary, summary_frame_id)
+            summary_stats = await self._export_executive_summary(board_id, report.executive_summary, summary_frame_id)
+            stats["sticky_notes_created"] += summary_stats.get("sticky_notes", 0)
 
         # Risk Register Frame (middle left)
         risk_frame = MiroFrame(

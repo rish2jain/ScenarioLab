@@ -6,6 +6,32 @@ import { reportApi } from './reports';
 import { integrationsApi } from './integrations';
 import { llmApi } from './llm';
 
+/** Fail fast in development if domain API slices reuse the same method name (spread would hide bugs). */
+function assertNoDuplicateApiKeys(
+  slices: ReadonlyArray<{ sliceName: string; slice: Record<string, unknown> }>
+): void {
+  if (process.env.NODE_ENV === 'production') return;
+  const keyOwner = new Map<string, string>();
+  for (const { sliceName, slice } of slices) {
+    for (const key of Object.keys(slice)) {
+      const existing = keyOwner.get(key);
+      if (existing !== undefined) {
+        const msg = `@/lib/api: duplicate key "${key}" when merging ${existing} and ${sliceName}`;
+        console.error(msg);
+        throw new Error(msg);
+      }
+      keyOwner.set(key, sliceName);
+    }
+  }
+}
+
+assertNoDuplicateApiKeys([
+  { sliceName: 'reportApi', slice: reportApi },
+  { sliceName: 'integrationsApi', slice: integrationsApi },
+  { sliceName: 'simulationApi', slice: simulationApi },
+  { sliceName: 'llmApi', slice: llmApi },
+]);
+
 export const api = {
   ...reportApi,
   ...integrationsApi,
@@ -33,7 +59,10 @@ export {
   normalizeSimulation,
   normalizePlaybook,
   normalizeFairnessAudit,
+  getInfluenceLevel,
+  createAgentColorAllocator,
 } from './normalizers';
+export type { AgentColorResolver } from './normalizers';
 
 // Re-export mock data for testing
 export { mockPlaybooks, mockSimulations, mockReport } from './mock-data';

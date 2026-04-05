@@ -41,13 +41,29 @@ export default function BacktestPage() {
   };
 
   const runBacktest = async () => {
+    if (customMode && customSeed.trim().length === 0) {
+      return;
+    }
     setLoading(true);
+    setLoadError(null);
     try {
       let res: BacktestResult;
       if (customMode) {
+        let actualOutcomes: Record<string, unknown> | undefined;
+        if (customOutcomes.trim().length > 0) {
+          try {
+            actualOutcomes = JSON.parse(customOutcomes) as Record<string, unknown>;
+          } catch {
+            setResult(null);
+            setLoadError(
+              'Actual outcomes must be valid JSON. Fix the "Actual Outcomes" field and try again.'
+            );
+            return;
+          }
+        }
         res = await api.runBacktest({
           seed_material: customSeed,
-          actual_outcomes: customOutcomes ? JSON.parse(customOutcomes) : undefined,
+          actual_outcomes: actualOutcomes,
         });
       } else {
         res = await api.runBacktest({ case_id: selectedCase || undefined });
@@ -55,6 +71,10 @@ export default function BacktestPage() {
       setResult(res);
     } catch (err) {
       console.error('Backtest failed:', err);
+      setResult(null);
+      setLoadError(
+        err instanceof Error ? err.message : 'Backtest failed.'
+      );
     } finally {
       setLoading(false);
     }
@@ -114,7 +134,7 @@ export default function BacktestPage() {
 
             {!customMode ? (
               <div className="space-y-3">
-                {loadError ? (
+                {loadError && cases.length === 0 && !casesLoading ? (
                   <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 space-y-3">
                     <p>{loadError}</p>
                     <button
@@ -126,37 +146,77 @@ export default function BacktestPage() {
                       {casesLoading ? 'Retrying…' : 'Retry'}
                     </button>
                   </div>
-                ) : casesLoading ? (
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-                    Loading cases…
-                  </div>
                 ) : (
-                  cases.map((c) => (
-                    <div
-                      key={c.case_id}
-                      onClick={() => setSelectedCase(c.case_id)}
-                      className={`p-4 border rounded-lg cursor-pointer transition ${
-                        selectedCase === c.case_id
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <h3 className="font-medium">{c.name}</h3>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {c.description}
-                      </p>
-                      <div className="flex gap-2 mt-2">
-                        {c.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="text-xs bg-gray-100 px-2 py-1 rounded"
-                          >
-                            {tag}
-                          </span>
-                        ))}
+                  <>
+                    {loadError && cases.length > 0 ? (
+                      <div
+                        role="alert"
+                        className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+                      >
+                        {loadError}
                       </div>
-                    </div>
-                  ))
+                    ) : null}
+                    {casesLoading ? (
+                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+                        Loading cases…
+                      </div>
+                    ) : cases.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-600 space-y-3">
+                        <p className="font-medium text-gray-800">
+                          No backtest cases available
+                        </p>
+                        <p>
+                          Bundled cases come from the API. You can still run a
+                          backtest with your own seed material and outcomes.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomMode(true);
+                            setSelectedCase(null);
+                          }}
+                          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                        >
+                          Define a custom case
+                        </button>
+                      </div>
+                    ) : (
+                      cases.map((c) => (
+                        <div
+                          key={c.case_id}
+                          onClick={() => setSelectedCase(c.case_id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setSelectedCase(c.case_id);
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          className={`p-4 border rounded-lg cursor-pointer transition ${
+                            selectedCase === c.case_id
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <h3 className="font-medium">{c.name}</h3>
+                          <p className="text-sm text-gray-600 mt-1">
+                            {c.description}
+                          </p>
+                          <div className="flex gap-2 mt-2">
+                            {c.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="text-xs bg-gray-100 px-2 py-1 rounded"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </>
                 )}
               </div>
             ) : (
@@ -190,7 +250,13 @@ export default function BacktestPage() {
 
             <button
               onClick={runBacktest}
-              disabled={loading || (!customMode && (!selectedCase || !!loadError))}
+              disabled={
+                loading ||
+                (customMode
+                  ? customSeed.trim().length === 0
+                  : !selectedCase ||
+                    Boolean(loadError && cases.length === 0))
+              }
               className="mt-6 w-full bg-blue-600 text-white py-3 rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-blue-700 transition"
             >
               {loading ? 'Running Backtest...' : 'Run Backtest'}
@@ -202,8 +268,20 @@ export default function BacktestPage() {
             <h2 className="text-xl font-semibold mb-4">Results</h2>
 
             {!result ? (
-              <div className="text-center py-12 text-gray-500">
-                <p>Select a case and run backtest to see results</p>
+              <div className="py-12 text-gray-500">
+                {loadError && (cases.length > 0 || customMode) ? (
+                  <div
+                    role="alert"
+                    className="mx-auto max-w-md rounded-lg border border-red-200 bg-red-50 p-4 text-left text-sm text-red-700"
+                  >
+                    <p className="font-medium text-red-800">Backtest failed</p>
+                    <p className="mt-1">{loadError}</p>
+                  </div>
+                ) : (
+                  <p className="text-center">
+                    Select a case and run backtest to see results
+                  </p>
+                )}
               </div>
             ) : result.error ? (
               <div className="bg-red-50 text-red-700 p-4 rounded-lg">

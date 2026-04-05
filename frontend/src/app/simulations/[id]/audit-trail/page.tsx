@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Shield, CheckCircle, XCircle, FileJson, FileSpreadsheet } from 'lucide-react';
@@ -49,25 +49,29 @@ export default function AuditTrailPage() {
   const [filter, setFilter] = useState<AuditEventType | 'all'>('all');
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const loadAuditTrail = async () => {
-      setIsLoading(true);
-      setLoadError(null);
-      try {
-        const result = await api.getAuditTrail(simulationId);
-        setAuditTrail(result || null);
-      } catch (error) {
-        setAuditTrail(null);
-        setLoadError(
-          error instanceof Error ? error.message : 'Failed to load audit trail.'
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    void loadAuditTrail();
+  const loadAuditTrail = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const result = await api.getAuditTrail(simulationId);
+      setAuditTrail(result || null);
+    } catch (error) {
+      setAuditTrail(null);
+      setLoadError(
+        error instanceof Error ? error.message : 'Failed to load audit trail.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
   }, [simulationId]);
+
+  useEffect(() => {
+    void loadAuditTrail();
+  }, [loadAuditTrail]);
+
+  const onRetry = () => {
+    void loadAuditTrail();
+  };
 
   const handleVerify = async () => {
     setIsVerifying(true);
@@ -83,8 +87,9 @@ export default function AuditTrailPage() {
         valid: false,
         message: error instanceof Error ? error.message : 'Could not verify audit trail.',
       });
+    } finally {
+      setIsVerifying(false);
     }
-    setIsVerifying(false);
   };
 
   const handleExport = async (format: 'json' | 'csv') => {
@@ -153,9 +158,16 @@ export default function AuditTrailPage() {
           {loadError ??
             'There are no authenticated events recorded for this simulation yet. The audit trail will populate as actions occur.'}
         </p>
-        <Link href={`/simulations/${simulationId}`}>
-          <Button variant="secondary" className="mt-4">Return to Overview</Button>
-        </Link>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-4">
+          {loadError ? (
+            <Button variant="primary" onClick={onRetry}>
+              Retry
+            </Button>
+          ) : null}
+          <Link href={`/simulations/${simulationId}`}>
+            <Button variant="secondary">Return to Overview</Button>
+          </Link>
+        </div>
       </div>
     );
   }

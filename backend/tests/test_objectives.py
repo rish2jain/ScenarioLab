@@ -1,5 +1,8 @@
 """Tests for simulation objective parsing and list coercion."""
 
+import logging
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 from app.simulation.models import RoundState, SimulationMessage
@@ -9,6 +12,7 @@ from app.simulation.objectives import (
     build_round_agenda_line,
     format_simulation_objective_for_prompt,
     objective_text_for_stale_check,
+    parse_simulation_objective,
     parsed_objective_matches_description,
     stop_conditions_met,
 )
@@ -72,10 +76,7 @@ class TestObjectiveTextForStaleCheck:
         assert objective_text_for_stale_check("  Alpha  ", {"simulation_requirement": "Beta"}) == "Alpha"
 
     def test_falls_back_to_simulation_requirement(self):
-        assert (
-            objective_text_for_stale_check("", {"simulation_requirement": " Wizard text "})
-            == "Wizard text"
-        )
+        assert objective_text_for_stale_check("", {"simulation_requirement": " Wizard text "}) == "Wizard text"
 
 
 class TestParsedObjectiveMatchesDescription:
@@ -222,3 +223,32 @@ class TestStopConditionsMet:
                 )
             )
         assert stop_conditions_met(params, rounds) is True
+
+
+@pytest.mark.asyncio
+class TestParseSimulationObjective:
+    async def test_json_decode_error_logs_fence_stripped_content(self, caplog):
+        """Invalid JSON after LLM return is logged distinctly from LLM failures."""
+        mock_llm = MagicMock()
+        mock_llm.generate = AsyncMock(return_value=MagicMock(content="```json\nnot valid json {\n```"))
+        caplog.set_level(logging.ERROR)
+        with patch("app.simulation.objectives.get_llm_provider", return_value=mock_llm):
+            body = "Objective about pricing"
+            r = await parse_simulation_objective(body)
+        assert r.raw_text == body
+        assert r.summary == body[:500]
+        assert any("json.loads failed" in rec.message for rec in caplog.records)
+        assert any("not valid json" in rec.message for rec in caplog.records)
+
+    async def test_llm_generate_failure_does_not_use_json_parse_log_path(self, caplog):
+        mock_llm = MagicMock()
+        mock_llm.generate = AsyncMock(side_effect=RuntimeError("provider offline"))
+        caplog.set_level(logging.ERROR)
+        with patch("app.simulation.objectives.get_llm_provider", return_value=mock_llm):
+            body = "Another objective"
+            r = await parse_simulation_objective(body)
+        assert r.summary == body[:500]
+        assert any(
+            "LLM generate()" in rec.message or "LLM generate()" in (rec.exc_text or "") for rec in caplog.records
+        )
+        assert not any("json.loads failed" in rec.message for rec in caplog.records)

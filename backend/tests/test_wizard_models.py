@@ -1,5 +1,7 @@
 """Tests for wizard model validation and cost-estimator provider mapping."""
 
+import threading
+import time
 from datetime import datetime
 from unittest.mock import patch
 
@@ -100,10 +102,11 @@ class TestAnthropicWizardModelCatalog:
         mock_settings.llm_provider = "anthropic"
         mock_settings.llm_api_key = ""
         opts = wizard_model_options()
-        assert opts[0] == WIZARD_PROVIDER_DEFAULT_OPTION
-        assert opts[1]["id"] == "claude-3-5-sonnet-20241022"
-        assert opts[2]["id"] == "claude-opus-4-20250514"
-        assert opts[3]["id"] == "claude-3-5-haiku-20241022"
+        expected = [
+            dict(WIZARD_PROVIDER_DEFAULT_OPTION),
+            *[dict(row) for row in wizard_models_mod._ANTHROPIC_WIZARD_MODELS_FALLBACK],
+        ]
+        assert opts == expected
 
     @patch("app.llm.wizard_models.settings")
     def test_models_api_picks_latest_sonnet_by_created_at(self, mock_settings):
@@ -127,6 +130,47 @@ class TestAnthropicWizardModelCatalog:
             opts = wizard_model_options()
         assert opts[1]["id"] == "claude-sonnet-b"
         assert opts[1]["name"] == "B"
+
+    @patch("app.llm.wizard_models.settings")
+    def test_concurrent_wizard_polls_call_models_api_once(self, mock_settings):
+        mock_settings.llm_provider = "anthropic"
+        mock_settings.llm_api_key = "sk-test"
+
+        calls = {"n": 0}
+        lock = threading.Lock()
+
+        def _slow_fetch() -> list[dict[str, str]]:
+            with lock:
+                calls["n"] += 1
+            time.sleep(0.12)
+            return [
+                dict(WIZARD_PROVIDER_DEFAULT_OPTION),
+                {"id": "claude-concurrent", "name": "C", "desc": "Balanced"},
+                {"id": "claude-concurrent-o", "name": "O", "desc": "Highest quality"},
+                {"id": "claude-concurrent-h", "name": "H", "desc": "Fast & cheap"},
+            ]
+
+        errors: list[BaseException] = []
+
+        def _worker() -> None:
+            try:
+                wizard_model_options()
+            except BaseException as e:
+                errors.append(e)
+
+        with patch(
+            "app.llm.wizard_models._fetch_anthropic_wizard_models_from_api",
+            side_effect=_slow_fetch,
+        ):
+            threads = [threading.Thread(target=_worker) for _ in range(8)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=30.0)
+                assert not t.is_alive()
+
+        assert not errors
+        assert calls["n"] == 1
 
 
 class TestWizardModelOptions:

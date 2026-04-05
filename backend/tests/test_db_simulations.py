@@ -180,7 +180,7 @@ def test_audit_event_hash_matches_canonical_function():
         details=event.details,
     )
     row = event.model_dump()
-    assert AuditTrailRepository._compute_event_hash(row) == event.hash
+    assert AuditTrailRepository.compute_event_hash(row) == event.hash
 
 
 @pytest.mark.asyncio
@@ -227,7 +227,7 @@ async def test_audit_integrity_checks(temp_db):
         "details": {},
         "previous_hash": "0" * 64,
     }
-    event1["hash"] = repo._compute_event_hash(event1)
+    event1["hash"] = repo.compute_event_hash(event1)
     await repo.save_event(event1)
 
     ok, msg = await repo.verify_integrity("sim-int-1")
@@ -259,7 +259,7 @@ async def test_audit_integrity_checks(temp_db):
         "details": {},
         "previous_hash": "b" * 64,  # Intentionally broken linkage from ev-int-1
     }
-    event2["hash"] = repo._compute_event_hash(event2)
+    event2["hash"] = repo.compute_event_hash(event2)
     await repo.save_event(event2)
 
     ok, msg = await repo.verify_integrity("sim-int-1")

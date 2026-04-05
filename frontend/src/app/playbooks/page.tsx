@@ -198,7 +198,7 @@ export default function PlaybooksPage() {
                 onClick: () => setSearchQuery(''),
               }}
             />
-          ) : playbooks.length === 0 ? (
+          ) : (
             <EmptyState
               title="No playbooks yet"
               description="Your library does not have any playbooks yet. Start a new simulation to configure a run, or check back after templates are added."
@@ -208,7 +208,7 @@ export default function PlaybooksPage() {
                 onClick: () => router.push('/simulations/new'),
               }}
             />
-          ) : null}
+          )}
         </Card>
       )}
 

@@ -18,9 +18,25 @@ class TestCLICodexProviderGenerate:
         with patch.object(provider, "_run_cli", new_callable=AsyncMock) as run_cli:
             run_cli.return_value = "ok"
             await provider.generate(
-                [LLMMessage(role="user", content="hi")],
+                [
+                    LLMMessage(role="system", content="sys body"),
+                    LLMMessage(role="assistant", content="asst body"),
+                    LLMMessage(role="user", content="hi"),
+                    LLMMessage(role="", content="empty-role body"),
+                    LLMMessage(role="   ", content="whitespace-role body"),
+                ],
                 temperature=0.35,
             )
 
         run_cli.assert_called_once()
         assert run_cli.call_args.kwargs == {}
+        prompt = run_cli.call_args.args[0]
+        assert "[System]" in prompt
+        assert "sys body" in prompt
+        assert "[Previous response]" in prompt
+        assert "asst body" in prompt
+        assert "[User]" in prompt
+        assert "hi" in prompt
+        assert "[unknown]" in prompt
+        assert "empty-role body" in prompt
+        assert "whitespace-role body" in prompt

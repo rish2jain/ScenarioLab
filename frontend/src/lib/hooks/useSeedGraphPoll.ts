@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { api } from '@/lib/api';
 import type { UploadedFile } from '@/lib/types';
 import { useUploadStore } from '@/lib/store';
@@ -24,6 +24,25 @@ function applySeedRowToStore(
   updateFile(id, patch);
 }
 
+/** True when failure is likely transport-level (no usable HTTP response), not an app/API error body. */
+function isLikelyNetworkOrUnreachableError(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  if ((err as { name?: string }).name === 'TypeError') return true;
+  if (typeof TypeError !== 'undefined' && err instanceof TypeError) return true;
+  if (typeof DOMException !== 'undefined' && err instanceof DOMException) {
+    return err.name === 'NetworkError';
+  }
+  if (err instanceof Error) {
+    const m = err.message.toLowerCase();
+    return (
+      m.includes('failed to fetch') ||
+      m.includes('load failed') ||
+      m.includes('networkerror')
+    );
+  }
+  return false;
+}
+
 /**
  * While any upload-store file is in `processing`, periodically refresh status from GET /api/seeds
  * so the UI reflects deferred graph extraction without blocking uploadFile/processSeeds.
@@ -36,11 +55,15 @@ export function useSeedGraphPoll(): void {
   const updateFile = useUploadStore((s) => s.updateFile);
   const { addToast } = useToast();
 
-  const processingKey = files
-    .filter((f) => f.status === 'processing')
-    .map((f) => f.id)
-    .sort()
-    .join(',');
+  const processingKey = useMemo(
+    () =>
+      files
+        .filter((f) => f.status === 'processing')
+        .map((f) => f.id)
+        .sort()
+        .join(','),
+    [files]
+  );
 
   useEffect(() => {
     if (!processingKey) return;
@@ -55,14 +78,16 @@ export function useSeedGraphPoll(): void {
         consecutiveFailures = 0;
         warned = false;
         for (const id of ids) {
-          let row = seeds.find((s) => s.id === id);
+          let row: UploadedFile | null | undefined = seeds.find(
+            (s) => s.id === id
+          );
           if (!row) {
-            row = (await api.getSeed(id)) ?? undefined;
+            row = await api.getSeed(id);
           }
           if (!row) continue;
           applySeedRowToStore(updateFile, id, row);
         }
-      } catch {
+      } catch (err) {
         consecutiveFailures += 1;
         if (!warned && consecutiveFailures >= 3) {
           warned = true;
@@ -71,12 +96,14 @@ export function useSeedGraphPoll(): void {
             'error'
           );
         }
-        for (const id of ids) {
-          try {
-            const row = await api.getSeed(id);
-            if (row) applySeedRowToStore(updateFile, id, row);
-          } catch {
-            /* offline */
+        if (!isLikelyNetworkOrUnreachableError(err)) {
+          for (const id of ids) {
+            try {
+              const row = await api.getSeed(id);
+              if (row) applySeedRowToStore(updateFile, id, row);
+            } catch {
+              /* per-id failure */
+            }
           }
         }
       }

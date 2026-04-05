@@ -24,6 +24,26 @@ function formatFastApiDetail(raw: unknown): string | null {
   return null;
 }
 
+/**
+ * Read body once (avoids empty-body `response.json()` throws), then parse JSON.
+ * Tries `JSON.parse` inside try/catch; returns null for empty or non-JSON bodies.
+ */
+async function parseSuccessJsonBody(response: Response): Promise<unknown | null> {
+  let text: string;
+  try {
+    text = await response.text();
+  } catch {
+    return null;
+  }
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return null;
+  }
+}
+
 /** Typed fetch wrapper. Returns ApiResponse<T> with success=false on network or HTTP errors. */
 export async function fetchApi<T>(
   endpoint: string,
@@ -36,12 +56,16 @@ export async function fetchApi<T>(
       defaultHeaders['Content-Type'] = 'application/json';
     }
     const url = `${API_BASE_URL}${endpoint}`;
+    const { headers: optionHeadersInit, ...restOptions } = options ?? {};
+    const mergedHeaders = new Headers(defaultHeaders);
+    if (optionHeadersInit !== undefined) {
+      new Headers(optionHeadersInit).forEach((value, key) => {
+        mergedHeaders.set(key, value);
+      });
+    }
     const response = await fetch(url, {
-      headers: {
-        ...defaultHeaders,
-        ...(options?.headers as Record<string, string>),
-      },
-      ...options,
+      ...restOptions,
+      headers: mergedHeaders,
     });
 
     if (!response.ok) {
@@ -64,8 +88,11 @@ export async function fetchApi<T>(
       return { success: false, error: errorMessage, status: response.status };
     }
 
-    const data = await response.json();
-    return { success: true, data };
+    const parsed = await parseSuccessJsonBody(response);
+    if (parsed === null) {
+      return { success: true, data: undefined };
+    }
+    return { success: true, data: parsed as T };
   } catch (error) {
     console.warn(`API call failed for ${endpoint}:`, error);
     const message = error instanceof Error ? error.message : String(error);

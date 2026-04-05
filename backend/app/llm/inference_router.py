@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from app.inference_modes import InferenceMode, normalize_inference_mode
 from app.llm.provider import LLMMessage, LLMProvider
 
 logger = logging.getLogger(__name__)
@@ -43,10 +44,10 @@ class InferenceRouter:
         cloud_rounds: int = 1,
     ) -> InferenceRouter:
         """Build router; probe local when hybrid/local; degrade hybrid to cloud if unreachable."""
-        m = (mode or "cloud").strip().lower()
+        m = normalize_inference_mode(mode)
         cr = max(0, int(cloud_rounds))
 
-        if m == "local":
+        if m == InferenceMode.LOCAL.value:
             if local is None:
                 raise ValueError("inference_mode=local requires a configured local LLM provider")
             try:
@@ -55,12 +56,17 @@ class InferenceRouter:
                 raise ValueError("Local LLM unreachable; fix LOCAL_LLM_* or use inference_mode=cloud") from e
             except Exception as e:
                 raise ValueError(f"Local LLM connection failed: {e}") from e
-            return cls(cloud=cloud, local=local, mode="local", cloud_rounds=cr)
+            return cls(cloud=cloud, local=local, mode=InferenceMode.LOCAL.value, cloud_rounds=cr)
 
-        if m == "hybrid":
+        if m == InferenceMode.HYBRID.value:
             if local is None:
                 logger.warning("Hybrid inference requested but no local provider; using cloud only")
-                return cls(cloud=cloud, local=None, mode="cloud", cloud_rounds=cr)
+                return cls(
+                    cloud=cloud,
+                    local=None,
+                    mode=InferenceMode.CLOUD.value,
+                    cloud_rounds=cr,
+                )
             try:
                 await asyncio.wait_for(local.test_connection(), timeout=5.0)
             except Exception as e:
@@ -68,20 +74,30 @@ class InferenceRouter:
                     "Hybrid inference: local LLM unreachable (%s); using cloud only",
                     e,
                 )
-                return cls(cloud=cloud, local=None, mode="cloud", cloud_rounds=cr)
-            return cls(cloud=cloud, local=local, mode="hybrid", cloud_rounds=cr)
+                return cls(
+                    cloud=cloud,
+                    local=None,
+                    mode=InferenceMode.CLOUD.value,
+                    cloud_rounds=cr,
+                )
+            return cls(
+                cloud=cloud,
+                local=local,
+                mode=InferenceMode.HYBRID.value,
+                cloud_rounds=cr,
+            )
 
         # cloud (default)
-        return cls(cloud=cloud, local=local, mode="cloud", cloud_rounds=cr)
+        return cls(cloud=cloud, local=local, mode=InferenceMode.CLOUD.value, cloud_rounds=cr)
 
     def get_provider(self, round_number: int, task_type: str) -> LLMProvider:
         """Return the provider for this round and task."""
         tt = (task_type or "response").strip().lower()
 
-        if self.mode == "cloud":
+        if self.mode == InferenceMode.CLOUD.value:
             return self.cloud
 
-        if self.mode == "local":
+        if self.mode == InferenceMode.LOCAL.value:
             if self.local is None:
                 return self.cloud
             return self.local
@@ -101,7 +117,7 @@ class InferenceRouter:
         round_number: int,
         task_type: str,
     ) -> bool:
-        if self.mode != "hybrid" or self.local is None:
+        if self.mode != InferenceMode.HYBRID.value or self.local is None:
             return False
         tt = (task_type or "response").strip().lower()
         if tt in ("analytics", "report"):
@@ -147,7 +163,7 @@ class InferenceRouter:
         exemplars), or a generic phrase when ``cloud_rounds`` is 0 (e.g. Monte Carlo
         follow-up routers that preload exemplars from an earlier run).
         """
-        if self.mode != "hybrid":
+        if self.mode != InferenceMode.HYBRID.value:
             return []
         data = self._exemplars.get(agent_id)
         if not data:
@@ -182,11 +198,16 @@ class InferenceRouter:
         return [LLMMessage(role="user", content=body)]
 
     def with_preloaded_exemplars(self) -> InferenceRouter:
-        """Monte Carlo copies 2+: all rounds local, shared exemplars from copy 1."""
+        """Monte Carlo copies 2+: all rounds local, shared exemplars from copy 1.
+
+        Shallow-copies the agent-id map only; per-agent exemplar dicts (response / vote /
+        stance) are the same objects as in ``self``. Mutating them affects this router too
+        unless callers deep-copy first — see :meth:`exemplars_shared_with`.
+        """
         return InferenceRouter(
             cloud=self.cloud,
             local=self.local,
-            mode="hybrid",
+            mode=InferenceMode.HYBRID.value,
             cloud_rounds=0,
             exemplars=dict(self._exemplars),
         )

@@ -2,11 +2,22 @@
 
 import { fetchApi } from './client';
 
+/** Matches backend `inference_mode` / `default_inference_mode` vocabulary (`config.py`). */
+export type DefaultInferenceMode = 'cloud' | 'hybrid' | 'local';
+
+function normalizeDefaultInferenceMode(raw: unknown): DefaultInferenceMode {
+  const s = String(raw ?? 'cloud')
+    .trim()
+    .toLowerCase();
+  if (s === 'hybrid' || s === 'local' || s === 'cloud') return s;
+  return 'cloud';
+}
+
 export interface InferenceCapabilities {
   hybridAvailable: boolean;
   localProvider: string | null;
   localModel: string | null;
-  defaultInferenceMode: string;
+  defaultInferenceMode: DefaultInferenceMode;
 }
 
 export const llmApi = {
@@ -19,7 +30,9 @@ export const llmApi = {
         localProvider:
           d.local_provider != null ? String(d.local_provider) : null,
         localModel: d.local_model != null ? String(d.local_model) : null,
-        defaultInferenceMode: String(d.default_inference_mode ?? 'cloud'),
+        defaultInferenceMode: normalizeDefaultInferenceMode(
+          d.default_inference_mode
+        ),
       };
     }
     return {

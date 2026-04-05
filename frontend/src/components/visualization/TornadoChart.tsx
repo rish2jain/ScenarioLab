@@ -65,6 +65,12 @@ export function TornadoChart({
     leftDelta: Math.max(0, Math.abs(param.baseValue - param.lowValue)),
     rightDelta: Math.max(0, Math.abs(param.highValue - param.baseValue)),
   }));
+  const paramExtentsMap = new Map(
+    paramExtents.map((entry) => [
+      entry.param.id,
+      { leftDelta: entry.leftDelta, rightDelta: entry.rightDelta },
+    ])
+  );
   const maxDelta = Math.max(
     1,
     ...paramExtents.flatMap(({ leftDelta, rightDelta }) => [leftDelta, rightDelta])
@@ -225,11 +231,10 @@ export function TornadoChart({
         {/* Y-axis labels and bars */}
         {sortedParams.map((param, index) => {
           const y = margin.top + index * (barHeight + barGap);
-          const { leftDelta, rightDelta } =
-            paramExtents.find((entry) => entry.param.id === param.id) ?? {
-              leftDelta: 0,
-              rightDelta: 0,
-            };
+          const { leftDelta, rightDelta } = paramExtentsMap.get(param.id) ?? {
+            leftDelta: 0,
+            rightDelta: 0,
+          };
           const leftBarWidth = leftDelta * scaleFactor;
           const rightBarWidth = rightDelta * scaleFactor;
 

@@ -5,15 +5,36 @@ import math
 import random
 import time
 import uuid
+from typing import Any, Protocol
 
 from pydantic import BaseModel
 
 from app.analytics.analytics_agent import AnalyticsAgent, SimulationMetrics
 from app.config import settings
-from app.simulation.engine import SimulationEngine
+from app.inference_modes import InferenceMode, normalize_inference_mode
 from app.simulation.models import SimulationConfig
 
 logger = logging.getLogger(__name__)
+
+
+class MonteCarloSimulationEngine(Protocol):
+    """Async simulation API surface used by :class:`MonteCarloRunner.run`."""
+
+    async def create_simulation(
+        self,
+        config: SimulationConfig,
+        graph_memory_manager: Any = None,
+        *,
+        inference_router: Any = None,
+    ) -> Any: ...
+
+    async def run_simulation(self, simulation_id: str, on_message: Any = None) -> Any: ...
+
+    def get_agent_router(self, sim_id: str, agent_index: int = 0) -> Any: ...
+
+    async def get_simulation(self, simulation_id: str) -> Any: ...
+
+    async def delete_simulation(self, simulation_id: str) -> bool: ...
 
 
 def _policy_adoption_rates_from_iterations(
@@ -60,7 +81,7 @@ class MonteCarloResult(BaseModel):
 class MonteCarloRunner:
     """Run multiple simulation iterations for statistical confidence."""
 
-    def __init__(self, simulation_engine: SimulationEngine):
+    def __init__(self, simulation_engine: MonteCarloSimulationEngine):
         self.engine = simulation_engine
         self.analytics_agent = AnalyticsAgent()
 
@@ -73,8 +94,8 @@ class MonteCarloRunner:
         iteration_results: list[dict] = []
 
         bp = config.base_config.parameters or {}
-        inf_mode = str(bp.get("inference_mode") or settings.inference_mode or "cloud").strip().lower()
-        mc_hybrid_followup = inf_mode == "hybrid" and config.iterations > 1
+        inf_mode = normalize_inference_mode(bp.get("inference_mode") or settings.inference_mode)
+        mc_hybrid_followup = inf_mode == InferenceMode.HYBRID.value and config.iterations > 1
         follow_up_router = None
 
         for i in range(config.iterations):
@@ -96,7 +117,7 @@ class MonteCarloRunner:
 
                 if i == 0 and mc_hybrid_followup:
                     router = self.engine.get_agent_router(sim_id)
-                    if router is not None and router.mode == "hybrid":
+                    if router is not None and router.mode == InferenceMode.HYBRID.value:
                         follow_up_router = router.with_preloaded_exemplars()
 
                 # Get final state

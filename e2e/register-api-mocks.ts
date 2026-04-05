@@ -13,6 +13,9 @@ export type RegisterApiMocksConfig = {
 /** Header names to redact (case-insensitive) for E2E logs and thrown errors. */
 const SENSITIVE_HEADER_NAMES = new Set(['authorization', 'cookie', 'x-api-key']);
 
+/** Max bytes read from multipart POST bodies for filename / content sniffing (256 KiB). */
+const SNIFF_BUFFER_LIMIT = 256 * 1024;
+
 function sanitizeRequestHeaders(headers: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, val] of Object.entries(headers)) {
@@ -173,7 +176,74 @@ export async function registerApiMocks(
     });
   });
 
-  // Integration API key management (must be before the generic **/api/** fallback)
+  // Next.js admin BFF (httpOnly session + proxy) — must be before the generic **/api/** fallback
+  await page.route('**/api/admin/session**', async route => {
+    const u = new URL(route.request().url());
+    if (u.pathname !== '/api/admin/session') {
+      await route.continue();
+      return;
+    }
+    const method = route.request().method();
+    if (method === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ unlocked: true }),
+      });
+      return;
+    }
+    if (method === 'POST') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true }),
+      });
+      return;
+    }
+    if (method === 'DELETE') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.route('**/api/admin/backend/**', async route => {
+    const u = new URL(route.request().url());
+    const method = route.request().method();
+    const listPath = '/api/admin/backend/v1/api-keys';
+    if (u.pathname === listPath && method === 'GET') {
+      await route.fulfill({ status: 200, json: [] });
+      return;
+    }
+    if (u.pathname === listPath && method === 'POST') {
+      await route.fulfill({
+        status: 200,
+        json: {
+          key_id: 'e2e-key-id',
+          name: 'E2E Key',
+          key: 'e2e-mock-secret',
+          permissions: ['read:simulations'],
+          created_at: new Date().toISOString(),
+        },
+      });
+      return;
+    }
+    if (
+      u.pathname.startsWith(`${listPath}/`) &&
+      u.pathname.split('/').length === listPath.split('/').length + 1 &&
+      method === 'DELETE'
+    ) {
+      await route.fulfill({ status: 200, json: { status: 'revoked', key_id: 'x' } });
+      return;
+    }
+    await route.continue();
+  });
+
+  // Integration API key management (direct backend path; keep for any client still using /api/v1/api-keys)
   await page.route('**/api/v1/api-keys**', async route => {
     const url = route.request().url();
     const method = route.request().method();
@@ -241,7 +311,7 @@ export async function registerApiMocks(
       const buf = req.postDataBuffer();
       let sniff = '';
       if (buf && buf.length > 0) {
-        sniff = buf.toString('utf8', 0, Math.min(buf.length, 256 * 1024));
+        sniff = buf.toString('utf8', 0, Math.min(buf.length, SNIFF_BUFFER_LIMIT));
       }
       if (sniff.includes('malware.exe')) {
         await route.fulfill({

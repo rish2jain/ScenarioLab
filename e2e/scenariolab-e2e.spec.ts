@@ -649,13 +649,13 @@ test.describe('P1: Fine-Tuning', () => {
 });
 
 test.describe('P1: API Keys', () => {
-  /** Sets admin sessionStorage on the app origin; optionally navigates to a path or full URL. */
+  /**
+   * Navigates with mocked admin session (`GET /api/admin/session` → unlocked) and optional path.
+   * Admin auth is server-side (httpOnly cookie + BFF); E2E does not use sessionStorage.
+   */
   async function unlockApiKeysPage(page: Page, targetPathOrUrl?: string) {
-    await page.goto(BASE);
-    await page.evaluate(() => {
-      sessionStorage.setItem('scenariolab_admin_api_key', 'e2e-mock-admin');
-    });
     if (targetPathOrUrl === undefined) {
+      await page.goto(BASE);
       return;
     }
     const target =

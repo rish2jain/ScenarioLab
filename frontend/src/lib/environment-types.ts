@@ -36,6 +36,7 @@ const LEGACY_ENV_MAP: Record<string, SimulationEnvironmentId> = {
   collaborative: 'integration',
 };
 
+/** Canonical backend environment id; safe for `environment_type` on simulation create/update. */
 export function normalizeSimulationEnvironmentType(
   raw: string | undefined | null
 ): SimulationEnvironmentId {
@@ -47,13 +48,6 @@ export function normalizeSimulationEnvironmentType(
     return s as SimulationEnvironmentId;
   }
   return 'boardroom';
-}
-
-/** Value sent as `environment_type` on POST /api/simulations (snake_case enum strings). */
-export function environmentTypeToBackend(
-  raw: string | undefined | null
-): SimulationEnvironmentId {
-  return normalizeSimulationEnvironmentType(raw);
 }
 
 export function simulationEnvironmentLabel(id: string): string {

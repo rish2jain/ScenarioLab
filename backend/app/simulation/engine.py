@@ -10,6 +10,7 @@ from app.config import settings
 from app.database import SimulationRepository
 from app.graph.graphiti_service import delete_simulation_graph, schedule_round_episode_ingest
 from app.graph.seed_processor import SeedProcessor
+from app.inference_modes import InferenceMode, normalize_inference_mode
 from app.llm.factory import get_llm_provider as _get_llm_provider
 from app.llm.factory import get_local_llm_provider
 from app.llm.inference_router import InferenceRouter
@@ -60,9 +61,9 @@ def _wizard_inference_params(params: dict | None) -> tuple[str, int]:
     p = params or {}
     raw_mode = p.get("inference_mode")
     if raw_mode is None or (isinstance(raw_mode, str) and not str(raw_mode).strip()):
-        mode = (settings.inference_mode or "cloud").strip().lower()
+        mode = normalize_inference_mode(settings.inference_mode)
     else:
-        mode = str(raw_mode).strip().lower()
+        mode = normalize_inference_mode(str(raw_mode))
     cr_raw = p.get("hybrid_cloud_rounds", settings.hybrid_cloud_rounds)
     try:
         cr = int(cr_raw)
@@ -181,13 +182,13 @@ class SimulationEngine:
 
         params = config.parameters
         po = params.get("parsedObjective") or params.get("parsed_objective")
-        if isinstance(po, dict) and po and not parsed_objective_matches_description(
-            po, config.description, config.parameters
+        if (
+            isinstance(po, dict)
+            and po
+            and not parsed_objective_matches_description(po, config.description, config.parameters)
         ):
             config.parameters = {
-                k: v
-                for k, v in dict(params).items()
-                if k not in ("parsedObjective", "parsed_objective")
+                k: v for k, v in dict(params).items() if k not in ("parsedObjective", "parsed_objective")
             }
             params = config.parameters
 
@@ -403,7 +404,7 @@ class SimulationEngine:
         if not agents:
             return
         router = agents[0].router
-        if router.mode != "hybrid" or router.local is None:
+        if router.mode != InferenceMode.HYBRID.value or router.local is None:
             return
         snap = sim_state.hybrid_exemplar_snapshot
         if snap:
@@ -606,7 +607,11 @@ class SimulationEngine:
                         )
                     if agents:
                         router = agents[0].router
-                        if router.mode == "hybrid" and router.local is not None and round_num == router.cloud_rounds:
+                        if (
+                            router.mode == InferenceMode.HYBRID.value
+                            and router.local is not None
+                            and round_num == router.cloud_rounds
+                        ):
                             for agent in agents:
                                 ams = [m for m in round_state.messages if m.agent_id == agent.id]
                                 router.store_exemplar(

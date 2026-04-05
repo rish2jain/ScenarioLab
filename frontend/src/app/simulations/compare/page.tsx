@@ -24,6 +24,18 @@ const DEFAULT_BASE = `{
   "parameters": {}
 }`;
 
+function parseBaseJson(
+  raw: string,
+  setError: (message: string) => void
+): Record<string, unknown> | null {
+  try {
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    setError('Base config must be valid JSON.');
+    return null;
+  }
+}
+
 export default function CompareScenariosPage() {
   const { addToast } = useToast();
   const [nameA, setNameA] = useState('Scenario A');
@@ -39,13 +51,8 @@ export default function CompareScenariosPage() {
   const runPreset = async () => {
     setError('');
     setResult(null);
-    let base: Record<string, unknown>;
-    try {
-      base = JSON.parse(baseJson) as Record<string, unknown>;
-    } catch {
-      setError('Base config must be valid JSON.');
-      return;
-    }
+    const base = parseBaseJson(baseJson, setError);
+    if (base === null) return;
     setLoading(true);
     setCreatedIds(null);
     try {
@@ -78,13 +85,8 @@ export default function CompareScenariosPage() {
   };
 
   const createBothSimulations = async () => {
-    let base: Record<string, unknown>;
-    try {
-      base = JSON.parse(baseJson) as Record<string, unknown>;
-    } catch {
-      setError('Base config must be valid JSON.');
-      return;
-    }
+    const base = parseBaseJson(baseJson, setError);
+    if (base === null) return;
     setError('');
     setCreating(true);
     setCreatedIds(null);

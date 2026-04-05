@@ -1,6 +1,8 @@
 // Integration-layer types: voice, counterpart agents, personas,
 // fine-tuning, API keys, webhooks, regulatory generator, behavioral axioms
 
+import type { SeverityLevel } from './report';
+
 // Voice
 export interface VoiceTranscription {
   text: string;
@@ -146,10 +148,10 @@ export interface GeneratedScenario {
   rounds: number;
   key_issues: string[];
   impact_assessment: {
-    compliance_risk: 'low' | 'medium' | 'high' | 'critical';
-    operational_impact: 'low' | 'medium' | 'high' | 'critical';
-    timeline_pressure: 'low' | 'medium' | 'high' | 'critical';
-    financial_exposure: 'low' | 'medium' | 'high' | 'critical';
+    compliance_risk: SeverityLevel;
+    operational_impact: SeverityLevel;
+    timeline_pressure: SeverityLevel;
+    financial_exposure: SeverityLevel;
   };
   suggested_objectives: string[];
 }

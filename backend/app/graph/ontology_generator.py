@@ -97,12 +97,8 @@ Same JSON shape as consulting mode. 8-14 entity types, 5-10 edges."""
             max_tokens=2500,
         )
         content = resp.content.strip()
-        if content.lower().startswith("```json"):
-            content = content[7:]
-        elif content.startswith("```"):
-            content = content[3:]
-        if content.endswith("```"):
-            content = content[:-3]
+        content = re.sub(r"^```\s*\w*\s*", "", content, flags=re.IGNORECASE)
+        content = re.sub(r"```\s*$", "", content)
         data = json.loads(content.strip())
         entity_by_key: dict[str, OntologyEntityType] = {}
         for e in data.get("entity_types") or []:

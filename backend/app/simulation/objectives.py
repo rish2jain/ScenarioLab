@@ -20,6 +20,9 @@ logger = logging.getLogger(__name__)
 # Strip optional markdown ```json ... ``` wrapper from LLM output (non-greedy inner body).
 _FENCE_RE = re.compile(r"^```(?:\w+)?\s*\n?(.*?)```\s*$", re.DOTALL)
 
+# Cap JSON body size in parse-failure logs (full string is still used for json.loads).
+_JSON_PARSE_LOG_MAX_CHARS = 8000
+
 _USER_OBJECTIVE_START = "USER_OBJECTIVE_START"
 _USER_OBJECTIVE_END = "USER_OBJECTIVE_END"
 
@@ -165,6 +168,15 @@ Return JSON only:
   "key_actors": ["organizations or people to track"]
 }}
 """
+
+    def _parse_fallback() -> ParsedSimulationObjective:
+        return ParsedSimulationObjective(
+            raw_text=text,
+            mode=mode,
+            summary=text[:500],
+            key_actors=[],
+        )
+
     try:
         resp = await llm.generate(
             messages=[
@@ -181,7 +193,26 @@ Return JSON only:
         m = _FENCE_RE.match(content)
         if m:
             content = m.group(1).strip()
-        data = json.loads(content.strip())
+        parse_input = content.strip()
+        try:
+            data = json.loads(parse_input)
+        except json.JSONDecodeError as e:
+            logged = (
+                parse_input
+                if len(parse_input) <= _JSON_PARSE_LOG_MAX_CHARS
+                else f"{parse_input[:_JSON_PARSE_LOG_MAX_CHARS]}...<truncated, total_len={len(parse_input)}>"
+            )
+            logger.error(
+                "parse_simulation_objective: json.loads failed on LLM output "
+                "(after resp.content strip and optional _FENCE_RE unwrap): %s | "
+                "lineno=%s colno=%s pos=%s | content=%r",
+                e.msg,
+                e.lineno,
+                e.colno,
+                e.pos,
+                logged,
+            )
+            return _parse_fallback()
         return ParsedSimulationObjective(
             raw_text=text,
             mode=mode,
@@ -192,13 +223,11 @@ Return JSON only:
             key_actors=_coerce_str_list(data.get("key_actors"), field_name="key_actors"),
         )
     except Exception:
-        logger.exception("parse_simulation_objective failed")
-        return ParsedSimulationObjective(
-            raw_text=text,
-            mode=mode,
-            summary=text[:500],
-            key_actors=[],
+        logger.exception(
+            "parse_simulation_objective failed: LLM generate(), response access, "
+            "or post-parse coercion (not json.loads JSONDecodeError)"
         )
+        return _parse_fallback()
 
 
 def format_simulation_objective_for_prompt(
@@ -212,9 +241,7 @@ def format_simulation_objective_for_prompt(
         parts.append("STATED OBJECTIVE (primary question for this simulation):\n" f"{desc}")
     params = parameters or {}
     po = params.get("parsedObjective") or params.get("parsed_objective")
-    if isinstance(po, dict) and po and not parsed_objective_matches_description(
-        po, description, parameters
-    ):
+    if isinstance(po, dict) and po and not parsed_objective_matches_description(po, description, parameters):
         po = None
     if isinstance(po, dict) and po:
         summary = str(po.get("summary", "")).strip()

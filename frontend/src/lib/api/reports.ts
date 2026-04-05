@@ -1,8 +1,7 @@
-// Report, Chat, Annotation, Audit, Sensitivity, ZOPA, Backtesting, Market,
-// Cross-Simulation, and Analytics API functions
+// Report, Annotation, Audit, Sensitivity, ZOPA, Backtesting, Market,
+// Cross-Simulation, and Analytics API functions (simulation chat lives on simulationApi)
 import type {
   Report,
-  ChatMessage,
   TornadoChartData,
   Annotation,
   DecayCurveResult,
@@ -74,55 +73,6 @@ export const reportApi = {
     throw new Error(result.error || 'Export failed');
   },
 
-  // Chat
-  getChatMessages: async (simulationId: string, agentId?: string): Promise<ChatMessage[]> => {
-    const url = agentId
-      ? `/api/simulations/${simulationId}/chat?agentId=${agentId}`
-      : `/api/simulations/${simulationId}/chat`;
-    const result = await fetchApi<ChatMessage[]>(url);
-    if (result.success && result.data && Array.isArray(result.data)) {
-      return result.data;
-    }
-    if (result.status === 404) return [];
-    throw new Error(
-      result.error?.trim() ||
-        (result.status
-          ? `Could not load chat history (HTTP ${result.status}).`
-          : 'Could not load chat history.')
-    );
-  },
-
-  sendChatMessage: async (
-    simulationId: string,
-    content: string,
-    agentId?: string
-  ): Promise<ChatMessage> => {
-    const result = await fetchApi<ChatMessage>(`/api/simulations/${simulationId}/chat`, {
-      method: 'POST',
-      body: JSON.stringify({ content, agentId }),
-    });
-    if (result.success && result.data) return result.data;
-    throw new Error('Failed to send chat message');
-  },
-
-  sendAgentChat: async (
-    simulationId: string,
-    agentId: string,
-    message: string
-  ): Promise<{ agent_id: string; agent_name: string; response: string; timestamp: string } | null> => {
-    const result = await fetchApi<{ agent_id: string; agent_name: string; response: string; timestamp: string }>(
-      `/api/simulations/${simulationId}/chat`,
-      { method: 'POST', body: JSON.stringify({ agent_id: agentId, message }) }
-    );
-    if (result.success && result.data) return result.data;
-    throw new Error(
-      result.error?.trim() ||
-        (result.status
-          ? `Could not send agent message (HTTP ${result.status}).`
-          : 'Could not send agent message.')
-    );
-  },
-
   // Sensitivity Analysis
   getSensitivityAnalysis: async (simulationId: string): Promise<TornadoChartData | null> => {
     const result = await fetchApi<TornadoChartData>(
@@ -176,9 +126,17 @@ export const reportApi = {
     );
   },
 
-  deleteAnnotation: async (annotationId: string): Promise<boolean> => {
-    const result = await fetchApi<void>(`/api/annotations/${annotationId}`, { method: 'DELETE' });
-    return result.success;
+  deleteAnnotation: async (annotationId: string): Promise<void> => {
+    const result = await fetchApi<unknown>(`/api/annotations/${annotationId}`, {
+      method: 'DELETE',
+    });
+    if (result.success) return;
+    throw new Error(
+      result.error?.trim() ||
+        (result.status
+          ? `Could not delete annotation (HTTP ${result.status}).`
+          : 'Could not delete annotation.')
+    );
   },
 
   exportAnnotations: async (simulationId: string): Promise<unknown> => {
@@ -388,7 +346,13 @@ export const reportApi = {
       { method: 'POST' }
     );
     if (result.success && result.data) return result.data;
-    return null;
+    if (result.status === 404) return null;
+    throw new Error(
+      result.error?.trim() ||
+        (result.status
+          ? `Could not load attribution (HTTP ${result.status}).`
+          : 'Could not load attribution.')
+    );
   },
 
   getFairnessAudit: async (simulationId: string): Promise<FairnessAuditResult> => {

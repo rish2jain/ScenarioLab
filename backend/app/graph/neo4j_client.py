@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 
@@ -46,6 +47,24 @@ def get_application_neo4j_client() -> Neo4jClient | None:
 def is_application_neo4j_registered() -> bool:
     """True after :func:`register_application_neo4j_client` runs (e.g. lifespan)."""
     return _application_neo4j_registered
+
+
+def unregister_application_neo4j_client() -> None:
+    """Clear app-lifecycle Neo4j registration (e.g. between tests).
+
+    Best-effort closes the registered client via :func:`asyncio.run` because
+    :meth:`Neo4jClient.close` is async. If called while an event loop is already
+    running, await :meth:`Neo4jClient.close` yourself first, then unregister.
+    """
+    global _application_neo4j_client, _application_neo4j_registered
+    client = _application_neo4j_client
+    if client is not None:
+        try:
+            asyncio.run(client.close())
+        except Exception as e:
+            logger.warning("Failed to close Neo4j client during unregister: %s", e)
+    _application_neo4j_client = None
+    _application_neo4j_registered = False
 
 
 class Neo4jClient:

@@ -7,14 +7,14 @@ interface SpinnerProps {
   message?: string;
 }
 
-export function Spinner({ size = 'md', className, message }: SpinnerProps) {
-  const sizes = {
-    sm: 'w-4 h-4',
-    md: 'w-8 h-8',
-    lg: 'w-12 h-12',
-    xl: 'w-16 h-16',
-  };
+const sizes: Record<NonNullable<SpinnerProps['size']>, string> = {
+  sm: 'w-4 h-4',
+  md: 'w-8 h-8',
+  lg: 'w-12 h-12',
+  xl: 'w-16 h-16',
+};
 
+export function Spinner({ size = 'md', className, message }: SpinnerProps) {
   return (
     <div
       className={clsx('flex flex-col items-center justify-center', className)}

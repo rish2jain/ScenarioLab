@@ -759,6 +759,9 @@ class PersonaDesigner:
             return CustomPersonaDeleteOutcome.NOT_FOUND_IN_MEMORY
 
         db_deleted = await _delete_custom_persona(persona_id)
+        # _delete_custom_persona: False means no DB row was removed. delete_custom_persona
+        # still clears designer + persona_library caches below on purpose — reconcile
+        # in-memory state when the row is already gone or caches were out of sync.
         if not db_deleted:
             logger.warning(
                 "Delete custom persona %s: DELETE matched no DB row while persona "

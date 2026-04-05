@@ -5,6 +5,7 @@ import logging
 from app.simulation.agent import SimulationAgent
 from app.simulation.environments.base import BaseEnvironment
 from app.simulation.models import EnvironmentType, RoundState
+from app.simulation.objectives import build_round_agenda_line
 from app.simulation.turn_rules import TurnManager
 from app.simulation.visibility import VisibilityManager
 
@@ -98,7 +99,7 @@ class NegotiationEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context=("Clearly state your position and interests in the " "negotiation."),
+                context=self._resolve_phase_instruction("position_statements", agent.archetype.role),
             )
             if message:
                 round_state.messages.append(message)
@@ -126,7 +127,7 @@ class NegotiationEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context=("Summarize the private discussions and identify " "common ground."),
+                context=self._resolve_phase_instruction("private_caucus", mediator.archetype.role),
             )
             if message:
                 # Mark as coalition visible (mediator's view)
@@ -162,7 +163,7 @@ class NegotiationEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context=("Make a counter-proposal or respond to the other " "party's offer."),
+                context=self._resolve_phase_instruction("counter_proposal", agent.archetype.role),
             )
             if message:
                 round_state.messages.append(message)
@@ -190,7 +191,7 @@ class NegotiationEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context="Identify your non-negotiable red lines clearly.",
+                context=self._resolve_phase_instruction("red_line_identification", agent.archetype.role),
             )
             if message:
                 round_state.messages.append(message)
@@ -218,7 +219,7 @@ class NegotiationEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context=("Indicate whether you can accept the current terms " "or if we're at an impasse."),
+                context=self._resolve_phase_instruction("agreement_check", agent.archetype.role),
             )
             if message:
                 round_state.messages.append(message)
@@ -279,8 +280,24 @@ class NegotiationEnvironment(BaseEnvironment):
 
         return evaluation
 
-    def _resolve_phase_instruction(self, phase: str, agent_role: str) -> str:
-        """Get phase-specific instruction for an agent."""
+    def get_phase_instruction(
+        self,
+        phase: str,
+        agent_role: str,
+        *,
+        round_number: int = 1,
+    ) -> str:
+        """Round-agenda only; phase body is supplied via ``context`` from ``_resolve_phase_instruction``."""
+        line = build_round_agenda_line(
+            round_number,
+            getattr(self._sim_config, "parameters", None) or {},
+        )
+        if line:
+            return f"Round focus (objective hypothesis): {line}"
+        return ""
+
+    def _resolve_phase_instruction(self, phase: str, _agent_role: str) -> str:
+        """Phase-specific copy for ``_process_agent_turn`` ``context`` (and shared instruction text source)."""
         instructions = {
             "position_statements": (
                 "Clearly state your opening position and key interests. " "Be firm but leave room for negotiation."

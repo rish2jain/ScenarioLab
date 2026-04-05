@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -32,7 +32,11 @@ import { useSimulationStore } from '@/lib/store';
 import { useElapsedTimer } from '@/hooks/useElapsedTimer';
 import { api } from '@/lib/api';
 import { fetchApi } from '@/lib/api/client';
-import { normalizeSimulation, normalizeAgentMessage } from '@/lib/api/normalizers';
+import {
+  createAgentColorAllocator,
+  normalizeSimulation,
+  normalizeAgentMessage,
+} from '@/lib/api/normalizers';
 import type { AgentMessage } from '@/lib/types';
 
 const POLL_BASE_MS = 2000;
@@ -89,6 +93,12 @@ export default function SimulationMonitorPage() {
   const elapsedStorageKey = `scenariolab-sim-elapsed-${simulationId}`;
   const elapsedSeconds = useElapsedTimer(currentSimulation, elapsedStorageKey);
 
+  const messageAgentColors = useMemo(
+    () => createAgentColorAllocator(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `simulationId` is only in the deps so `createAgentColorAllocator` runs again when the route changes; the factory does not read `simulationId`.
+    [simulationId],
+  );
+
   // Fetch simulation state + messages (reusable for initial load and polling)
   const refreshSimulation = useCallback(async () => {
     let simulationData: Awaited<ReturnType<typeof api.getSimulation>>;
@@ -96,7 +106,7 @@ export default function SimulationMonitorPage() {
     try {
       [simulationData, messagesData] = await Promise.all([
         api.getSimulation(simulationId),
-        api.getAgentMessages(simulationId),
+        api.getAgentMessages(simulationId, messageAgentColors),
       ]);
     } catch (error) {
       setCurrentSimulation(null);
@@ -126,7 +136,7 @@ export default function SimulationMonitorPage() {
     }
     setAgentMessages(messagesData);
     return simulationData;
-  }, [simulationId, setCurrentSimulation, setAgentMessages]);
+  }, [simulationId, messageAgentColors, setCurrentSimulation, setAgentMessages]);
 
   /** Poll refresh using raw fetch results so transient API failures can be detected (fetchApi does not throw). */
   const pollSimulation = useCallback(async (): Promise<boolean> => {
@@ -137,7 +147,9 @@ export default function SimulationMonitorPage() {
 
     let messagesData: AgentMessage[];
     if (msgRes.success && msgRes.data) {
-      messagesData = msgRes.data.map((m) => normalizeAgentMessage(m));
+      messagesData = msgRes.data.map((m) =>
+        normalizeAgentMessage(m, messageAgentColors)
+      );
     } else if (msgRes.status === 404) {
       messagesData = [];
     } else {
@@ -159,7 +171,7 @@ export default function SimulationMonitorPage() {
       return true;
     }
     return false;
-  }, [simulationId, setCurrentSimulation, setAgentMessages]);
+  }, [simulationId, messageAgentColors, setCurrentSimulation, setAgentMessages]);
 
   // Initial load
   useEffect(() => {

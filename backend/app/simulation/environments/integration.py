@@ -5,6 +5,7 @@ import logging
 from app.simulation.agent import SimulationAgent
 from app.simulation.environments.base import BaseEnvironment
 from app.simulation.models import EnvironmentType, RoundState
+from app.simulation.objectives import build_round_agenda_line
 from app.simulation.turn_rules import TurnManager
 from app.simulation.visibility import VisibilityManager
 
@@ -100,7 +101,7 @@ class IntegrationEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context="Document the current state of your functional area.",
+                context=self._resolve_phase_instruction("current_state_mapping", agent.archetype.role),
             )
             if message:
                 round_state.messages.append(message)
@@ -130,7 +131,7 @@ class IntegrationEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context="Describe the desired future state for your area.",
+                context=self._resolve_phase_instruction("future_state_vision", agent.archetype.role),
             )
             if message:
                 round_state.messages.append(message)
@@ -160,7 +161,7 @@ class IntegrationEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context=("Identify gaps between current and future state " "in your area."),
+                context=self._resolve_phase_instruction("gap_analysis", agent.archetype.role),
             )
             if message:
                 round_state.messages.append(message)
@@ -190,9 +191,7 @@ class IntegrationEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context=(
-                    "Propose integration initiatives and prioritize by " "impact and effort (High/Medium/Low for each)."
-                ),
+                context=self._resolve_phase_instruction("initiative_prioritization", agent.archetype.role),
             )
             if message:
                 round_state.messages.append(message)
@@ -242,7 +241,7 @@ class IntegrationEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context="Propose resource allocation across initiatives.",
+                context=self._resolve_phase_instruction("resource_allocation", agent.archetype.role),
             )
             if message:
                 round_state.messages.append(message)
@@ -255,7 +254,7 @@ class IntegrationEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context=("Review proposed allocations. You have veto power " "if budget is exceeded."),
+                context=self._resolve_phase_instruction("resource_allocation", cfo.archetype.role),
             )
             if message:
                 round_state.messages.append(message)
@@ -318,8 +317,24 @@ class IntegrationEnvironment(BaseEnvironment):
 
         return evaluation
 
-    def _resolve_phase_instruction(self, phase: str, agent_role: str) -> str:
-        """Get phase-specific instruction for an agent."""
+    def get_phase_instruction(
+        self,
+        phase: str,
+        agent_role: str,
+        *,
+        round_number: int = 1,
+    ) -> str:
+        """Round-agenda only; phase body is supplied via ``context`` from ``_resolve_phase_instruction``."""
+        line = build_round_agenda_line(
+            round_number,
+            getattr(self._sim_config, "parameters", None) or {},
+        )
+        if line:
+            return f"Round focus (objective hypothesis): {line}"
+        return ""
+
+    def _resolve_phase_instruction(self, phase: str, _agent_role: str) -> str:
+        """Phase-specific copy for ``_process_agent_turn`` ``context`` (and shared instruction text source)."""
         instructions = {
             "current_state_mapping": (
                 "Document the current state of your functional area. "

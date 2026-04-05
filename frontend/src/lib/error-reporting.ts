@@ -25,6 +25,7 @@ export function initSentryClient(): void {
 
 /** Report React error-boundary errors to Sentry in production only. */
 export function reportCapturedError(error: Error, errorInfo: ErrorInfo): void {
+  if (!clientInitialized) return;
   if (!isClientReportingEnabled()) return;
   Sentry.captureException(error, { extra: { errorInfo } });
 }

@@ -41,15 +41,16 @@ class CLICodexProvider(LLMProvider):
         """
         cli = self._cli or "codex"
 
-        with tempfile.NamedTemporaryFile(
-            mode="w+",
-            encoding="utf-8",
-            suffix=".txt",
-            delete=False,
-        ) as output_file:
-            output_path = output_file.name
-
+        output_path: str | None = None
         try:
+            with tempfile.NamedTemporaryFile(
+                mode="w+",
+                encoding="utf-8",
+                suffix=".txt",
+                delete=False,
+            ) as output_file:
+                output_path = output_file.name
+
             cmd = [
                 cli,
                 "exec",
@@ -99,10 +100,11 @@ class CLICodexProvider(LLMProvider):
                 content = stdout.decode("utf-8", errors="replace").strip()
             return content
         finally:
-            try:
-                os.unlink(output_path)
-            except OSError:
-                pass
+            if output_path is not None:
+                try:
+                    os.unlink(output_path)
+                except OSError:
+                    pass
 
     async def generate(
         self,
@@ -130,8 +132,11 @@ class CLICodexProvider(LLMProvider):
                     parts.append(f"[System]\n{msg.content}")
                 elif msg.role == "assistant":
                     parts.append(f"[Previous response]\n{msg.content}")
+                elif msg.role == "user":
+                    parts.append(f"[User]\n{msg.content}")
                 else:
-                    parts.append(msg.content)
+                    label = (msg.role or "unknown").strip() or "unknown"
+                    parts.append(f"[{label}]\n{msg.content}")
 
             prompt = "\n\n".join(parts)
             content = await self._run_cli(prompt)

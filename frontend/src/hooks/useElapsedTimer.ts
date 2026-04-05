@@ -96,9 +96,11 @@ export function useElapsedTimer(
   }, [currentSimulation?.status, elapsedStorageKey]);
 
   // After remount while paused, restore elapsed for display when the API has no field.
+  const pausedStatus = currentSimulation?.status;
+  const pausedElapsedFromApi = currentSimulation?.elapsedTime;
   useEffect(() => {
-    if (!currentSimulation || currentSimulation.status !== 'paused') return;
-    const fromApi = currentSimulation.elapsedTime;
+    if (pausedStatus !== 'paused') return;
+    const fromApi = pausedElapsedFromApi;
     if (typeof fromApi === 'number' && fromApi >= 0) return;
     try {
       const raw = sessionStorage.getItem(elapsedStorageKey);
@@ -109,12 +111,7 @@ export function useElapsedTimer(
     } catch {
       /* ignore */
     }
-  }, [
-    currentSimulation,
-    currentSimulation?.status,
-    currentSimulation?.elapsedTime,
-    elapsedStorageKey,
-  ]);
+  }, [pausedStatus, pausedElapsedFromApi, elapsedStorageKey]);
 
   return elapsedSeconds;
 }

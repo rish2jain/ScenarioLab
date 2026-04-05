@@ -9,7 +9,7 @@ const RESERVED_SIMULATION_PATH_SEGMENTS = new Set(["new", "compare"]);
  * (list, wizard, compare, etc.).
  */
 export function getSimulationIdFromPath(pathname: string): string | null {
-  const match = pathname.match(/\/simulations\/([^/]+)/);
+  const match = pathname.match(/^\/simulations\/([^/]+)/);
   if (!match) return null;
   if (RESERVED_SIMULATION_PATH_SEGMENTS.has(match[1])) return null;
   return match[1];

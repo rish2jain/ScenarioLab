@@ -269,7 +269,11 @@ class TestHybridSimulationEndToEnd:
 
 @pytest.mark.asyncio
 class TestCloudOnlyBackwardCompat:
-    """Spec 9.2: default config keeps cloud-only InferenceRouter mode."""
+    """Spec 9.2: cloud-only InferenceRouter when the wizard omits ``inference_mode``.
+
+    ``test_cloud_only_backward_compat`` pins ``settings.inference_mode`` so the assertion
+    does not depend on ``INFERENCE_MODE`` env overrides (Pydantic default is still ``cloud``).
+    """
 
     @patch("app.simulation.engine.InferenceRouter.create", new_callable=AsyncMock)
     @patch("app.simulation.engine.get_local_llm_provider", return_value=None)
@@ -287,7 +291,15 @@ class TestCloudOnlyBackwardCompat:
         minimal_config,
         monkeypatch,
     ):
+        """Pin ``settings.inference_mode`` to ``cloud`` (explicit), then assert router mode.
+
+        ``minimal_config`` has no wizard ``inference_mode``; the engine falls back to
+        ``settings.inference_mode``. We monkeypatch that attribute so the test is not an
+        accidental no-op when env sets a different mode — we are checking cloud-only wiring,
+        not discovering whatever default the process inherited from the environment.
+        """
         monkeypatch.setattr(sim_engine_module.settings, "inference_mode", "cloud")
+        assert sim_engine_module.settings.inference_mode == "cloud"
         mock_seed_cls.return_value.get_seed = AsyncMock(return_value=None)
         engine._repo.save = AsyncMock()
         cloud = MagicMock()

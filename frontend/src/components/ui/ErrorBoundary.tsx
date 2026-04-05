@@ -58,7 +58,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         if (typeof fallback === 'function') {
           return fallback({
             resetErrorBoundary: this.resetErrorBoundary,
-            error: this.state.error,
+            error: this.state.error ?? undefined,
           });
         }
         if (isValidElement(fallback)) {
@@ -67,12 +67,13 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           if (typeof fallback.type === 'string') {
             return fallback;
           }
+          const fallbackCloneProps: ErrorBoundaryFallbackProps = {
+            resetErrorBoundary: this.resetErrorBoundary,
+            error: this.state.error ?? undefined,
+          };
           return cloneElement(
             fallback as ReactElement<ErrorBoundaryFallbackProps>,
-            {
-              resetErrorBoundary: this.resetErrorBoundary,
-              error: this.state.error,
-            },
+            fallbackCloneProps,
           );
         }
         return fallback;

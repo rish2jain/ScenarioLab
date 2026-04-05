@@ -8,13 +8,6 @@ import { useToast } from '@/components/ui/Toast';
 import { api, loadSimulationsFromApi } from '@/lib/api';
 import type { CrossSimulationPattern, PrivacyReport, ArchetypeImprovement } from '@/lib/types';
 
-/** Cross-simulation load uses these backend routes. */
-const CROSS_SIMULATION_LOAD_ENDPOINTS = [
-  'GET /api/analytics/cross-simulation/patterns',
-  'POST /api/analytics/cross-simulation/improve-archetypes',
-  'GET /api/analytics/cross-simulation/privacy-report/:simulationId',
-] as const;
-
 type ApiLoadErrorKind = 'unavailable' | 'unexpected';
 
 function classifyCrossSimulationLoadError(error: unknown): ApiLoadErrorKind {
@@ -67,12 +60,10 @@ export default function CrossSimulationPage() {
       } catch (error: unknown) {
         const kind = classifyCrossSimulationLoadError(error);
         setApiLoadError(kind);
-        console.error('[cross-simulation] Failed to load analytics.', {
-          endpoints: CROSS_SIMULATION_LOAD_ENDPOINTS,
-          simulationId: candidateSimulationId ?? '(none)',
-          kind,
-          error,
-        });
+        console.error(
+          '[cross-simulation] Failed to load patterns, archetype improvements, or privacy report.',
+          { simulationId: candidateSimulationId ?? '(none)', kind, error }
+        );
         if (kind === 'unavailable') {
           addToast(
             `Cross-simulation API unreachable (simulation: ${candidateSimulationId ?? 'n/a'}).`,

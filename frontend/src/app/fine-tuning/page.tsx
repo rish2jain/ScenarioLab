@@ -18,8 +18,8 @@ interface FineTuningJob {
   created_at: string;
   completed_at?: string;
   metrics?: {
-    loss: number;
-    accuracy: number;
+    loss?: number;
+    accuracy?: number;
   };
 }
 
@@ -130,12 +130,14 @@ export default function FineTuningPage() {
               progress: Math.round(job.progress),
               created_at: job.created_at,
               completed_at: job.completed_at,
-              metrics: job.metrics?.loss !== undefined || job.metrics?.accuracy !== undefined
-                ? {
-                    loss: job.metrics?.loss ?? 0,
-                    accuracy: job.metrics?.accuracy ?? 0,
-                  }
-                : undefined,
+              metrics: (() => {
+                const src = job.metrics;
+                if (!src) return undefined;
+                const out: { loss?: number; accuracy?: number } = {};
+                if (src.loss !== undefined) out.loss = src.loss;
+                if (src.accuracy !== undefined) out.accuracy = src.accuracy;
+                return Object.keys(out).length ? out : undefined;
+              })(),
             }))
           );
         }
@@ -240,6 +242,9 @@ export default function FineTuningPage() {
   };
 
   const handleToggleAdapter = async (adapterId: string) => {
+    if (adapters.find((a) => a.id === adapterId)?.is_active) {
+      return;
+    }
     setAdapterToggleError(null);
     try {
       const result = await fetchApi<{ adapter_id: string }>(`/api/llm/fine-tune/activate/${adapterId}`, {
@@ -505,19 +510,28 @@ export default function FineTuningPage() {
                 </div>
               </div>
 
-              {/* Metrics */}
-              {job.metrics && (
-                <div className="flex items-center gap-4 text-sm">
-                  <div className="flex items-center gap-1">
-                    <BarChart3 className="w-4 h-4 text-slate-500" />
-                    <span className="text-slate-400">Loss:</span>
-                    <span className="text-slate-300">{job.metrics.loss.toFixed(4)}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <CheckCircle className="w-4 h-4 text-slate-500" />
-                    <span className="text-slate-400">Accuracy:</span>
-                    <span className="text-slate-300">{(job.metrics.accuracy * 100).toFixed(1)}%</span>
-                  </div>
+              {/* Metrics — only show values the API actually sent */}
+              {(job.metrics?.loss !== undefined ||
+                job.metrics?.accuracy !== undefined) && (
+                <div className="flex flex-wrap items-center gap-4 text-sm">
+                  {job.metrics?.loss !== undefined && (
+                    <div className="flex items-center gap-1">
+                      <BarChart3 className="w-4 h-4 text-slate-500" />
+                      <span className="text-slate-400">Loss:</span>
+                      <span className="text-slate-300">
+                        {job.metrics.loss.toFixed(4)}
+                      </span>
+                    </div>
+                  )}
+                  {job.metrics?.accuracy !== undefined && (
+                    <div className="flex items-center gap-1">
+                      <CheckCircle className="w-4 h-4 text-slate-500" />
+                      <span className="text-slate-400">Accuracy:</span>
+                      <span className="text-slate-300">
+                        {(job.metrics.accuracy * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 

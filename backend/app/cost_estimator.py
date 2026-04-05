@@ -119,7 +119,18 @@ class CostEstimator:
 
     @classmethod
     def _provider_tier(cls, provider: str) -> str:
-        """Wall-clock tier for duration estimates: CLI/shell-out vs cloud HTTP APIs.
+        """Wall-clock tier for duration estimates: ``"cli"`` or ``"cloud"``.
+
+        **Precedence:** ``getattr(settings, "llm_provider", None)`` (stripped and
+        lowercased) is resolved *before* the ``provider`` argument. If that value is
+        in :attr:`_CLI_PROVIDERS` or starts with ``"cli-"``, this returns ``"cli"``
+        even when ``provider`` names a different execution path (e.g. a billing
+        family such as ``openai``).
+
+        **Fallback:** If settings did not imply CLI, the same ``"cli"`` vs
+        ``"cloud"`` decision uses the ``provider`` parameter together with
+        :attr:`_CLI_PROVIDERS` (membership only on this path; the ``"cli-"`` prefix
+        rule applies to settings first).
 
         :func:`cost_estimator_provider_key` maps CLI providers to a **billing** family
         (e.g. ``cli-chatgpt`` → ``openai``). Token/cost math uses that family; duration

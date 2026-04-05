@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { api } from '@/lib/api';
+import type { SeverityLevel } from '@/lib/types';
 
 interface GeneratedScenario {
   name: string;
@@ -21,10 +22,10 @@ interface GeneratedScenario {
   rounds: number;
   key_issues: string[];
   impact_assessment: {
-    compliance_risk: 'low' | 'medium' | 'high' | 'critical';
-    operational_impact: 'low' | 'medium' | 'high' | 'critical';
-    timeline_pressure: 'low' | 'medium' | 'high' | 'critical';
-    financial_exposure: 'low' | 'medium' | 'high' | 'critical';
+    compliance_risk: SeverityLevel;
+    operational_impact: SeverityLevel;
+    timeline_pressure: SeverityLevel;
+    financial_exposure: SeverityLevel;
   };
   suggested_objectives: string[];
 }
@@ -213,7 +214,7 @@ export default function RegulatoryGeneratorPage() {
                   {Object.entries(generatedScenario.impact_assessment).map(([key, value]) => (
                     <div key={key} className="p-3 bg-slate-700/20 rounded-lg">
                       <div className="text-sm text-slate-400 capitalize mb-1">
-                        {key.replace('_', ' ')}
+                        {key.replaceAll('_', ' ')}
                       </div>
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${riskColors[value]}`}>
                         {value.charAt(0).toUpperCase() + value.slice(1)}

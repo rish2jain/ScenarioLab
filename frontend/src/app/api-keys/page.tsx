@@ -6,12 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { fetchApi } from '@/lib/api';
-import {
-  adminAuthHeaders,
-  clearAdminApiKey,
-  getAdminApiKey,
-  setAdminApiKey,
-} from '@/lib/adminApiKey';
+import { fetchAdminBackend } from '@/lib/adminBackendFetch';
 
 /** Persisted after key creation so webhook list can use GET /webhooks (requires X-API-Key). */
 const INTEGRATION_KEY_STORAGE = 'scenariolab_integration_api_key';
@@ -96,9 +91,10 @@ function getFullSecretForKeyId(keyId: string): string | null {
 
 export default function ApiKeysPage() {
   const { addToast } = useToast();
+  const [sessionReady, setSessionReady] = useState(false);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
-  const [isLoading, setIsLoading] = useState(() => !!getAdminApiKey());
+  const [isLoading, setIsLoading] = useState(false);
   const [showKeyForm, setShowKeyForm] = useState(false);
   const [showWebhookForm, setShowWebhookForm] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -111,13 +107,34 @@ export default function ApiKeysPage() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [createKeyError, setCreateKeyError] = useState<string | null>(null);
   const [webhookError, setWebhookError] = useState<string | null>(null);
-  const [adminUnlocked, setAdminUnlocked] = useState(() => !!getAdminApiKey());
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [adminInput, setAdminInput] = useState('');
   const [adminGateError, setAdminGateError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch('/api/admin/session', { credentials: 'include' });
+        const j = (await r.json()) as { unlocked?: boolean };
+        if (!cancelled && j.unlocked) {
+          setAdminUnlocked(true);
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) {
+          setSessionReady(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!adminUnlocked) {
-      queueMicrotask(() => setIsLoading(false));
       return;
     }
 
@@ -125,19 +142,19 @@ export default function ApiKeysPage() {
       setIsLoading(true);
       setPageError(null);
 
-      const keysResult = await fetchApi<ApiKey[]>('/api/v1/api-keys', {
-        headers: adminAuthHeaders(),
-      });
+      const keysResult = await fetchAdminBackend<ApiKey[]>('/v1/api-keys');
       if (keysResult.success && keysResult.data) {
         setApiKeys(keysResult.data);
       }
       if (!keysResult.success) {
         if (keysResult.status === 503) {
           setPageError(
-            'API key management is disabled on the server. Set ADMIN_API_KEY in the backend environment and restart.',
+            'API key management is disabled. Set ADMIN_API_KEY on the Next.js server (and backend) and restart.',
           );
         } else if (keysResult.status === 401 || keysResult.status === 403) {
-          setPageError('Invalid admin key. Clear it and sign in again with the value of ADMIN_API_KEY.');
+          setPageError(
+            'Admin session expired or is invalid. Sign out and unlock again with the server ADMIN_API_KEY.',
+          );
         } else {
           setPageError('Failed to load API keys from API');
         }
@@ -169,12 +186,12 @@ export default function ApiKeysPage() {
 
   const handleCreateKey = async () => {
     if (!newKey.name || newKey.name.trim().length === 0) {
+      setCreateKeyError('Name is required');
       return;
     }
     setCreateKeyError(null);
-    const result = await fetchApi<ApiKey>('/api/v1/api-keys', {
+    const result = await fetchAdminBackend<ApiKey>('/v1/api-keys', {
       method: 'POST',
-      headers: adminAuthHeaders(),
       body: JSON.stringify(newKey),
     });
     if (!result.success || !result.data) {
@@ -209,9 +226,8 @@ export default function ApiKeysPage() {
   };
 
   const handleRevokeKey = async (keyId: string) => {
-    const result = await fetchApi(`/api/v1/api-keys/${keyId}`, {
+    const result = await fetchAdminBackend(`/v1/api-keys/${keyId}`, {
       method: 'DELETE',
-      headers: adminAuthHeaders(),
     });
     if (!result.success) {
       const detail =
@@ -276,7 +292,8 @@ export default function ApiKeysPage() {
       setWebhookError(result.error || 'Failed to register webhook');
       return;
     }
-    setWebhooks((prev) => [result.data!, ...prev]);
+    const data = result.data;
+    setWebhooks((prev) => [data, ...prev]);
     setShowWebhookForm(false);
     setNewWebhook({ url: '', events: ['simulation_completed'] });
   };
@@ -318,17 +335,44 @@ export default function ApiKeysPage() {
     }));
   };
 
-  const handleUnlockAdmin = () => {
+  const handleUnlockAdmin = async () => {
     setAdminGateError(null);
     const v = adminInput.trim();
     if (!v) {
       setAdminGateError('Enter the admin key from the server ADMIN_API_KEY setting.');
       return;
     }
-    setAdminApiKey(v);
-    setAdminInput('');
-    setAdminUnlocked(true);
+    try {
+      const r = await fetch('/api/admin/session', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminKey: v }),
+      });
+      if (!r.ok) {
+        if (r.status === 503) {
+          setAdminGateError(
+            'API key management is disabled. Set ADMIN_API_KEY on the Next.js server and restart.',
+          );
+        } else {
+          setAdminGateError('Invalid admin key. Use the same value as ADMIN_API_KEY on the server.');
+        }
+        return;
+      }
+      setAdminInput('');
+      setAdminUnlocked(true);
+    } catch {
+      setAdminGateError('Could not reach the server. Try again.');
+    }
   };
+
+  if (!sessionReady) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-slate-400">Checking session...</div>
+      </div>
+    );
+  }
 
   if (!adminUnlocked) {
     return (
@@ -337,8 +381,8 @@ export default function ApiKeysPage() {
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">API Key Management</h1>
           <p className="text-slate-400 mt-1 text-sm sm:text-base">
             Enter the server admin key (same value as <code className="text-accent">ADMIN_API_KEY</code> in
-            the backend <code className="text-slate-500">.env</code>). This unlocks listing and creating
-            integration API keys. It is stored only in this browser tab (session storage).
+            your <code className="text-slate-500">.env</code>). The Next.js server verifies it and sets an
+            httpOnly session cookie; the secret is not stored in browser storage.
           </p>
         </div>
         {adminGateError && (
@@ -353,11 +397,13 @@ export default function ApiKeysPage() {
             autoComplete="off"
             value={adminInput}
             onChange={(e) => setAdminInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleUnlockAdmin()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void handleUnlockAdmin();
+            }}
             className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-slate-200 focus:outline-none focus:border-accent"
             placeholder="Bearer value (paste secret only, not the word Bearer)"
           />
-          <Button className="w-full sm:w-auto" onClick={handleUnlockAdmin}>
+          <Button className="w-full sm:w-auto" onClick={() => void handleUnlockAdmin()}>
             Unlock
           </Button>
         </div>
@@ -387,11 +433,12 @@ export default function ApiKeysPage() {
           variant="ghost"
           size="sm"
           onClick={() => {
-            clearAdminApiKey();
-            setAdminUnlocked(false);
-            setApiKeys([]);
-            setWebhooks([]);
-            setPageError(null);
+            void fetch('/api/admin/session', { method: 'DELETE', credentials: 'include' }).finally(() => {
+              setAdminUnlocked(false);
+              setApiKeys([]);
+              setWebhooks([]);
+              setPageError(null);
+            });
           }}
         >
           Sign out admin

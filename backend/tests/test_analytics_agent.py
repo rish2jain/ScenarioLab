@@ -15,10 +15,10 @@ from app.analytics.analytics_agent import (
 )
 from app.analytics.prompts import (
     APPROVAL_PATTERNS,
-    MIN_COALITION_SIZE,
     NEGATIVE_WORDS,
     POSITIVE_WORDS,
     PROPOSAL_PATTERNS,
+    REJECTION_PATTERNS,
     TURNING_POINT_HIGH_THRESHOLD,
     TURNING_POINT_MEDIUM_THRESHOLD,
     TURNING_POINT_THRESHOLD,
@@ -69,6 +69,10 @@ class TestPromptsConstants:
 
     def test_approval_patterns_are_valid_regex(self):
         for pattern in APPROVAL_PATTERNS:
+            re.compile(pattern)  # must not raise
+
+    def test_rejection_patterns_are_valid_regex(self):
+        for pattern in REJECTION_PATTERNS:
             re.compile(pattern)  # must not raise
 
 
@@ -156,12 +160,9 @@ class TestFindCoalitionGroups:
         assert len(groups) == 1
         assert {"a1", "a2", "a3"}.issubset(groups[0])
 
-    @pytest.mark.skipif(
-        MIN_COALITION_SIZE <= 2,
-        reason="test requires MIN_COALITION_SIZE > 2",
-    )
-    def test_two_agents_below_min_threshold(self, agent):
-        # Pair size is 2; expect [] when below MIN_COALITION_SIZE
+    def test_two_agents_below_min_threshold(self, agent, monkeypatch):
+        """Pair of two mutually aligned agents yields no coalition when min size > 2."""
+        monkeypatch.setattr("app.analytics.analytics_agent.MIN_COALITION_SIZE", 3)
         alignments = {
             "a1": {"a2"},
             "a2": {"a1"},

@@ -1,6 +1,9 @@
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.inference_modes import DEFAULT_INFERENCE_MODE, normalize_inference_mode
 
 
 def resolve_env_file_path(start: Path) -> Path | None:
@@ -87,7 +90,7 @@ class Settings(BaseSettings):
     fine_tune_output_dir: str = "./fine_tune_output"
 
     # Hybrid inference (optional local tier; see docs/superpowers/specs)
-    inference_mode: str = "cloud"  # cloud | hybrid | local
+    inference_mode: str = DEFAULT_INFERENCE_MODE.value
     # ollama | llamacpp — empty disables local tier
     local_llm_provider: str = ""
     local_llm_base_url: str = "http://localhost:11434/v1"
@@ -104,6 +107,13 @@ class Settings(BaseSettings):
         env_file=str(_ENV_FILE) if _ENV_FILE is not None else None,
         env_file_encoding="utf-8",
     )
+
+    @field_validator("inference_mode", mode="before")
+    @classmethod
+    def _coerce_inference_mode(cls, v: object) -> str:
+        if v is None:
+            return DEFAULT_INFERENCE_MODE.value
+        return normalize_inference_mode(str(v))
 
 
 settings = Settings()

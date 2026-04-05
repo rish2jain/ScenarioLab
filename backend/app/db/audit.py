@@ -89,7 +89,7 @@ class AuditTrailRepository:
         ]
 
     @staticmethod
-    def _compute_event_hash(event: dict) -> str:
+    def compute_event_hash(event: dict) -> str:
         """Recompute digest for a row-shaped event dict (DB or API)."""
         et = event.get("event_type", "")
         if hasattr(et, "value"):
@@ -128,7 +128,7 @@ class AuditTrailRepository:
 
         for i, event in enumerate(events):
             # --- check 1: recompute hash ---
-            computed = self._compute_event_hash(event)
+            computed = self.compute_event_hash(event)
             if computed != event["hash"]:
                 logger.warning(
                     "Audit integrity failure at event %d (%s): " "stored hash=%s, computed hash=%s",

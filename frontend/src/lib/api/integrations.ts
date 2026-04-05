@@ -11,6 +11,7 @@ import type {
   CustomPersonaConfig,
   CoherenceWarning,
 } from '../types';
+import { fetchAdminBackend } from '../adminBackendFetch';
 import { fetchApi, API_BASE_URL } from './client';
 
 export const integrationsApi = {
@@ -187,8 +188,16 @@ export const integrationsApi = {
 
   startFineTuning: async (config: { name: string; base_model: string; dataset_id: string; epochs?: number; learning_rate?: number }): Promise<FineTuningJob> => {
     const result = await fetchApi<FineTuningJob>('/api/fine-tuning/jobs', { method: 'POST', body: JSON.stringify(config) });
-    if (result.success && result.data) return result.data;
-    return { id: '', name: config.name, status: 'pending', base_model: config.base_model, dataset_size: 0, progress: 0, created_at: new Date().toISOString() };
+    if (result.success && result.data != null) return result.data;
+    const parts: string[] = [];
+    const msg = result.error?.trim();
+    if (msg) parts.push(msg);
+    if (result.status != null) parts.push(`HTTP ${result.status}`);
+    throw new Error(
+      parts.length > 0
+        ? parts.join(' — ')
+        : 'Could not start fine-tuning job (no response data)'
+    );
   },
 
   getFineTuningStatus: async (jobId: string): Promise<FineTuningJob | null> => {
@@ -223,19 +232,22 @@ export const integrationsApi = {
   // ========== API Keys & Webhooks ==========
 
   generateApiKey: async (name: string, permissions: string[]): Promise<ApiKey> => {
-    const result = await fetchApi<ApiKey>('/api/v1/api-keys', { method: 'POST', body: JSON.stringify({ name, permissions }) });
+    const result = await fetchAdminBackend<ApiKey>('/v1/api-keys', {
+      method: 'POST',
+      body: JSON.stringify({ name, permissions }),
+    });
     if (result.success && result.data) return result.data;
     throw new Error(result.error ?? 'Failed to generate API key');
   },
 
   listApiKeys: async (): Promise<ApiKey[]> => {
-    const result = await fetchApi<ApiKey[]>('/api/v1/api-keys');
+    const result = await fetchAdminBackend<ApiKey[]>('/v1/api-keys');
     if (result.success && result.data) return result.data;
     throw new Error(result.error ?? 'Failed to list API keys');
   },
 
   revokeApiKey: async (keyId: string): Promise<boolean> => {
-    const result = await fetchApi<void>(`/api/v1/api-keys/${keyId}`, { method: 'DELETE' });
+    const result = await fetchAdminBackend(`/v1/api-keys/${keyId}`, { method: 'DELETE' });
     return result.success;
   },
 

@@ -8,6 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.config import settings
+from app.inference_modes import (
+    DEFAULT_INFERENCE_MODE,
+    InferenceMode,
+    normalize_inference_mode,
+)
 from app.llm.capabilities_cache import CapabilitiesCache
 from app.llm.factory import get_llm_provider, get_local_llm_provider
 from app.llm.fine_tuning import (
@@ -36,7 +41,7 @@ def _unavailable_capabilities() -> dict:
         "hybrid_available": False,
         "local_provider": None,
         "local_model": None,
-        "default_inference_mode": "cloud",
+        "default_inference_mode": DEFAULT_INFERENCE_MODE.value,
     }
 
 
@@ -174,9 +179,7 @@ async def get_inference_capabilities(
         if cached_payload is not None:
             return InferenceCapabilitiesResponse(**cached_payload)
 
-        default_mode = (settings.inference_mode or "cloud").strip().lower()
-        if default_mode not in ("cloud", "hybrid", "local"):
-            default_mode = "cloud"
+        default_mode = normalize_inference_mode(settings.inference_mode)
 
         if not (settings.local_llm_provider or "").strip():
             body = _unavailable_capabilities()
@@ -203,7 +206,14 @@ async def get_inference_capabilities(
             "hybrid_available": True,
             "local_provider": lp,
             "local_model": lm,
-            "default_inference_mode": "hybrid" if default_mode == "hybrid" else "cloud",
+            # Capabilities payload: only echo InferenceMode.HYBRID when default_mode is HYBRID;
+            # otherwise report DEFAULT_INFERENCE_MODE (cloud). A configured local mode is not
+            # surfaced here—clients still see cloud unless hybrid was explicitly chosen.
+            "default_inference_mode": (
+                InferenceMode.HYBRID.value
+                if default_mode == InferenceMode.HYBRID.value
+                else DEFAULT_INFERENCE_MODE.value
+            ),
         }
         cache.set_cached_locked(body)
         return InferenceCapabilitiesResponse(**body)

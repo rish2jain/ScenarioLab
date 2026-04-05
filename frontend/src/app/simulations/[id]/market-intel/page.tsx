@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, TrendingUp, Newspaper, DollarSign, RefreshCw, Settings, Zap } from 'lucide-react';
@@ -29,26 +29,27 @@ export default function MarketIntelPage() {
     refresh_interval: 300,
   });
 
-  useEffect(() => {
-    const loadMarketData = async () => {
-      setIsLoading(true);
-      setLoadError(null);
-      try {
-        const result = await api.getMarketIntelligenceFeed(simulationId);
-        setMarketData(result);
-      } catch (error) {
-        setMarketData(null);
-        setLoadError(
-          error instanceof Error
-            ? error.message
-            : 'Could not load market intelligence.'
-        );
-      }
+  const loadMarketData = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const result = await api.getMarketIntelligenceFeed(simulationId);
+      setMarketData(result);
+    } catch (error) {
+      setMarketData(null);
+      setLoadError(
+        error instanceof Error
+          ? error.message
+          : 'Could not load market intelligence.'
+      );
+    } finally {
       setIsLoading(false);
-    };
-
-    loadMarketData();
+    }
   }, [simulationId]);
+
+  useEffect(() => {
+    void loadMarketData();
+  }, [loadMarketData]);
 
   const handleConfigure = async () => {
     setIsConfiguring(true);
@@ -91,7 +92,11 @@ export default function MarketIntelPage() {
     return (
       <div className="flex flex-col items-center justify-center h-96 gap-4 px-4 text-center">
         <div className="text-red-400 max-w-md">{loadError}</div>
-        <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => void loadMarketData()}
+        >
           Retry
         </Button>
         <Link href={`/simulations/${simulationId}`}>

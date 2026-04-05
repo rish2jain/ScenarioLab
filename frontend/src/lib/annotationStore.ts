@@ -4,7 +4,8 @@ import { api } from './api';
 
 interface AnnotationState {
   annotations: Record<string, Annotation[]>; // messageId -> annotations
-  loadedSimulations: Set<string>; // Track which simulations have been loaded
+  /** Simulation ids whose annotations have been loaded (plain object for immutable updates / persistence). */
+  loadedSimulations: Record<string, true>;
   isLoading: boolean;
   addAnnotation: (annotation: Omit<Annotation, 'id' | 'createdAt'>) => Promise<void>;
   loadAnnotations: (simulationId: string) => Promise<void>;
@@ -20,12 +21,12 @@ const generateId = () => `anno-${Date.now()}-${Math.random().toString(36).substr
 
 export const useAnnotationStore = create<AnnotationState>((set, get) => ({
   annotations: {},
-  loadedSimulations: new Set<string>(),
+  loadedSimulations: {},
   isLoading: false,
 
   loadAnnotations: async (simulationId: string) => {
     // Skip if already loaded
-    if (get().loadedSimulations.has(simulationId)) {
+    if (get().loadedSimulations[simulationId]) {
       return;
     }
 
@@ -51,7 +52,10 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
 
         return {
           annotations: newAnnotations,
-          loadedSimulations: new Set(state.loadedSimulations).add(simulationId),
+          loadedSimulations: {
+            ...state.loadedSimulations,
+            [simulationId]: true,
+          },
           isLoading: false,
         };
       });
@@ -127,7 +131,14 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
   },
 
   removeAnnotation: async (id: string) => {
-    // Remove optimistically
+    const before = get().annotations;
+    const rollbackByMessageId = new Map<string, Annotation[]>();
+    for (const [messageId, annotations] of Object.entries(before)) {
+      if (annotations.some((a) => a.id === id)) {
+        rollbackByMessageId.set(messageId, [...annotations]);
+      }
+    }
+
     set((state) => {
       const newAnnotations: Record<string, Annotation[]> = {};
       Object.entries(state.annotations).forEach(([mid, annotations]) => {
@@ -139,13 +150,19 @@ export const useAnnotationStore = create<AnnotationState>((set, get) => ({
       return { annotations: newAnnotations };
     });
 
-    // Try to delete from backend
     try {
       await api.deleteAnnotation(id);
     } catch (error) {
       console.error('Failed to delete annotation from backend:', error);
-      // On error, the annotation is already removed locally
-      // Could add it back if needed, but for now just log
+      if (rollbackByMessageId.size > 0) {
+        set((state) => {
+          const next = { ...state.annotations };
+          for (const [mid, original] of rollbackByMessageId) {
+            next[mid] = original;
+          }
+          return { annotations: next };
+        });
+      }
     }
   },
 

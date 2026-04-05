@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { api } from "@/lib/api";
 import { archetypeColors } from "@/lib/archetypeColors";
-import type { Agent } from "@/lib/types";
+import type { Agent, AgentArchetype } from "@/lib/types";
 
 interface VoiceMessage {
   id: string;
@@ -49,11 +49,17 @@ export default function VoiceChatPage() {
       try {
         const agentsData = await api.getSimulationAgents(simulationId);
         if (agentsData && agentsData.length > 0) {
-          setAgents(agentsData.map(a => ({
-            ...a,
-            color: archetypeColors[a.archetype] || '#6b7280',
-            isActive: true
-          } as Agent)));
+          setAgents(
+            agentsData.map((a) => {
+              const archetype = a.archetype as AgentArchetype;
+              return {
+                ...a,
+                archetype,
+                color: archetypeColors[archetype] || "#6b7280",
+                isActive: true,
+              } as Agent;
+            })
+          );
         } else {
           setAgents([]);
         }

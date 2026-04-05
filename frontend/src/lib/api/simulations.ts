@@ -12,8 +12,13 @@ import type {
   WizardModelsResponse,
 } from '../types';
 import { fetchApi, API_BASE_URL } from './client';
-import { normalizeSimulation, normalizePlaybook, normalizeAgentMessage } from './normalizers';
-import { environmentTypeToBackend } from '../environment-types';
+import {
+  normalizeSimulation,
+  normalizePlaybook,
+  normalizeAgentMessage,
+  type AgentColorResolver,
+} from './normalizers';
+import { normalizeSimulationEnvironmentType } from '../environment-types';
 
 export type LoadSimulationsResult = { ok: boolean; simulations: Simulation[] };
 
@@ -136,6 +141,20 @@ export type GetDashboardStatsOptions = {
   simRes?: LoadSimulationsResult;
 };
 
+/** GET /api/playbooks may return a bare array or `{ playbooks: [...] }`. */
+function extractPlaybooksArrayFromResponse(
+  playbooksResult: ApiResponse<unknown>
+): unknown[] {
+  if (!playbooksResult.success) return [];
+  const { data } = playbooksResult;
+  if (Array.isArray(data)) return data;
+  const record = data as Record<string, unknown> | undefined;
+  if (Array.isArray(record?.playbooks)) {
+    return record.playbooks as unknown[];
+  }
+  return [];
+}
+
 export const simulationApi = {
   // Dashboard — derive stats from real simulation + playbook lists
   getDashboardStats: async (
@@ -149,13 +168,7 @@ export const simulationApi = {
     const playbooksResult = await fetchApi<unknown>('/api/playbooks');
 
     const sims = simRes.simulations;
-    const playbooks = playbooksResult.success
-      ? Array.isArray(playbooksResult.data)
-        ? playbooksResult.data
-        : Array.isArray((playbooksResult.data as Record<string, unknown>)?.playbooks)
-          ? (playbooksResult.data as Record<string, unknown>).playbooks as unknown[]
-          : []
-      : [];
+    const playbooks = extractPlaybooksArrayFromResponse(playbooksResult);
 
     return {
       totalSimulations: sims.length,
@@ -276,7 +289,9 @@ export const simulationApi = {
       name: simulation.name ?? 'Unnamed Simulation',
       ...(req ? { description: req } : {}),
       playbook_id: simulation.playbookId ?? null,
-      environment_type: environmentTypeToBackend(simulation.config?.environmentType),
+      environment_type: normalizeSimulationEnvironmentType(
+        simulation.config?.environmentType
+      ),
       agents,
       total_rounds: simulation.totalRounds ?? simulation.config?.rounds ?? 10,
       seed_ids: simulation.seedIds ?? [],
@@ -367,12 +382,17 @@ export const simulationApi = {
   },
 
   // Agent Messages
-  getAgentMessages: async (simulationId: string): Promise<AgentMessage[]> => {
+  getAgentMessages: async (
+    simulationId: string,
+    resolveAgentColor?: AgentColorResolver
+  ): Promise<AgentMessage[]> => {
     const result = await fetchApi<Record<string, unknown>[]>(
       `/api/simulations/${simulationId}/messages`
     );
     if (result.success && result.data) {
-      return result.data.map(normalizeAgentMessage);
+      return result.data.map((row) =>
+        normalizeAgentMessage(row, resolveAgentColor)
+      );
     }
     // Don't fall back to mock data for 404 — the simulation doesn't exist
     if (result.status === 404) return [];

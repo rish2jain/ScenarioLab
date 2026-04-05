@@ -357,6 +357,11 @@ export function NetworkGraph({
 
   const nodes = cheapLayout;
 
+  const nodeMap = useMemo(
+    () => new Map(nodes.map((n) => [n.id, n])),
+    [nodes]
+  );
+
   // Get edge color based on sentiment
   const getEdgeColor = (sentiment: NetworkEdge['sentiment']) => {
     switch (sentiment) {
@@ -548,8 +553,8 @@ export function NetworkGraph({
         <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
           {/* Edges */}
           {filteredData.edges.map((edge) => {
-            const source = nodes.find((n) => n.id === edge.source);
-            const target = nodes.find((n) => n.id === edge.target);
+            const source = nodeMap.get(edge.source);
+            const target = nodeMap.get(edge.target);
             if (!source || !target) return null;
 
             return (

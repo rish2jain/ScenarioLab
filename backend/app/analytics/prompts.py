@@ -250,8 +250,8 @@ MIN_COALITION_SIZE: int = 3
 
 # Minimum absolute sentiment shift (0–1) to classify a transition as a turning point
 TURNING_POINT_THRESHOLD: float = 0.3
-TURNING_POINT_HIGH_THRESHOLD: float = 0.5
 TURNING_POINT_MEDIUM_THRESHOLD: float = 0.4
+TURNING_POINT_HIGH_THRESHOLD: float = 0.5
 
 # ---------------------------------------------------------------------------
 # Outcome normalization maps
