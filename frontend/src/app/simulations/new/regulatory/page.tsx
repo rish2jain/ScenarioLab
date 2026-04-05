@@ -8,27 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { api } from '@/lib/api';
-import type { SeverityLevel } from '@/lib/types';
-
-interface GeneratedScenario {
-  name: string;
-  description: string;
-  environment_type: string;
-  agents: Array<{
-    role: string;
-    archetype: string;
-    description: string;
-  }>;
-  rounds: number;
-  key_issues: string[];
-  impact_assessment: {
-    compliance_risk: SeverityLevel;
-    operational_impact: SeverityLevel;
-    timeline_pressure: SeverityLevel;
-    financial_exposure: SeverityLevel;
-  };
-  suggested_objectives: string[];
-}
+import type { GeneratedScenario, SeverityLevel } from '@/lib/types/integrations';
 
 const industries = [
   'Technology',
@@ -41,7 +21,7 @@ const industries = [
   'Transportation',
 ];
 
-const riskColors: Record<string, string> = {
+const riskColors: Record<SeverityLevel, string> = {
   low: 'bg-green-500/20 text-green-400',
   medium: 'bg-yellow-500/20 text-yellow-400',
   high: 'bg-orange-500/20 text-orange-400',

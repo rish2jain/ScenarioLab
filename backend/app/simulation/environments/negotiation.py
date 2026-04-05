@@ -282,12 +282,17 @@ class NegotiationEnvironment(BaseEnvironment):
 
     def get_phase_instruction(
         self,
-        phase: str,
-        agent_role: str,
+        _phase: str,
+        _agent_role: str,
         *,
         round_number: int = 1,
     ) -> str:
-        """Round-agenda only; phase body is supplied via ``context`` from ``_resolve_phase_instruction``."""
+        """Round-agenda only.
+
+        ``_phase`` and ``_agent_role`` match the base ``SimulationEnvironment.get_phase_instruction``
+        signature for protocol consistency but are intentionally unused here: phase-specific copy is
+        supplied via ``context`` from ``_resolve_phase_instruction``.
+        """
         line = build_round_agenda_line(
             round_number,
             getattr(self._sim_config, "parameters", None) or {},

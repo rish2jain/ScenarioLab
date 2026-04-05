@@ -32,14 +32,23 @@ async function parseSuccessJsonBody(response: Response): Promise<unknown | null>
   let text: string;
   try {
     text = await response.text();
-  } catch {
+  } catch (err) {
+    console.debug('[parseSuccessJsonBody] response.text() failed', {
+      error: err,
+      message: err instanceof Error ? err.message : String(err),
+    });
     return null;
   }
   const trimmed = text.trim();
   if (!trimmed) return null;
   try {
     return JSON.parse(trimmed) as unknown;
-  } catch {
+  } catch (err) {
+    console.debug('[parseSuccessJsonBody] JSON.parse failed', {
+      trimmed,
+      error: err,
+      message: err instanceof Error ? err.message : String(err),
+    });
     return null;
   }
 }

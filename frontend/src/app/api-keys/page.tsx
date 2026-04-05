@@ -433,12 +433,20 @@ export default function ApiKeysPage() {
           variant="ghost"
           size="sm"
           onClick={() => {
-            void fetch('/api/admin/session', { method: 'DELETE', credentials: 'include' }).finally(() => {
-              setAdminUnlocked(false);
-              setApiKeys([]);
-              setWebhooks([]);
-              setPageError(null);
-            });
+            void fetch('/api/admin/session', { method: 'DELETE', credentials: 'include' })
+              .catch((err) => {
+                console.warn('Admin session sign-out request failed:', err);
+                addToast(
+                  'Could not reach the server to end the admin session. You were signed out locally.',
+                  'error',
+                );
+              })
+              .finally(() => {
+                setAdminUnlocked(false);
+                setApiKeys([]);
+                setWebhooks([]);
+                setPageError(null);
+              });
           }}
         >
           Sign out admin

@@ -18,6 +18,21 @@ class TestCLICodexProviderGenerate:
         with patch.object(provider, "_run_cli", new_callable=AsyncMock) as run_cli:
             run_cli.return_value = "ok"
             await provider.generate(
+                [LLMMessage(role="user", content="hi")],
+                temperature=0.35,
+            )
+
+        run_cli.assert_called_once()
+        assert run_cli.call_args.kwargs == {}
+
+    async def test_generate_prompt_includes_role_headers_and_content(self):
+        """Flattened prompt labels each message role for the CLI stdin payload."""
+        provider = CLICodexProvider(model="gpt-5.4")
+        provider._cli = "/fake/codex"
+
+        with patch.object(provider, "_run_cli", new_callable=AsyncMock) as run_cli:
+            run_cli.return_value = "ok"
+            await provider.generate(
                 [
                     LLMMessage(role="system", content="sys body"),
                     LLMMessage(role="assistant", content="asst body"),
@@ -25,11 +40,9 @@ class TestCLICodexProviderGenerate:
                     LLMMessage(role="", content="empty-role body"),
                     LLMMessage(role="   ", content="whitespace-role body"),
                 ],
-                temperature=0.35,
             )
 
         run_cli.assert_called_once()
-        assert run_cli.call_args.kwargs == {}
         prompt = run_cli.call_args.args[0]
         assert "[System]" in prompt
         assert "sys body" in prompt

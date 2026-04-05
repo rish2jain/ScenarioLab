@@ -27,7 +27,6 @@ function applySeedRowToStore(
 /** True when failure is likely transport-level (no usable HTTP response), not an app/API error body. */
 function isLikelyNetworkOrUnreachableError(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false;
-  if ((err as { name?: string }).name === 'TypeError') return true;
   if (typeof TypeError !== 'undefined' && err instanceof TypeError) return true;
   if (typeof DOMException !== 'undefined' && err instanceof DOMException) {
     return err.name === 'NetworkError';

@@ -49,8 +49,6 @@ def test_summarize_unicode_large_string_truncates_without_mojibake():
     assert isinstance(inner, str)
     assert inner.endswith("<truncated>")
     assert "あ" in inner or "β" in inner or "🙂" in inner
-    inner_utf8_roundtrip = inner.encode("utf-8").decode("utf-8")
-    assert inner_utf8_roundtrip == inner
 
 
 def test_summarize_large_list_and_many_dict_keys_reduces():

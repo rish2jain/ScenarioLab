@@ -9,7 +9,8 @@ export default function BacktestPage() {
   const [selectedCase, setSelectedCase] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<BacktestResult | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [caseLoadError, setCaseLoadError] = useState<string | null>(null);
+  const [backtestError, setBacktestError] = useState<string | null>(null);
   const [casesLoading, setCasesLoading] = useState(true);
   const [customMode, setCustomMode] = useState(false);
   const [customSeed, setCustomSeed] = useState('');
@@ -20,7 +21,7 @@ export default function BacktestPage() {
   }, []);
 
   const loadCases = async () => {
-    setLoadError(null);
+    setCaseLoadError(null);
     setCasesLoading(true);
     try {
       const caseList = await api.getBacktestCases();
@@ -32,7 +33,7 @@ export default function BacktestPage() {
     } catch (err) {
       setCases([]);
       setSelectedCase(null);
-      setLoadError(
+      setCaseLoadError(
         err instanceof Error ? err.message : 'Failed to load backtest cases.'
       );
     } finally {
@@ -40,24 +41,42 @@ export default function BacktestPage() {
     }
   };
 
+  const handleRetryCases = () => {
+    void loadCases();
+  };
+
   const runBacktest = async () => {
     if (customMode && customSeed.trim().length === 0) {
       return;
     }
     setLoading(true);
-    setLoadError(null);
+    setBacktestError(null);
     try {
       let res: BacktestResult;
       if (customMode) {
         let actualOutcomes: Record<string, unknown> | undefined;
         if (customOutcomes.trim().length > 0) {
           try {
-            actualOutcomes = JSON.parse(customOutcomes) as Record<string, unknown>;
+            const parsed: unknown = JSON.parse(customOutcomes);
+            if (
+              typeof parsed !== 'object' ||
+              parsed === null ||
+              Array.isArray(parsed)
+            ) {
+              setResult(null);
+              setBacktestError(
+                'Actual outcomes must be a valid JSON object (not an array or primitive). Fix the "Actual Outcomes" field and try again.'
+              );
+              setLoading(false);
+              return;
+            }
+            actualOutcomes = parsed as Record<string, unknown>;
           } catch {
             setResult(null);
-            setLoadError(
+            setBacktestError(
               'Actual outcomes must be valid JSON. Fix the "Actual Outcomes" field and try again.'
             );
+            setLoading(false);
             return;
           }
         }
@@ -72,7 +91,7 @@ export default function BacktestPage() {
     } catch (err) {
       console.error('Backtest failed:', err);
       setResult(null);
-      setLoadError(
+      setBacktestError(
         err instanceof Error ? err.message : 'Backtest failed.'
       );
     } finally {
@@ -111,7 +130,10 @@ export default function BacktestPage() {
 
             <div className="flex gap-4 mb-4">
               <button
-                onClick={() => setCustomMode(false)}
+                onClick={() => {
+                  setCustomMode(false);
+                  setBacktestError(null);
+                }}
                 className={`px-4 py-2 rounded ${
                   !customMode
                     ? 'bg-blue-600 text-white'
@@ -121,7 +143,10 @@ export default function BacktestPage() {
                 Bundled Cases
               </button>
               <button
-                onClick={() => setCustomMode(true)}
+                onClick={() => {
+                  setCustomMode(true);
+                  setBacktestError(null);
+                }}
                 className={`px-4 py-2 rounded ${
                   customMode
                     ? 'bg-blue-600 text-white'
@@ -134,12 +159,12 @@ export default function BacktestPage() {
 
             {!customMode ? (
               <div className="space-y-3">
-                {loadError && cases.length === 0 && !casesLoading ? (
+                {caseLoadError && cases.length === 0 && !casesLoading ? (
                   <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 space-y-3">
-                    <p>{loadError}</p>
+                    <p>{caseLoadError}</p>
                     <button
                       type="button"
-                      onClick={() => void loadCases()}
+                      onClick={handleRetryCases}
                       disabled={casesLoading}
                       className="rounded-md bg-red-100 px-3 py-1.5 text-sm font-medium text-red-800 ring-1 ring-inset ring-red-200 hover:bg-red-200 disabled:cursor-not-allowed disabled:opacity-60"
                     >
@@ -148,12 +173,30 @@ export default function BacktestPage() {
                   </div>
                 ) : (
                   <>
-                    {loadError && cases.length > 0 ? (
+                    {caseLoadError && cases.length > 0 ? (
                       <div
                         role="alert"
-                        className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+                        className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 space-y-3"
                       >
-                        {loadError}
+                        <p>{caseLoadError}</p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={handleRetryCases}
+                            disabled={casesLoading}
+                            className="rounded-md bg-red-100 px-3 py-1.5 text-sm font-medium text-red-800 ring-1 ring-inset ring-red-200 hover:bg-red-200 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {casesLoading ? 'Retrying…' : 'Retry'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCaseLoadError(null)}
+                            disabled={casesLoading}
+                            className="rounded-md bg-white px-3 py-1.5 text-sm font-medium text-red-800 ring-1 ring-inset ring-red-200 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
                       </div>
                     ) : null}
                     {casesLoading ? (
@@ -174,6 +217,7 @@ export default function BacktestPage() {
                           onClick={() => {
                             setCustomMode(true);
                             setSelectedCase(null);
+                            setBacktestError(null);
                           }}
                           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
                         >
@@ -255,7 +299,7 @@ export default function BacktestPage() {
                 (customMode
                   ? customSeed.trim().length === 0
                   : !selectedCase ||
-                    Boolean(loadError && cases.length === 0))
+                    Boolean(caseLoadError && cases.length === 0))
               }
               className="mt-6 w-full bg-blue-600 text-white py-3 rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-blue-700 transition"
             >
@@ -269,13 +313,13 @@ export default function BacktestPage() {
 
             {!result ? (
               <div className="py-12 text-gray-500">
-                {loadError && (cases.length > 0 || customMode) ? (
+                {backtestError ? (
                   <div
                     role="alert"
                     className="mx-auto max-w-md rounded-lg border border-red-200 bg-red-50 p-4 text-left text-sm text-red-700"
                   >
                     <p className="font-medium text-red-800">Backtest failed</p>
-                    <p className="mt-1">{loadError}</p>
+                    <p className="mt-1">{backtestError}</p>
                   </div>
                 ) : (
                   <p className="text-center">

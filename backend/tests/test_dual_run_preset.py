@@ -26,14 +26,14 @@ def test_dual_run_preset_invalid_environment_type_b_emits_structured_warning():
                 "environment_type_b": "not_a_valid_env",
             },
         )
-    assert r.status_code == 200, r.text
-    j = r.json()
-    assert len(j["warnings"]) == 1
-    w = j["warnings"][0]
-    assert w["code"] == "invalid_environment_type_b"
-    assert "not_a_valid_env" in (w.get("message") or "")
-    assert w["metadata"]["field"] == "environment_type_b"
-    assert w["metadata"]["value"] == "not_a_valid_env"
+        assert r.status_code == 200, r.text
+        j = r.json()
+        assert len(j["warnings"]) == 1
+        w = j["warnings"][0]
+        assert w["code"] == "invalid_environment_type_b"
+        assert "not_a_valid_env" in (w.get("message") or "")
+        assert w["metadata"]["field"] == "environment_type_b"
+        assert w["metadata"]["value"] == "not_a_valid_env"
 
 
 def test_dual_run_preset_merges_batch_parent_id_and_json_safe():
@@ -56,17 +56,17 @@ def test_dual_run_preset_merges_batch_parent_id_and_json_safe():
                 "environment_type_b": "war_room",
             },
         )
-    assert r.status_code == 200, r.text
-    j = r.json()
-    bid = j["batch_parent_id"]
-    assert isinstance(bid, str) and len(bid) >= 8
-    assert j["scenario_a"]["parameters"]["batch_parent_id"] == bid
-    assert j["scenario_b"]["parameters"]["batch_parent_id"] == bid
-    assert j["scenario_a"]["parameters"]["foo"] == 1
-    assert j["scenario_a"]["environment_type"] == "boardroom"
-    assert j["scenario_b"]["environment_type"] == "war_room"
-    assert j["scenario_a"]["name"] == "Scenario A"
-    assert j["scenario_b"]["name"] == "Scenario B"
+        assert r.status_code == 200, r.text
+        j = r.json()
+        bid = j["batch_parent_id"]
+        assert isinstance(bid, str) and len(bid) >= 8
+        assert j["scenario_a"]["parameters"]["batch_parent_id"] == bid
+        assert j["scenario_b"]["parameters"]["batch_parent_id"] == bid
+        assert j["scenario_a"]["parameters"]["foo"] == 1
+        assert j["scenario_a"]["environment_type"] == "boardroom"
+        assert j["scenario_b"]["environment_type"] == "war_room"
+        assert j["scenario_a"]["name"] == "Scenario A"
+        assert j["scenario_b"]["name"] == "Scenario B"
 
 
 def test_dual_run_preset_create_creates_pair_and_matches_batch_id():

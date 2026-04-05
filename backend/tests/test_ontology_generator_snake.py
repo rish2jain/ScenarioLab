@@ -54,13 +54,13 @@ async def test_generate_ontology_strips_plain_fence_with_trailing_whitespace():
     assert out.entity_types[0].name == "Acme"
 
 
+@pytest.mark.parametrize("opener", ["```jsonc\n", "```JSON5\n", "```typescript\n"])
 @pytest.mark.asyncio
-async def test_generate_ontology_strips_jsonc_and_json5_language_fences():
+async def test_generate_ontology_strips_various_language_fences(opener: str):
     body = _minimal_ontology_json()
-    for opener in ("```jsonc\n", "```JSON5\n", "```typescript\n"):
-        fenced = f"{opener}{body}\n```"
-        llm = MagicMock()
-        llm.generate = AsyncMock(return_value=MagicMock(content=fenced))
-        with patch("app.graph.ontology_generator.get_llm_provider", return_value=llm):
-            out = await generate_ontology("doc excerpt", "objective")
-        assert out.entity_types[0].name == "Acme", f"failed to strip fence: {opener!r}"
+    fenced = f"{opener}{body}\n```"
+    llm = MagicMock()
+    llm.generate = AsyncMock(return_value=MagicMock(content=fenced))
+    with patch("app.graph.ontology_generator.get_llm_provider", return_value=llm):
+        out = await generate_ontology("doc excerpt", "objective")
+    assert out.entity_types[0].name == "Acme"

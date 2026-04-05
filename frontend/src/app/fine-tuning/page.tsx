@@ -113,32 +113,36 @@ export default function FineTuningPage() {
 
         if (jobsResult.success && jobsResult.data) {
           setJobs(
-            jobsResult.data.map((job) => ({
-              id: job.job_id,
-              name: `${job.base_model} adapter`,
-              status:
-                job.status === 'queued'
-                  ? 'pending'
-                  : job.status === 'training'
-                  ? 'running'
-                  : job.status === 'completed'
-                  ? 'completed'
-                  : 'failed',
-              base_model: job.base_model,
-              dataset_size:
-                typeof job.num_examples === 'number' ? job.num_examples : undefined,
-              progress: Math.round(job.progress),
-              created_at: job.created_at,
-              completed_at: job.completed_at,
-              metrics: (() => {
-                const src = job.metrics;
-                if (!src) return undefined;
+            jobsResult.data.map((job) => {
+              const src = job.metrics;
+              let metrics: { loss?: number; accuracy?: number } | undefined =
+                undefined;
+              if (src) {
                 const out: { loss?: number; accuracy?: number } = {};
                 if (src.loss !== undefined) out.loss = src.loss;
                 if (src.accuracy !== undefined) out.accuracy = src.accuracy;
-                return Object.keys(out).length ? out : undefined;
-              })(),
-            }))
+                metrics = Object.keys(out).length ? out : undefined;
+              }
+              return {
+                id: job.job_id,
+                name: `${job.base_model} adapter`,
+                status:
+                  job.status === 'queued'
+                    ? 'pending'
+                    : job.status === 'training'
+                    ? 'running'
+                    : job.status === 'completed'
+                    ? 'completed'
+                    : 'failed',
+                base_model: job.base_model,
+                dataset_size:
+                  typeof job.num_examples === 'number' ? job.num_examples : undefined,
+                progress: Math.round(job.progress),
+                created_at: job.created_at,
+                completed_at: job.completed_at,
+                metrics,
+              };
+            })
           );
         }
 

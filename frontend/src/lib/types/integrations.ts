@@ -3,6 +3,8 @@
 
 import type { SeverityLevel } from './report';
 
+export type { SeverityLevel };
+
 // Voice
 export interface VoiceTranscription {
   text: string;

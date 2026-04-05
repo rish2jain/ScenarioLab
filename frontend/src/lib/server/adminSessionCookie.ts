@@ -3,6 +3,12 @@ import { createHmac, timingSafeEqual } from 'crypto';
 /** HttpOnly cookie proving the user passed admin verification (server-side only). */
 export const ADMIN_SESSION_COOKIE = 'scenariolab_admin_sess';
 
+/**
+ * `getSigningSecret` HMAC material for admin cookies: prefer `ADMIN_SESSION_SECRET`; if absent, derive
+ * `scenariolab-admin-sess-v1:${ADMIN_API_KEY}` so the cookie signer does not use the raw API key string as the secret
+ * (versioned namespace). If both env vars are unset, returns `''`—signing yields null and verification stays false (fail closed);
+ * deploy with at least one of the two vars set.
+ */
 function getSigningSecret(): string {
   const explicit = process.env.ADMIN_SESSION_SECRET?.trim();
   if (explicit) return explicit;
@@ -52,8 +58,12 @@ export function timingSafeEqualString(a: string, b: string): boolean {
   try {
     const ba = Buffer.from(a, 'utf8');
     const bb = Buffer.from(b, 'utf8');
-    if (ba.length !== bb.length) return false;
-    return timingSafeEqual(ba, bb);
+    const maxLen = Math.max(ba.length, bb.length);
+    const padA = Buffer.alloc(maxLen);
+    const padB = Buffer.alloc(maxLen);
+    ba.copy(padA);
+    bb.copy(padB);
+    return timingSafeEqual(padA, padB);
   } catch {
     return false;
   }

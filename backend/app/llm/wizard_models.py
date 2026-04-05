@@ -52,6 +52,12 @@ _ANTHROPIC_WIZARD_MODELS_FALLBACK: list[dict[str, str]] = [
     },
 ]
 
+# Substrings for Anthropic GET /v1/models filtering; each fallback row's ``id`` should
+# contain one of these tokens so :func:`_fetch_anthropic_wizard_models_from_api` can pick
+# the latest model per slot without hardcoding ``fb[0]``, ``fb[1]``, … Add tokens here
+# when introducing new wizard families.
+_ANTHROPIC_FAMILY_API_NEEDLES: tuple[str, ...] = ("sonnet", "opus", "haiku")
+
 # Substrings, prefix roots, and exact ids used to infer model vendor from public ids.
 # **Maintain MODEL_VENDOR_PATTERNS when providers ship new names** so validation and
 # cloud-vs-local checks stay accurate; avoid duplicating literals outside this mapping.
@@ -122,6 +128,17 @@ def _pick_latest_anthropic_model(models: list[Any], *, needle: str) -> Any | Non
     return max(hits, key=lambda m: m.created_at)
 
 
+def _needle_for_anthropic_fallback_entry(entry: dict[str, str]) -> str:
+    id_l = entry["id"].lower()
+    matching = [n for n in _ANTHROPIC_FAMILY_API_NEEDLES if n in id_l]
+    if not matching:
+        raise ValueError(
+            f"Anthropic wizard fallback id {entry['id']!r} matches none of "
+            f"{_ANTHROPIC_FAMILY_API_NEEDLES}; extend _ANTHROPIC_FAMILY_API_NEEDLES or the id."
+        )
+    return max(matching, key=len)
+
+
 def _slot_from_anthropic_model_or_fallback(
     picked: Any | None,
     fallback: dict[str, str],
@@ -156,60 +173,47 @@ def _fetch_anthropic_wizard_models_from_api() -> list[dict[str, str]] | None:
         return None
 
     fb = _ANTHROPIC_WIZARD_MODELS_FALLBACK
-    sonnet = _pick_latest_anthropic_model(models, needle="sonnet")
-    opus = _pick_latest_anthropic_model(models, needle="opus")
-    haiku = _pick_latest_anthropic_model(models, needle="haiku")
     return [
         dict(WIZARD_PROVIDER_DEFAULT_OPTION),
-        _slot_from_anthropic_model_or_fallback(sonnet, fb[0]),
-        _slot_from_anthropic_model_or_fallback(opus, fb[1]),
-        _slot_from_anthropic_model_or_fallback(haiku, fb[2]),
+        *[
+            _slot_from_anthropic_model_or_fallback(
+                _pick_latest_anthropic_model(models, needle=_needle_for_anthropic_fallback_entry(entry)),
+                entry,
+            )
+            for entry in fb
+        ],
     ]
 
 
 def _anthropic_wizard_models_static_fallback_entries() -> list[dict[str, str]]:
     """Stable rows when GET /v1/models fails or returns nothing (same shape as cached wizard rows)."""
     fb = _ANTHROPIC_WIZARD_MODELS_FALLBACK
-    return [
-        dict(WIZARD_PROVIDER_DEFAULT_OPTION),
-        dict(fb[0]),
-        dict(fb[1]),
-        dict(fb[2]),
-    ]
+    return [dict(WIZARD_PROVIDER_DEFAULT_OPTION)] + [dict(entry) for entry in fb]
 
 
 def _anthropic_wizard_model_entries() -> list[dict[str, str]]:
     """Prefer live model ids from Anthropic; cache successes; else stable fallbacks."""
     global _cached_anthropic_wizard_models, _ANTHROPIC_FETCH_IN_PROGRESS
-    now = time.monotonic()
-    with _ANTHROPIC_CACHE_CONDITION:
-        if _cached_anthropic_wizard_models is not None:
-            entries, ts = _cached_anthropic_wizard_models
-            if now - ts < _ANTHROPIC_CACHE_TTL_SEC:
-                return [dict(row) for row in entries]
-
-        while _ANTHROPIC_FETCH_IN_PROGRESS:
-            _ANTHROPIC_CACHE_CONDITION.wait()
-            now = time.monotonic()
-
-        if _cached_anthropic_wizard_models is not None:
-            entries, ts = _cached_anthropic_wizard_models
-            if now - ts < _ANTHROPIC_CACHE_TTL_SEC:
-                return [dict(row) for row in entries]
-
     claimed_fetch = False
     fetched: list[dict[str, str]] | None = None
-    try:
-        with _ANTHROPIC_CACHE_CONDITION:
-            while _ANTHROPIC_FETCH_IN_PROGRESS:
-                _ANTHROPIC_CACHE_CONDITION.wait()
+
+    with _ANTHROPIC_CACHE_CONDITION:
+        while True:
             now = time.monotonic()
             if _cached_anthropic_wizard_models is not None:
                 entries, ts = _cached_anthropic_wizard_models
                 if now - ts < _ANTHROPIC_CACHE_TTL_SEC:
                     return [dict(row) for row in entries]
+
+            if _ANTHROPIC_FETCH_IN_PROGRESS:
+                _ANTHROPIC_CACHE_CONDITION.wait()
+                continue
+
             _ANTHROPIC_FETCH_IN_PROGRESS = True
             claimed_fetch = True
+            break
+
+    try:
         fetched = _fetch_anthropic_wizard_models_from_api()
     finally:
         if claimed_fetch:

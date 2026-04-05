@@ -29,7 +29,16 @@ function parseBaseJson(
   setError: (message: string) => void
 ): Record<string, unknown> | null {
   try {
-    return JSON.parse(raw) as Record<string, unknown>;
+    const result: unknown = JSON.parse(raw);
+    if (
+      typeof result === 'object' &&
+      !Array.isArray(result) &&
+      result !== null
+    ) {
+      return result as Record<string, unknown>;
+    }
+    setError('Base config must be a JSON object.');
+    return null;
   } catch {
     setError('Base config must be valid JSON.');
     return null;

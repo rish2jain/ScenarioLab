@@ -24,6 +24,11 @@ function sanitizeRequestHeaders(headers: Record<string, string>): Record<string,
   return out;
 }
 
+/** Escape a string for safe interpolation into a `RegExp` source. */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * Register routes on `page` to mock backend APIs.
  * Glob patterns such as ** /api/simulations match any URL containing that segment — use pathname
@@ -232,11 +237,8 @@ export async function registerApiMocks(
       });
       return;
     }
-    if (
-      u.pathname.startsWith(`${listPath}/`) &&
-      u.pathname.split('/').length === listPath.split('/').length + 1 &&
-      method === 'DELETE'
-    ) {
+    const deleteKeyPath = new RegExp(`^${escapeRegExp(listPath)}/[^/]+$`);
+    if (deleteKeyPath.test(u.pathname) && method === 'DELETE') {
       await route.fulfill({ status: 200, json: { status: 'revoked', key_id: 'x' } });
       return;
     }

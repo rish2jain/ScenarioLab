@@ -59,17 +59,25 @@ export function TornadoChart({
   
   const chartHeight = dynamicHeight - margin.top - margin.bottom;
 
-  // Calculate scales
-  const paramExtents = sortedParams.map((param) => ({
-    param,
-    leftDelta: Math.max(0, Math.abs(param.baseValue - param.lowValue)),
-    rightDelta: Math.max(0, Math.abs(param.highValue - param.baseValue)),
-  }));
-  const paramExtentsMap = new Map(
-    paramExtents.map((entry) => [
-      entry.param.id,
-      { leftDelta: entry.leftDelta, rightDelta: entry.rightDelta },
-    ])
+  // Calculate scales (memoized so tooltip / other state do not rebuild the map)
+  const paramExtents = useMemo(
+    () =>
+      sortedParams.map((param) => ({
+        param,
+        leftDelta: Math.max(0, Math.abs(param.baseValue - param.lowValue)),
+        rightDelta: Math.max(0, Math.abs(param.highValue - param.baseValue)),
+      })),
+    [sortedParams]
+  );
+  const paramExtentsMap = useMemo(
+    () =>
+      new Map(
+        paramExtents.map((entry) => [
+          entry.param.id,
+          { leftDelta: entry.leftDelta, rightDelta: entry.rightDelta },
+        ])
+      ),
+    [paramExtents]
   );
   const maxDelta = Math.max(
     1,

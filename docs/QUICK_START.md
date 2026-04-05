@@ -84,7 +84,7 @@ Press `Ctrl+C` in the terminal running `start.sh`. It will prompt whether to sto
 
 | Issue | Fix |
 |-------|-----|
-| Port 3000/5001 already in use | `start.sh` auto-kills stale processes, or manually: <code>lsof -ti:3000 &#124; xargs kill</code> |
+| Port 3000/5001 already in use | `start.sh` auto-kills stale processes, or manually: `lsof -ti:3000 | xargs kill` |
 | Neo4j won't start | Run `docker ps` to check; try `./start.sh --no-neo4j` to skip it |
 | LLM errors | Verify `LLM_API_KEY` in `.env`; test with `curl http://localhost:5001/api/llm/test -X POST` |
 | Frontend shows mock data | Backend isn't running — check terminal output for errors |

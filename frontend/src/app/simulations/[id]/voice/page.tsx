@@ -17,6 +17,22 @@ import { api } from "@/lib/api";
 import { archetypeColors } from "@/lib/archetypeColors";
 import type { Agent, AgentArchetype } from "@/lib/types";
 
+const VALID_AGENT_ARCHETYPES = [
+  "aggressor",
+  "defender",
+  "mediator",
+  "analyst",
+  "influencer",
+  "skeptic",
+] as const satisfies readonly AgentArchetype[];
+
+function isValidArchetype(value: unknown): value is AgentArchetype {
+  return (
+    typeof value === "string" &&
+    (VALID_AGENT_ARCHETYPES as readonly string[]).includes(value)
+  );
+}
+
 interface VoiceMessage {
   id: string;
   isUser: boolean;
@@ -51,11 +67,25 @@ export default function VoiceChatPage() {
         if (agentsData && agentsData.length > 0) {
           setAgents(
             agentsData.map((a) => {
-              const archetype = a.archetype as AgentArchetype;
+              let archetype: AgentArchetype;
+              if (isValidArchetype(a.archetype)) {
+                archetype = a.archetype;
+              } else {
+                console.warn(
+                  "[voice] Invalid agent archetype from API; defaulting to skeptic",
+                  {
+                    simulationId,
+                    agentId: a.id,
+                    agentName: a.name,
+                    archetype: a.archetype,
+                  }
+                );
+                archetype = "skeptic";
+              }
               return {
                 ...a,
                 archetype,
-                color: archetypeColors[archetype] || "#6b7280",
+                color: archetypeColors[archetype],
                 isActive: true,
               } as Agent;
             })

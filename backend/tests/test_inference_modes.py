@@ -24,6 +24,8 @@ def test_allowed_set_matches_enum() -> None:
         ("", DEFAULT_INFERENCE_MODE.value),
         ("  CLOUD  ", InferenceMode.CLOUD.value),
         ("Hybrid", InferenceMode.HYBRID.value),
+        ("  local  ", InferenceMode.LOCAL.value),
+        ("LOCAL", InferenceMode.LOCAL.value),
         ("bogus", DEFAULT_INFERENCE_MODE.value),
     ],
 )

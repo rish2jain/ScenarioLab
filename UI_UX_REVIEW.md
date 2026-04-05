@@ -2,30 +2,15 @@
 
 **Date:** 2026-04-03
 **Scope:** Full frontend audit across all pages, components, and layouts
-**Status:** ✅ Remediated (All 6 Phases Complete)
+**Status:** Remediation complete in code (6 phases) — **audit documentation pending** (**[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)** `_Backfill:_` cells await real PR links, merge dates, authors, and evidence per **Maintainers** at end of document).
 
 ## Audit remediation (document-level)
 
-Cross-cutting record for this audit. Per-bucket and per-phase rows below use the same four labels so maintainers can trace **finding → fix → evidence**.
+Cross-cutting record for this audit. **Single backfill surface:** all PR/commit links, merge dates, authors, and evidence (including before/after notes) live in **[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)** under **Recommended Fix Order**. Priority buckets, page-level sections, component-level notes, and **Verification** point to that table—do not duplicate four-field remediation blocks elsewhere. Rows marked `_Backfill:_` are intentional placeholders until evidence is attached.
 
-### Remediation — PR/Commit
+### Maintainer workflow
 
-- **Pull requests:** _Backfill:_ `https://github.com/<ORG>/<REPO>/pull/<N>` (split across PRs if needed; add one link per phase in **Recommended Fix Order**).
-- **Commits on `main` (examples—run `git log --oneline -- frontend/` to confirm):** `da42eff`, `ccb8f76`, `1e4ec77` (UI, rename, platform).
-
-### Remediation — Before/After
-
-- **Summary:** Accessibility (modal, AgentCard, live regions, ARIA), error surfaces + boundaries, design tokens, shared loading/empty components, responsive charts/sidebar/header, polling/toasts/wizard draft/secure API key generation—see **Verification** for checklists.
-- **Artifacts:** _Backfill:_ screenshots or short fenced `diff` snippets per critical fix; store under `docs/research/` or attach to PRs.
-
-### Remediation — Date
-
-- **Audit:** 2026-04-03  
-- **Remediation closed:** _Backfill per phase_ (align with merge dates of PRs above).
-
-### Remediation — Author
-
-- **Implemented / reviewed by:** _Backfill:_ engineer + optional a11y or design reviewer names (match Git blame or PR assignees).
+When a phase ships, update **only** the matching row(s) in **Remediation Tracking (Consolidated)** (PR/Commit, Merge Date, Author, Evidence). Optional: add cross-links in the **Evidence** column to screenshots in `docs/research/` or PR attachments. Trace **Critical Issues → Recommended Fix Order → [Consolidated table](#remediation-tracking-consolidated) → Verification checklists** so each claim maps to one table row.
 
 ---
 
@@ -39,22 +24,7 @@ Cross-cutting record for this audit. Per-bucket and per-phase rows below use the
 | 4 | **No error boundaries on any page** | All pages | Single component crash takes down entire page |
 | 5 | **API keys generated with `Math.random()`** | `app/api-keys/page.tsx:45` | Not cryptographically secure — security risk |
 
-### Remediation — PR/Commit
-
-- Maps primarily to **Recommended Fix Order** Phase 1 (Modal, AgentCard, SimulationFeed), Phase 2 (errors, boundaries), Phase 6 (`crypto.getRandomValues` for API keys). _Backfill SHAs/PRs in those phase blocks._
-
-### Remediation — Before/After
-
-- **#1–#4:** Modal `role="dialog"` + focus trap; visible error UI; `<button>` AgentCard; error boundaries. _Backfill code refs or screenshots._
-- **#5:** API key generation uses secure RNG. _Backfill snippet._
-
-### Remediation — Date
-
-- _Backfill:_ completion date when Phase 1 + 2 + API key fix merged (often same sprint as Phase 6).
-
-### Remediation — Author
-
-- _Backfill:_ author / reviewer who signed off Critical bucket.
+**Remediation tracking:** Backfill **[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)** rows **Phase 1** (#1, #3), **Phase 2** (#2, #4), and **Phase 6** (#5). Use the **Traceability legend** in **Verification** for issue ↔ phase mapping.
 
 ---
 
@@ -73,21 +43,7 @@ Cross-cutting record for this audit. Per-bucket and per-phase rows below use the
 | 14 | **SimulationFeed missing `aria-live="polite"`** — new messages not announced to screen readers | `components/simulation/SimulationFeed.tsx:73-79` |
 | 15 | **No pagination/sorting** on simulations table, reports list, API keys list | Dashboard, Reports, API Keys pages |
 
-### Remediation — PR/Commit
-
-- Spans Phase 4 (empty/loading), Phase 5 (responsive), Phase 6 (polling, tables, toasts, wizard preselect/draft). _Backfill links under each phase._
-
-### Remediation — Before/After
-
-- e.g. Spinner vs bare “Loading…”; collapsible/sidebar behavior at 375px; 5–10s polling; sortable tables; toast vs `alert()`. _Backfill._
-
-### Remediation — Date
-
-- _Backfill_ per sub-deliverable or single High-bucket close date.
-
-### Remediation — Author
-
-- _Backfill:_ owner / reviewer.
+**Remediation tracking:** Backfill consolidated table rows **Phase 1** (#14), **Phase 3** (#8, #19), **Phase 4** (#7, #9), **Phase 5** (#10, #23), **Phase 6** (#6, #12, #13, #15, #26).
 
 ---
 
@@ -111,21 +67,7 @@ Cross-cutting record for this audit. Per-bucket and per-phase rows below use the
 | 29 | **No max-width constraint** on main content — stretches on ultra-wide monitors | `components/ClientLayout.tsx:15-23` |
 | 30 | **Sidebar section headers** use `<div>` instead of semantic `<h3>` tags | `components/Sidebar.tsx:145-147` |
 
-### Remediation — PR/Commit
-
-- Mostly Phase 3 (tokens, sidebar padding/focus, custom Select), Phase 5 (sticky header, overflow). _Backfill._
-
-### Remediation — Before/After
-
-- Token migration, focus rings, header stickiness, negative-margin containment. _Backfill._
-
-### Remediation — Date
-
-- _Backfill._
-
-### Remediation — Author
-
-- _Backfill._
+**Remediation tracking:** Backfill consolidated table rows **Phase 3**, **Phase 5**, and **Phase 6** (as applicable per issue).
 
 ---
 
@@ -144,43 +86,15 @@ Cross-cutting record for this audit. Per-bucket and per-phase rows below use the
 | 39 | Card hover `-translate-y-1` transition can feel janky on low-end devices | `components/ui/Card.tsx:34` |
 | 40 | No collapsible legend on network graph page — legend is very long | `app/simulations/[id]/network/page.tsx:303-357` |
 
-### Remediation — PR/Commit
-
-- Addressed opportunistically across Phases 4–6; not all Low items may be shipped—track remaining work in issues. _Backfill._
-
-### Remediation — Before/After
-
-- _Backfill_ per item if fixed; otherwise note “open”.
-
-### Remediation — Date
-
-- _Backfill._
-
-### Remediation — Author
-
-- _Backfill._
+**Remediation tracking:** Opportunistic fixes map to **Phase 4–6** rows in **[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)**; note remaining items in Evidence or linked issues.
 
 ---
 
 ## Page-by-Page Detail
 
-Roll-up for all routes in this section (Dashboard through Fine-Tuning). Individual page bullets remain the historical audit; close the loop here and in matching **Recommended Fix Order** phases.
+Roll-up for all routes in this section (Dashboard through Fine-Tuning). Individual page bullets remain the historical audit; close the loop via **[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)** and matching **Recommended Fix Order** phases.
 
-### Remediation — PR/Commit
-
-- _Backfill:_ one or more PR/commit links covering dashboard, wizard, monitor, chat, playbooks, reports, designer, axioms, cross-sim analytics, API keys, fine-tuning.
-
-### Remediation — Before/After
-
-- _Backfill:_ short note or screenshot per high-traffic route (e.g. empty dashboard, monitor polling, playbook → wizard).
-
-### Remediation — Date
-
-- _Backfill:_ date range or milestone when page-level fixes landed.
-
-### Remediation — Author
-
-- _Backfill:_ author / reviewer.
+**Remediation tracking:** Page-level PR/commit, dates, authors, and evidence (screenshots per high-traffic route) — backfill the **Document-level** and **Phase 1–6** rows in the consolidated table; use **Traceability legend** to map routes to phases.
 
 ### Dashboard (`app/page.tsx`)
 
@@ -274,21 +188,7 @@ Roll-up for all routes in this section (Dashboard through Fine-Tuning). Individu
 
 ## Simulation Sub-Pages (Shared Issues)
 
-### Remediation — PR/Commit
-
-- _Backfill:_ PRs/commits touching `app/simulations/[id]/*`, shared layout, Spinner/EmptyState.
-
-### Remediation — Before/After
-
-- Shared loading/spinner, overflow handling, breadcrumbs/back behavior where implemented. _Backfill._
-
-### Remediation — Date
-
-- _Backfill._
-
-### Remediation — Author
-
-- _Backfill._
+**Remediation tracking:** Backfill **Phase 1–6** rows in **[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)** for PRs/commits touching `app/simulations/[id]/*`, shared layout, Spinner/EmptyState; capture before/after in Evidence.
 
 ---
 
@@ -319,21 +219,7 @@ All 9 sub-pages under `app/simulations/[id]/` share these patterns:
 
 ## Component-Level Issues
 
-### Remediation — PR/Commit
-
-- _Backfill:_ commits touching `components/ui/*`, `components/simulation/*`, `components/Sidebar.tsx`, `components/Header.tsx` (Phase 1–3).
-
-### Remediation — Before/After
-
-- Modal, Button, Input, Sidebar, Header, AgentCard, SimulationFeed—see **Verification § Phase 1–3** tables. _Backfill snippets._
-
-### Remediation — Date
-
-- _Backfill._
-
-### Remediation — Author
-
-- _Backfill._
+**Remediation tracking:** Backfill **Phase 1–3** rows in **[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)** for `components/ui/*`, `components/simulation/*`, `components/Sidebar.tsx`, `components/Header.tsx`. Detailed QA checklists remain under **Verification** → **Per-phase verification record** (Phases 1–3).
 
 ### Modal (`components/ui/Modal.tsx`)
 
@@ -397,86 +283,26 @@ All 9 sub-pages under `app/simulations/[id]/` share these patterns:
 - [x] Add `aria-busy`, `aria-invalid`, `aria-describedby` to Button and Input
 - [x] Wrap breadcrumbs in `<nav>` with `aria-current`
 
-#### Remediation — PR/Commit
-- _Backfill:_ `https://github.com/<ORG>/<REPO>/pull/<N>` or commit SHA(s).
-
-#### Remediation — Before/After
-- _Backfill:_ e.g. Modal markup + focus trap behavior; AgentCard `<button>`; feed `aria-live`.
-
-#### Remediation — Date
-- _Backfill:_ merge/close date.
-
-#### Remediation — Author
-- _Backfill:_ implementer / reviewer.
-
 ### Phase 2: Error Handling (Critical)
 - [x] Replace all `console.error()` with user-visible error toast/banner component
 - [x] Add error boundaries to all page layouts
 - [x] Add retry mechanisms for failed API calls
-
-#### Remediation — PR/Commit
-- _Backfill:_ PR/commit link(s).
-
-#### Remediation — Before/After
-- _Backfill:_ toast/banner vs silent `console.error`; error boundary fallback UI.
-
-#### Remediation — Date
-- _Backfill._
-
-#### Remediation — Author
-- _Backfill._
 
 ### Phase 3: Design Token Migration (High)
 - [x] Replace hardcoded Slate colors in AgentCard, SimulationFeed, Modal with theme tokens
 - [x] Unify spacing (consistent `py-2` or `py-2.5` in sidebar)
 - [x] Replace native `<select>` with custom components matching design system
 
-#### Remediation — PR/Commit
-- _Backfill._
-
-#### Remediation — Before/After
-- _Backfill:_ token class names vs hardcoded Slate; sidebar spacing; Select component.
-
-#### Remediation — Date
-- _Backfill._
-
-#### Remediation — Author
-- _Backfill._
-
 ### Phase 4: Loading & Empty States (High)
 - [x] Create shared `<Spinner>` and `<EmptyState>` components
 - [x] Apply consistent loading states across all pages
 - [x] Add meaningful empty states with CTAs
-
-#### Remediation — PR/Commit
-- _Backfill._
-
-#### Remediation — Before/After
-- _Backfill:_ shared `Spinner` / `EmptyState` usage.
-
-#### Remediation — Date
-- _Backfill._
-
-#### Remediation — Author
-- _Backfill._
 
 ### Phase 5: Responsive Fixes (Medium)
 - [x] Make sidebar responsive (collapsible or narrower on small screens)
 - [x] Fix network graph and tornado chart overflow on mobile
 - [x] Remove negative margins or contain overflow
 - [x] Make header sticky on mobile
-
-#### Remediation — PR/Commit
-- _Backfill._
-
-#### Remediation — Before/After
-- _Backfill:_ sidebar at narrow widths; chart overflow; sticky header.
-
-#### Remediation — Date
-- _Backfill._
-
-#### Remediation — Author
-- _Backfill._
 
 ### Phase 6: Interaction Improvements (Medium)
 - [x] Increase polling intervals to 5-10 seconds
@@ -485,39 +311,25 @@ All 9 sub-pages under `app/simulations/[id]/` share these patterns:
 - [x] Add wizard draft persistence via localStorage
 - [x] Replace `Math.random()` with `crypto.getRandomValues()` for API keys
 
-#### Remediation — PR/Commit
-- _Backfill:_ may align with branch noted in **Verification** table (`feat/optimize-post-sim-pipeline` or successor).
+### Remediation Tracking (Consolidated)
 
-#### Remediation — Before/After
-- _Backfill:_ Network tab polling interval; Voice toasts; wizard `localStorage`; API key RNG.
+Single table for **Section**, **Phase**, **PR/Commit**, **Merge Date**, **Author**, and **Evidence** (include before/after notes, screenshots, diff links, and branch hints here—do not duplicate in other headings). Replace `<ORG>/<REPO>` with your repo path. _Backfill:_ rows as fixes ship.
 
-#### Remediation — Date
-- _Backfill._
-
-#### Remediation — Author
-- _Backfill._
+| Section | Phase | PR/Commit | Merge Date | Author | Evidence |
+|---------|-------|-----------|------------|--------|----------|
+| Document-level (cross-cutting) | 1–6 | _Backfill:_ `https://github.com/<ORG>/<REPO>/pull/<N>` (split across PRs if needed) | _Backfill_ | _Backfill_ | **Summary:** Accessibility (modal, AgentCard, live regions, ARIA), error surfaces + boundaries, design tokens, shared loading/empty components, responsive charts/sidebar/header, polling/toasts/wizard draft/secure API key generation. **Example commits on `main` (confirm via `git log --oneline -- frontend/`):** `da42eff`, `ccb8f76`, `1e4ec77`. **Artifacts:** screenshots or fenced `diff` snippets per critical fix — `docs/research/` or PR attachments. **Audit date:** 2026-04-03 (see document header). |
+| Phase 1 — Accessibility (Critical) | 1 | _Backfill_ | _Backfill_ | _Backfill_ | Modal `role="dialog"` + focus trap; AgentCard `<button>`; SimulationFeed `aria-live`; Button/Input ARIA; breadcrumbs `<nav>` + `aria-current`. Maps to **Critical** #1, #3; **High** #14; **Component-Level** Modal, Button, Input, parts of Sidebar/Header. |
+| Phase 2 — Error handling (Critical) | 2 | _Backfill_ | _Backfill_ | _Backfill_ | Toasts/banners vs silent `console.error`; error boundaries; retry. **Critical** #2, #4; **High** #15 (partial). |
+| Phase 3 — Design tokens (High) | 3 | _Backfill_ | _Backfill_ | _Backfill_ | Token migration vs Slate; sidebar spacing/focus; custom Select. **High** #8, #19; **Medium** #16, #18. |
+| Phase 4 — Loading & empty (High) | 4 | _Backfill_ | _Backfill_ | _Backfill_ | Shared Spinner/EmptyState; CTAs. **High** #7, #9. |
+| Phase 5 — Responsive (Medium) | 5 | _Backfill_ | _Backfill_ | _Backfill_ | Sidebar narrow viewports; chart overflow; negative-margin containment; sticky header. **High** #10, #23; **Medium** #17, #22. |
+| Phase 6 — Interaction (Medium) | 6 | _Backfill_ | _Backfill_ | _Backfill_ | Polling 5–10s; pagination/sorting; toasts vs `alert()`; wizard `localStorage`; API key `crypto.getRandomValues`. **Critical** #5; **High** #6, #12, #13, #15, #26; **Medium** #25, #31; **Low** #31–#40 (opportunistic). May align with `feat/optimize-post-sim-pipeline` or successor — confirm in git history. |
 
 ---
 
 ## Verification
 
-### Remediation — PR/Commit
-
-- Use the **Pull requests and implementation links** table below plus each **Phase 1–6** block under **Recommended Fix Order** (`#### Remediation — PR/Commit`). Replace `<ORG>/<REPO>` with your repo path. Under **Per-phase verification record**, the same four labels appear as `##### Remediation — …` so they nest under each `#### Phase N` heading.
-
-### Remediation — Before/After
-
-- Per-phase notes in **Per-phase verification record** (`##### Remediation — Before/After`); align with **Recommended Fix Order** phase blocks (`#### Remediation — Before/After`).
-
-### Remediation — Date
-
-- **Audit reference:** 2026-04-03 (document header). _Backfill merge dates next to each phase row._
-
-### Remediation — Author
-
-- _Backfill:_ reviewer who ran Lighthouse/axe/E2E checks listed in **Consolidated test and audit commands**.
-
-This section ties each **Recommended Fix Order** phase to the numbered items in **Critical Issues**, **High Priority — UX Degradation**, and **Medium Priority — Polish & Consistency**, and records how work was validated. **Pull request links and before/after artifacts are placeholders** until they are backfilled from your Git host (replace `<ORG>/<REPO>` and PR numbers, or paste full `https://github.com/.../pull/N` URLs).
+This section ties each **Recommended Fix Order** phase to the numbered items in **Critical Issues**, **High Priority — UX Degradation**, and **Medium Priority — Polish & Consistency**, and records how work was validated. **PR/commit links, merge dates, authors, and before/after artifacts** are backfilled in **[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)** above (replace `<ORG>/<REPO>` and placeholders when merging).
 
 ### Traceability legend
 
@@ -529,17 +341,6 @@ This section ties each **Recommended Fix Order** phase to the numbered items in 
 | Phase 4 | **High** #7, #9; **Recommended Fix Order** — Phase 4; **Page-by-Page** — Dashboard, Wizard, shared sub-page loading |
 | Phase 5 | **High** #10, #23; **Medium** #17, #22; **Recommended Fix Order** — Phase 5; **Simulation Sub-Pages** — Network, Sensitivity, etc. |
 | Phase 6 | **Critical Issues** #5; **High** #6, #12, #13 (partial), #26, #15; **Medium** #25, #31; **Recommended Fix Order** — Phase 6 |
-
-### Pull requests and implementation links
-
-| Phase | Remediation scope (maps to tables above) | PR / merge request | Notes |
-|-------|--------------------------------------------|----------------------|-------|
-| 1 | Modal a11y (#1), AgentCard semantics (#3), SimulationFeed live region (#14), Button/Input ARIA, nav semantics | _Add:_ `https://github.com/<ORG>/<REPO>/pull/<N>` | Replace when the accessibility batch is merged. |
-| 2 | User-visible errors (#2), error boundaries (#4), retries | _Add PR link_ | If split across PRs, list multiple rows or use a tracking issue. |
-| 3 | Design tokens (#8), sidebar spacing (#16), custom Select (#19), focus rings (#18) | _Add PR link_ | |
-| 4 | Spinner/EmptyState (#7, #9), empty/loading consistency | _Add PR link_ | |
-| 5 | Responsive sidebar (#10), chart overflow (#23, Medium #22), sticky header (#17) | _Add PR link_ | |
-| 6 | Polling (#6), tables (#15), toasts vs `alert()` (#26), wizard draft (#25, Low #31), API key RNG (#5) | _Add PR link_ | May align with branch `feat/optimize-post-sim-pipeline` or successor; confirm in git history. |
 
 ### Per-phase verification record
 
@@ -553,18 +354,7 @@ This section ties each **Recommended Fix Order** phase to the numbered items in 
 | Button/Input ARIA | — (Component-Level) | Loading state, invalid input announced | Unit tests for `Button`/`Input` if present | — |
 | Breadcrumbs `<nav>` + `aria-current` | — (Header / Medium #21 context) | Tab through breadcrumb; current page indicated | — | — |
 
-##### Remediation — PR/Commit
-- _Backfill:_ canonical PR/SHA in **Recommended Fix Order** → Phase 1 (`#### Remediation — PR/Commit`).
-
-##### Remediation — Before/After
-- _Screenshots:_ `docs/research/ui-verification/phase-1-modal-before.png` → `phase-1-modal-after.png` _(paths TBD — add to repo or link to design tool)._
-- _Metrics:_ Lighthouse accessibility before `__` → after `__` (same URL, same throttling).
-
-##### Remediation — Date
-- _Backfill:_ merge/close date.
-
-##### Remediation — Author
-- _Backfill:_ implementer / a11y reviewer.
+**Remediation tracking:** PR/commit, merge date, author, screenshots, and metrics for this phase → **[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)** → row **Phase 1 — Accessibility**.
 
 #### Phase 2: Error Handling (Critical)
 
@@ -574,17 +364,7 @@ This section ties each **Recommended Fix Order** phase to the numbered items in 
 | Error boundaries | #4 | Throw in a child component; page shows boundary UI, not white screen | `frontend` error boundary tests if any |
 | Retry on failed API | #2 | Trigger failure then retry control | — |
 
-##### Remediation — PR/Commit
-- _Backfill:_ **Recommended Fix Order** → Phase 2; also **Pull requests and implementation links** row for Phase 2.
-
-##### Remediation — Before/After
-- _Screenshot:_ empty/broken UI vs toast + recovery.
-
-##### Remediation — Date
-- _Backfill._
-
-##### Remediation — Author
-- _Backfill._
+**Remediation tracking:** **[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)** → row **Phase 2 — Error handling**.
 
 #### Phase 3: Design Token Migration (High)
 
@@ -594,17 +374,7 @@ This section ties each **Recommended Fix Order** phase to the numbered items in 
 | Sidebar padding consistency | #16 | Compare nav blocks at same breakpoint | — |
 | Custom `<Select>` in persona designer | #19 | Keyboard open/close/select | — |
 
-##### Remediation — PR/Commit
-- _Backfill:_ **Recommended Fix Order** → Phase 3.
-
-##### Remediation — Before/After
-- _Side-by-side or design-token diff in Figma/Git._
-
-##### Remediation — Date
-- _Backfill._
-
-##### Remediation — Author
-- _Backfill._
+**Remediation tracking:** **[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)** → row **Phase 3 — Design tokens**.
 
 #### Phase 4: Loading & Empty States (High)
 
@@ -613,17 +383,7 @@ This section ties each **Recommended Fix Order** phase to the numbered items in 
 | Shared Spinner + EmptyState | #7, #9 | Dashboard with zero sims; each `[id]` sub-route loading | E2E smoke on `/`, `/simulations/[id]/*` |
 | CTAs in empty states | #7 | Click CTA routes correctly | — |
 
-##### Remediation — PR/Commit
-- _Backfill:_ **Recommended Fix Order** → Phase 4.
-
-##### Remediation — Before/After
-- “Loading...” text vs `Spinner` (screenshot); empty dashboard before/after.
-
-##### Remediation — Date
-- _Backfill._
-
-##### Remediation — Author
-- _Backfill._
+**Remediation tracking:** **[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)** → row **Phase 4 — Loading & empty**.
 
 #### Phase 5: Responsive Fixes (Medium)
 
@@ -634,17 +394,7 @@ This section ties each **Recommended Fix Order** phase to the numbered items in 
 | Negative margins / overflow | #22 | Spot-check Monitor, Attribution, Voice | — |
 | Sticky header | #17 | Scroll long page on mobile | — |
 
-##### Remediation — PR/Commit
-- _Backfill:_ **Recommended Fix Order** → Phase 5.
-
-##### Remediation — Before/After
-- Viewport screenshots 375px vs 1280px; Network page scroll.
-
-##### Remediation — Date
-- _Backfill._
-
-##### Remediation — Author
-- _Backfill._
+**Remediation tracking:** **[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)** → row **Phase 5 — Responsive**.
 
 #### Phase 6: Interaction Improvements (Medium)
 
@@ -656,17 +406,7 @@ This section ties each **Recommended Fix Order** phase to the numbered items in 
 | Wizard draft (localStorage) | #25, #31 | Refresh mid-wizard; state restored | E2E or manual |
 | API keys: `crypto.getRandomValues` | #5 | Generate key; inspect entropy / no `Math.random` in bundle for that path | Code review + quick runtime check |
 
-##### Remediation — PR/Commit
-- _Backfill:_ **Recommended Fix Order** → Phase 6.
-
-##### Remediation — Before/After
-- Lighthouse performance (polling impact); security note for #5 in PR description.
-
-##### Remediation — Date
-- _Backfill._
-
-##### Remediation — Author
-- _Backfill._
+**Remediation tracking:** **[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)** → row **Phase 6 — Interaction**.
 
 ### Consolidated test and audit commands
 
@@ -688,4 +428,4 @@ Run from repo root after starting the app (`./start.sh` or `npm run dev`), unles
 | Lighthouse HTML / JSON | Attach to PR or CI artifact | Same URL pre/post merge |
 | A11y | axe report export optional | Full page scan on `/`, `/simulations`, wizard |
 
-**Maintainers:** When a phase ships, add one row to **Pull requests and implementation links**, fill the four **Remediation —** blocks for that phase (PR/Commit, Before/After, Date, Author), and attach or link evidence so reviewers can trace **Critical Issues** → **Recommended Fix Order** → **Verification** → **PR/commit** → **evidence**.
+**Maintainers:** When a phase ships, update the matching row in **[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)** (PR/Commit, Merge Date, Author, Evidence) and, if needed, the **Document-level** row for cross-cutting links. Trace **Critical Issues** / **High** / **Medium** / **Low** → **Recommended Fix Order** → consolidated table → **Verification** checklists. Avoid half-edited rows: either keep `_Backfill:_` until the row is complete or fill PR/commit, dates, author, and evidence together so placeholders are not orphaned beside finished text.

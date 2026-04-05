@@ -47,28 +47,43 @@ async function proxy(request: NextRequest, pathSegments: string[] | undefined) {
   if (ct) {
     headers['Content-Type'] = ct;
   }
+  const contentLength = request.headers.get('content-length');
+  if (contentLength) {
+    headers['Content-Length'] = contentLength;
+  }
 
-  const init: RequestInit = {
+  type ProxyRequestInit = RequestInit & { duplex?: 'half' };
+
+  const init: ProxyRequestInit = {
     method: request.method,
     headers,
   };
 
-  if (!['GET', 'HEAD'].includes(request.method)) {
-    const raw = await request.text();
-    if (raw.length > 0) {
-      init.body = raw;
-    }
+  if (!['GET', 'HEAD'].includes(request.method) && request.body != null) {
+    init.body = request.body;
+    // Required by Node/undici when forwarding a ReadableStream body
+    init.duplex = 'half';
   }
 
   try {
     const res = await fetch(url, init);
     const outHeaders = new Headers();
-    const passContentType = res.headers.get('content-type');
-    if (passContentType) {
-      outHeaders.set('content-type', passContentType);
+    const forwardHeaderNames = [
+      'content-type',
+      'content-length',
+      'content-disposition',
+      'cache-control',
+      'etag',
+      'last-modified',
+    ] as const;
+    for (const name of forwardHeaderNames) {
+      const value = res.headers.get(name);
+      if (value) {
+        outHeaders.set(name, value);
+      }
     }
 
-    return new NextResponse(await res.arrayBuffer(), {
+    return new NextResponse(res.body ?? null, {
       status: res.status,
       headers: outHeaders,
     });
