@@ -284,9 +284,22 @@ class AnalyticsAgent:
     async def compute_sentiment_trajectory(
         self, rounds: list[RoundState]
     ) -> list[dict]:
-        """Track sentiment over time using keyword-based analysis."""
-        trajectory = []
+        """Track sentiment over time.
 
+        Uses LLM-based semantic analysis when a provider is available;
+        falls back to keyword matching otherwise.
+        """
+        if self.llm:
+            return await self._llm_sentiment_trajectory(rounds)
+        return self._keyword_sentiment_trajectory(rounds)
+
+    async def _llm_sentiment_trajectory(
+        self, rounds: list[RoundState]
+    ) -> list[dict]:
+        """LLM-based sentiment: asks the model to rate each round."""
+        from app.llm.provider import LLMMessage
+
+        trajectory: list[dict] = []
         for round_state in rounds:
             if not round_state.messages:
                 trajectory.append({
@@ -297,33 +310,102 @@ class AnalyticsAgent:
                 })
                 continue
 
-            positive_count = 0
-            negative_count = 0
-
-            for msg in round_state.messages:
-                content = msg.content.lower()
-                words = set(re.findall(r'\b\w+\b', content))
-
-                pos_matches = len(words & POSITIVE_WORDS)
-                neg_matches = len(words & NEGATIVE_WORDS)
-
-                # Simple scoring: net sentiment per message
-                if pos_matches > neg_matches:
-                    positive_count += 1
-                elif neg_matches > pos_matches:
-                    negative_count += 1
-
-            total = len(round_state.messages)
-            trajectory.append({
-                "round": round_state.round_number,
-                "positive": round(positive_count / total, 2),
-                "negative": round(negative_count / total, 2),
-                "neutral": round(
-                    (total - positive_count - negative_count) / total, 2
-                ),
-            })
+            excerpt = "\n".join(
+                f"{m.agent_name}: {m.content[:200]}"
+                for m in round_state.messages
+            )
+            try:
+                resp = await self.llm.generate(
+                    messages=[
+                        LLMMessage(
+                            role="system",
+                            content=(
+                                "Rate the overall sentiment of this "
+                                "boardroom discussion round. Respond "
+                                "with ONLY valid JSON: "
+                                '{"positive": 0.0-1.0, '
+                                '"negative": 0.0-1.0, '
+                                '"neutral": 0.0-1.0} '
+                                "Values must sum to 1.0."
+                            ),
+                        ),
+                        LLMMessage(
+                            role="user", content=excerpt[:4000]
+                        ),
+                    ],
+                    temperature=0.1,
+                    max_tokens=100,
+                )
+                import json
+                data = json.loads(
+                    resp.content.strip()
+                    .removeprefix("```json")
+                    .removesuffix("```")
+                    .strip()
+                )
+                trajectory.append({
+                    "round": round_state.round_number,
+                    "positive": float(data.get("positive", 0)),
+                    "negative": float(data.get("negative", 0)),
+                    "neutral": float(data.get("neutral", 0)),
+                })
+            except Exception:
+                logger.debug(
+                    "LLM sentiment failed for round %d, "
+                    "falling back to keywords",
+                    round_state.round_number,
+                )
+                kw = self._keyword_sentiment_for_round(
+                    round_state
+                )
+                trajectory.append(kw)
 
         return trajectory
+
+    def _keyword_sentiment_trajectory(
+        self, rounds: list[RoundState]
+    ) -> list[dict]:
+        """Fallback keyword-based sentiment analysis."""
+        return [
+            self._keyword_sentiment_for_round(r) for r in rounds
+        ]
+
+    def _keyword_sentiment_for_round(
+        self, round_state: RoundState
+    ) -> dict:
+        """Keyword sentiment for a single round."""
+        if not round_state.messages:
+            return {
+                "round": round_state.round_number,
+                "positive": 0.0,
+                "negative": 0.0,
+                "neutral": 1.0,
+            }
+
+        positive_count = 0
+        negative_count = 0
+
+        for msg in round_state.messages:
+            content = msg.content.lower()
+            words = set(re.findall(r'\b\w+\b', content))
+            pos_matches = len(words & POSITIVE_WORDS)
+            neg_matches = len(words & NEGATIVE_WORDS)
+            if pos_matches > neg_matches:
+                positive_count += 1
+            elif neg_matches > pos_matches:
+                negative_count += 1
+
+        total = len(round_state.messages)
+        return {
+            "round": round_state.round_number,
+            "positive": round(positive_count / total, 2),
+            "negative": round(negative_count / total, 2),
+            "neutral": round(
+                (total - positive_count - negative_count)
+                / total,
+                2,
+            ),
+        }
 
     async def compute_polarization_index(
         self, agents: list[AgentState], messages: list[SimulationMessage]
