@@ -12,3 +12,8 @@ def test_recommendation_priority_css_class_whitelist() -> None:
 def test_recommendation_priority_css_class_unknown() -> None:
     assert _recommendation_priority_css_class("critical") == "priority-unknown"
     assert _recommendation_priority_css_class('<img onerror="x">') == "priority-unknown"
+
+
+def test_recommendation_priority_css_class_edge_cases() -> None:
+    assert _recommendation_priority_css_class("") == "priority-unknown"
+    assert _recommendation_priority_css_class(None) == "priority-unknown"

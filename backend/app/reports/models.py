@@ -14,6 +14,9 @@ class RiskItem(BaseModel):
     description: str
     probability: float = Field(ge=0.0, le=1.0)
     impact: Literal["low", "medium", "high", "critical"]
+    # 1–5 ordinal scores (align with LLM severity framework); optional for older payloads.
+    impact_score: int = Field(default=3, ge=1, le=5)
+    likelihood_score: int = Field(default=3, ge=1, le=5)
     owner: str  # Agent/role responsible
     mitigation: str
     trigger: str  # What would trigger this risk

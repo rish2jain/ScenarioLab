@@ -500,7 +500,18 @@ class ScenarioLabMCPServer:
 
         simulation_id = args.get("simulation_id")
         query = args.get("query")
-        limit = int(args.get("limit", 8))
+        default_limit = 8
+        raw_limit = args.get("limit", default_limit)
+        try:
+            limit = int(raw_limit)
+        except (TypeError, ValueError):
+            logger.warning(
+                "scenariolab/graphiti/search: invalid limit %r; using %s",
+                raw_limit,
+                default_limit,
+            )
+            limit = default_limit
+        limit = max(1, min(limit, 25))
 
         if not simulation_id or not query:
             return MCPToolResult(
@@ -519,7 +530,7 @@ class ScenarioLabMCPServer:
         facts = await search_simulation_graph(
             simulation_id,
             query,
-            limit=max(1, min(limit, 25)),
+            limit=limit,
         )
         return MCPToolResult(
             tool_name="scenariolab/graphiti/search",

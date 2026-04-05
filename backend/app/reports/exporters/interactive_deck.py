@@ -521,6 +521,8 @@ class InteractiveDeckExporter:
                         <td>{self._escape_html(risk.risk_id)}</td>
                         <td>{self._escape_html(risk.description[:60])}...</td>
                         <td>{risk.probability:.0%}</td>
+                        <td>{risk.impact_score}</td>
+                        <td>{risk.likelihood_score}</td>
                         <td class="{severity_class}">{
                             risk.impact.upper()
                         }</td>
@@ -551,9 +553,11 @@ class InteractiveDeckExporter:
                         <th onclick="sortTable('{table_id}', 0)">ID</th>
                         <th onclick="sortTable('{table_id}', 1)">Desc</th>
                         <th onclick="sortTable('{table_id}', 2)">Prob</th>
-                        <th onclick="sortTable('{table_id}', 3)">Impact</th>
-                        <th onclick="sortTable('{table_id}', 4)">Owner</th>
-                        <th onclick="sortTable('{table_id}', 5)">Mitigate</th>
+                        <th onclick="sortTable('{table_id}', 3)">I (1-5)</th>
+                        <th onclick="sortTable('{table_id}', 4)">L (1-5)</th>
+                        <th onclick="sortTable('{table_id}', 5)">Impact</th>
+                        <th onclick="sortTable('{table_id}', 6)">Owner</th>
+                        <th onclick="sortTable('{table_id}', 7)">Mitigate</th>
                     </tr>
                 </thead>
                 <tbody>

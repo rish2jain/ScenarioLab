@@ -153,6 +153,8 @@ def generate_report_html(report: SimulationReport) -> str:
                 "            <th>Risk ID</th>",
                 "            <th>Description</th>",
                 "            <th>Probability</th>",
+                "            <th>Impact (1–5)</th>",
+                "            <th>Likelihood (1–5)</th>",
                 "            <th>Impact</th>",
                 "            <th>Owner</th>",
                 "        </tr>",
@@ -166,6 +168,8 @@ def generate_report_html(report: SimulationReport) -> str:
                 f"<td>{html.escape(str(risk.risk_id))}</td>"
                 f"<td>{html.escape(str(risk.description))}</td>"
                 f"<td>{html.escape(f'{risk.probability:.0%}')}</td>"
+                f"<td>{risk.impact_score}</td>"
+                f"<td>{risk.likelihood_score}</td>"
                 f'<td class="{impact_class}">{html.escape(str(risk.impact).upper())}</td>'
                 f"<td>{html.escape(str(risk.owner))}</td>"
                 f"</tr>"

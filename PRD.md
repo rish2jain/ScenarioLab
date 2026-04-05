@@ -918,7 +918,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
         └─────────┘    └──────────┘    └──────────┘
 ```
 
-> **Note:** Diagram shows a representative configuration. The LLM component supports multiple providers (cloud APIs, local servers, and CLI subprocess backends). **Graph / memory:** Neo4j powers GraphRAG, entity extraction, and **Graphiti** (optional temporal context graph per simulation, `GRAPHITI_ENABLED`); when Neo4j is unavailable the backend degrades gracefully (SQLite and in-process persistence).
+> **Note:** Diagram shows a representative configuration. The LLM component supports multiple providers (cloud APIs, local servers, and CLI subprocess backends). **Graph / memory:** Neo4j powers GraphRAG and seed/knowledge-graph features in `app/graph`. **Graphiti** is **not** a Neo4j built-in; it is an **external Python library** (`graphiti_core`) that **integrates with Neo4j** to store a temporal episode graph per simulation (`group_id`). **`GRAPHITI_ENABLED`** toggles whether the backend starts that Graphiti integration at runtime; when off, Graphiti is not initialized and temporal-graph features are inactive. Graphiti’s default embedder/LLM expect an OpenAI-class API key (`GRAPHITI_OPENAI_API_KEY`, or `LLM_API_KEY` with `LLM_PROVIDER=openai`, or `OPENAI_API_KEY`). GraphRAG/seed graph paths can fall back when Neo4j is unavailable; **Graphiti itself requires a reachable Neo4j** (it does not run on the SQLite graph fallback).
 
 ### 4.2 Technology Stack
 
@@ -927,7 +927,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 | Frontend | Next.js + React + Tailwind + Zustand | 16.x (App Router) | Both |
 | Backend | Python (FastAPI) + uv | 3.11-3.12 | Both |
 | Package Manager | uv | Latest | Both |
-| LLM API | Provider factory: OpenAI, Anthropic, Ollama, llama.cpp, cli-claude, cli-chatgpt, cli-gemini; OpenAI-compatible `LLM_BASE_URL` for Azure/proxies | - | Both |
+| LLM API | Provider factory (`LLM_PROVIDER`): `openai`, `anthropic`, `google`, `qwen`, `ollama`, `llamacpp`, `cli-claude`, `cli-chatgpt`, `cli-gemini`, `cli-codex`; OpenAI-compatible `LLM_BASE_URL` for Azure/proxies | - | Both |
 | Memory | Neo4j-backed temporal agent memory and GraphRAG (`app/graph`); SQLite fallback when Neo4j unavailable | 5.x Neo4j | Both |
 | Graph DB | Neo4j | 5.x | Both |
 | Reports DB | SQLite (aiosqlite, WAL) for report persistence | - | Both |
@@ -983,8 +983,8 @@ All LLM output passes through defensive processing:
 **Memory and graph service:**
 
 - Neo4j 5.x for knowledge graph, GraphRAG, and simulation memory (`SimulationMemoryManager` in `app/simulation/memory_manager.py`)
-- Optional **Graphiti** (`GRAPHITI_ENABLED`, OpenAI key for default embedder/LLM) for temporal facts per simulation (`group_id`); see `GET /api/graph/temporal-memory-status`
-- When Neo4j is not reachable, graph features degrade and core simulation/report flows continue using SQLite and in-memory state
+- Optional **Graphiti (external `graphiti_core` library integrating with Neo4j)** — enable with **`GRAPHITI_ENABLED`**; requires **Neo4j** for the Graphiti driver; default embedder/LLM need an **OpenAI-class API key** (`GRAPHITI_OPENAI_API_KEY`, or `LLM_API_KEY` with `LLM_PROVIDER=openai`, or `OPENAI_API_KEY`). Temporal facts are keyed per simulation (`group_id`); see `GET /api/graph/temporal-memory-status`
+- When Neo4j is not reachable, GraphRAG/seed graph features degrade and core simulation/report flows continue using SQLite and in-memory state; **Graphiti does not operate without Neo4j**
 
 ---
 
@@ -1153,7 +1153,7 @@ docker compose up -d
 | ---------- | ---------- | ------------- |
 | `LLM_PROVIDER` | Yes | `openai`, `anthropic`, `google`, `qwen`, `ollama`, `llamacpp`, `cli-claude`, `cli-chatgpt`, `cli-gemini`, `cli-codex` |
 | `LLM_API_KEY` | Conditional | API key for cloud providers (not needed for Ollama/llama.cpp or CLI providers) |
-| `LLM_BASE_URL` | For most setups | Override for Azure OpenAI or local proxies (see `.env.example`) |
+| `LLM_BASE_URL` | Conditional | **Required** when `LLM_PROVIDER` is `ollama`, `llamacpp`, or any setup that talks to a **non-default HTTP base** (self-hosted OpenAI-compatible servers, Azure OpenAI, LiteLLM/vLLM gateways, corporate proxies). **Optional** when using vendor public APIs with built-in defaults (`openai`, `anthropic`, `google`, `qwen`)—omit unless you intentionally override the hostname. **CLI providers** (`cli-*`) do not use `LLM_BASE_URL`. See `.env.example`. |
 | `LLM_MODEL_NAME` | Yes | Model identifier sent to the active provider |
 | `LLM_CONCURRENCY_DEFAULT` | No | Max concurrent LLM calls (default 3); per-provider overrides via `LLM_CONCURRENCY_OVERRIDES` JSON map |
 | `INFERENCE_MODE` | No | `cloud` (default), `hybrid`, or `local`; hybrid routes rounds between cloud and local |
@@ -1178,6 +1178,8 @@ docker compose up -d
 | `NEO4J_GRAPHITI_DATABASE` | No | Neo4j database name for Graphiti (default `neo4j`) |
 | `GRAPHITI_OPENAI_API_KEY` | No | Optional; defaults from `LLM_API_KEY` when `LLM_PROVIDER=openai` |
 | `ADMIN_API_KEY` | For integration API key mgmt | Protects `/api/v1/api-keys` admin routes |
+
+**`LLM_BASE_URL` quick check:** No self-hosted or custom API base URL → usually omit for cloud defaults. Using Ollama / llama.cpp / Azure or another OpenAI-compatible endpoint → set `LLM_BASE_URL` to that server’s base (e.g. `http://localhost:11434/v1` for Ollama).
 
 ### 7.3 Monitoring & Logging
 
@@ -1353,7 +1355,7 @@ docker compose up -d
 | **GraphRAG** | Graph-based Retrieval-Augmented Generation for knowledge retrieval |
 | **Agent** | AI entity with personality, memory, and behavioral logic |
 | **Simulation Round** | One iteration of agent interactions in the digital world |
-| **Neo4j memory layer** | Temporal agent memory and GraphRAG implemented in `app/graph` against Neo4j; design follows a Graphiti-style temporal pattern without requiring the external Graphiti package in default deployments |
+| **Neo4j memory layer** | GraphRAG, entity extraction, and related graph code in `app/graph`, primarily backed by **Neo4j** (with graceful degradation for some paths when Neo4j is down). **Graphiti** is an **optional external package** (`graphiti_core`) used only when **`GRAPHITI_ENABLED`** is true: that flag turns on integration with the Graphiti library for a temporal context graph per simulation over Neo4j. When `GRAPHITI_ENABLED` is false, Graphiti is not loaded for that integration; core GraphRAG/seed features do not depend on Graphiti. |
 | **MCP** | Model Context Protocol for agentic workflow integration |
 | **War Gaming** | Structured simulation of competitive or strategic scenarios |
 | **Strategy-Native Environment** | Simulation setting designed for business strategy (boardroom, negotiation, war room, integration planning) rather than social media platforms. Defines round structure, information visibility rules, and decision mechanisms. |
@@ -1363,7 +1365,7 @@ docker compose up -d
 | **Consulting Playbook** | Pre-configured simulation template for specific consulting scenarios (M&A culture clash, regulatory shock test, competitive response war game, boardroom decision rehearsal) with defined agent rosters, environment configurations, and expected deliverables. |
 | **Client Counterpart Agent** | Specialized agent type that simulates client executive behavior for rehearsing presentations and anticipating objections before SteerCo meetings. |
 | **Monte Carlo Confidence Interval** | Statistical method running 20-50 simulation iterations per scenario to establish probability ranges and confidence bounds for outcomes. |
-| **LLM Provider** | Backend inference service selected via `LLM_PROVIDER`: cloud (OpenAI, Anthropic), local servers (Ollama, llama.cpp), or CLI subprocess providers (Claude, ChatGPT, Gemini CLIs). |
+| **LLM Provider** | Backend inference service selected via `LLM_PROVIDER`: cloud/OpenAI-compatible (`openai`, `anthropic`, `google`, `qwen`), local servers (`ollama`, `llamacpp`), or CLI subprocess providers (`cli-claude`, `cli-chatgpt`, `cli-gemini`, `cli-codex`). |
 | **BATNA** | Best Alternative To a Negotiated Agreement - fallback option triggered in negotiation scenarios when impasse persists. |
 | **Scenario Rehearsal** | ScenarioLab's core positioning: stress-testing strategic decisions in simulated environments rather than predicting future outcomes. |
 | **Scenario Matrix** | Deliverable format showing 3-5 scenarios × 4-6 outcomes with probability ranges and confidence intervals. |

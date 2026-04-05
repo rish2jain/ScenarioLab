@@ -484,6 +484,8 @@ class MiroBoardExporter:
                 description=(
                     f"{risk.description[:100]}...\n\n"
                     f"Probability: {risk.probability:.0%}\n"
+                    f"Impact score (1-5): {risk.impact_score}\n"
+                    f"Likelihood score (1-5): {risk.likelihood_score}\n"
                     f"Impact: {risk.impact.upper()}\n"
                     f"Owner: {risk.owner}\n\n"
                     f"Mitigation: {risk.mitigation[:100]}..."
@@ -767,7 +769,10 @@ class MiroBoardExporter:
                     {
                         "type": "app_card",
                         "title": f"Risk: {risk.risk_id}",
-                        "description": (f"{risk.description[:100]}... " f"(Impact: {risk.impact})"),
+                        "description": (
+                            f"{risk.description[:100]}... "
+                            f"(I:{risk.impact_score} L:{risk.likelihood_score} Impact:{risk.impact})"
+                        ),
                     }
                 )
                 risk_frame["items"].append(

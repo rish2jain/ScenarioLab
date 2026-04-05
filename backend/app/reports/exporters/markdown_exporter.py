@@ -91,8 +91,8 @@ async def export_to_markdown(report: SimulationReport) -> bytes:
                     "",
                     f"**Total Risks:** {len(report.risk_register.items)}",
                     "",
-                    "| Risk ID | Description | Probability | Impact | Owner |",
-                    "|---------|-------------|-------------|--------|-------|",
+                    "| Risk ID | Description | Probability | I (1-5) | L (1-5) | Impact | Owner |",
+                    "|---------|-------------|-------------|---------|---------|--------|-------|",
                 ]
             )
 
@@ -101,7 +101,8 @@ async def export_to_markdown(report: SimulationReport) -> bytes:
                 desc = risk.description[:50] + "..." if len(risk.description) > 50 else risk.description
                 lines.append(
                     f"| {risk.risk_id} | {desc} | "
-                    f"{risk.probability:.0%} | {risk.impact.upper()} | "
+                    f"{risk.probability:.0%} | {risk.impact_score} | {risk.likelihood_score} | "
+                    f"{risk.impact.upper()} | "
                     f"{risk.owner} |"
                 )
 
@@ -119,6 +120,8 @@ async def export_to_markdown(report: SimulationReport) -> bytes:
                         f"#### {risk.risk_id}: {risk.description[:60]}",
                         "",
                         f"- **Probability:** {risk.probability:.0%}",
+                        f"- **Impact score (1-5):** {risk.impact_score}",
+                        f"- **Likelihood score (1-5):** {risk.likelihood_score}",
                         f"- **Impact:** {risk.impact.upper()}",
                         f"- **Owner:** {risk.owner}",
                         f"- **Trigger:** {risk.trigger}",

@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
+from typing import Literal, cast
 
 from app.llm.provider import LLMMessage, LLMProvider
 from app.reports.deliverables import (
@@ -46,6 +47,46 @@ from app.simulation.objectives import format_simulation_objective_for_prompt
 
 logger = logging.getLogger(__name__)
 
+_VALID_IMPACT_LABELS = frozenset({"low", "medium", "high", "critical"})
+
+
+def _coerce_int_score_1_5(value: object) -> int | None:
+    """Parse a 1–5 integer from LLM JSON; return None if missing or invalid."""
+    if value is None:
+        return None
+    try:
+        v = int(round(float(value)))
+    except (TypeError, ValueError):
+        return None
+    if 1 <= v <= 5:
+        return v
+    return None
+
+
+def _impact_label_to_default_score(impact: str) -> int:
+    """Map categorical impact to a default 1–5 impact score when LLM omits impact_score."""
+    return {
+        "low": 2,
+        "medium": 3,
+        "high": 4,
+        "critical": 5,
+    }.get(impact.strip().lower(), 3)
+
+
+def _probability_to_likelihood_score(probability: float) -> int:
+    """Map 0.0–1.0 probability to 1–5 when likelihood_score is absent."""
+    p = max(0.0, min(1.0, float(probability)))
+    return max(1, min(5, round(p * 4) + 1))
+
+
+def _normalize_impact_label(
+    raw: object,
+) -> Literal["low", "medium", "high", "critical"]:
+    s = str(raw or "medium").strip().lower()
+    if s in _VALID_IMPACT_LABELS:
+        return cast(Literal["low", "medium", "high", "critical"], s)
+    return "medium"
+
 
 class ReportAgent:
     """Generates consulting-grade reports from simulation results."""
@@ -87,9 +128,10 @@ class ReportAgent:
         ),
     }
 
-    def _system_message_for(self, section: str) -> str:
+    @classmethod
+    def _system_message_for(cls, section: str) -> str:
         """Return the section-specific system message, falling back to the generic one."""
-        return self._SYSTEM_MESSAGES.get(section, self._SYSTEM_JSON)
+        return cls._SYSTEM_MESSAGES.get(section, cls._SYSTEM_JSON)
 
     def __init__(
         self,
@@ -394,7 +436,8 @@ ATTRIBUTION REQUIREMENT:
 For each risk, provide:
 - Clear description with source attribution (agent name + round)
 - Probability (0.0-1.0) based on signal strength and repetition
-- Impact level (low, medium, high, critical) per the severity framework
+- impact_score (integer 1-5) and likelihood_score (integer 1-5) per the severity framework above
+- Impact level (low, medium, high, critical) derived from the two dimensions (must be consistent with scores)
 - Risk owner (the specific stakeholder most responsible, by name)
 - Mitigation strategy (actionable, with responsible party)
 - Trigger condition (specific observable event from simulation dynamics)
@@ -405,6 +448,8 @@ Respond with valid JSON in this exact format:
         {{
             "description": "Risk description citing agent and round",
             "probability": 0.7,
+            "impact_score": 4,
+            "likelihood_score": 3,
             "impact": "high",
             "owner": "Stakeholder name/role",
             "mitigation": "Specific mitigation with responsible party",
@@ -431,15 +476,27 @@ Include 3-7 significant risks. Be specific and actionable."""
             # Create risk items
             items = []
             for risk_data in data.get("risks", []):
-                # Use helper functions for scoring if LLM values seem off
-                prob = risk_data.get("probability", 0.5)
-                impact = risk_data.get("impact", "medium")
+                prob = float(risk_data.get("probability", 0.5) or 0.0)
+                prob = max(0.0, min(1.0, prob))
+                impact = _normalize_impact_label(risk_data.get("impact", "medium"))
+
+                parsed_impact_s = _coerce_int_score_1_5(risk_data.get("impact_score"))
+                impact_score = (
+                    parsed_impact_s if parsed_impact_s is not None else _impact_label_to_default_score(impact)
+                )
+
+                parsed_like_s = _coerce_int_score_1_5(risk_data.get("likelihood_score"))
+                likelihood_score = (
+                    parsed_like_s if parsed_like_s is not None else _probability_to_likelihood_score(prob)
+                )
 
                 items.append(
                     RiskItem(
                         description=risk_data.get("description", "Unknown risk"),
                         probability=prob,
                         impact=impact,
+                        impact_score=impact_score,
+                        likelihood_score=likelihood_score,
                         owner=risk_data.get("owner", "Unassigned"),
                         mitigation=risk_data.get("mitigation", "TBD"),
                         trigger=risk_data.get("trigger", "Unknown"),
@@ -849,11 +906,14 @@ Ensure the analysis reflects the actual dynamics observed in the simulation."""
             impact = score_risk_impact(signal.get("content", ""))
             owner = identify_risk_owner(signal, self.simulation.agents)
 
+            impact_label = _normalize_impact_label(impact)
             items.append(
                 RiskItem(
                     description=signal.get("content", "Unknown risk")[:100],
                     probability=prob,
-                    impact=impact,
+                    impact=impact_label,
+                    impact_score=_impact_label_to_default_score(impact_label),
+                    likelihood_score=_probability_to_likelihood_score(prob),
                     owner=owner,
                     mitigation="Further analysis required",
                     trigger="TBD",
