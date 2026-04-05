@@ -45,6 +45,40 @@ _NON_LATIN_HEAVY_RE = re.compile(
 )
 
 
+_DEFAULT_CLOSING = (
+    "Respond in 2-3 paragraphs as your character. "
+    "Reference at least one prior argument by name."
+)
+
+_PHASE_CLOSING: dict[str, str] = {
+    "presentation": (
+        "Present in 2-4 paragraphs. State your thesis, "
+        "supporting evidence, and what you need from the "
+        "group. Speak with executive authority."
+    ),
+    "qa": (
+        "Ask ONE focused question in 1-2 paragraphs. "
+        "Explain why the answer matters for your "
+        "decision. Address the presenter by role."
+    ),
+    "objection": (
+        "Raise your strongest objection in 2-3 paragraphs. "
+        "Be specific: name the risk, quantify if possible, "
+        "and state what would resolve your concern."
+    ),
+    "rebuttal": (
+        "Address the objections directly in 2-3 paragraphs. "
+        "Acknowledge valid points with mitigations. "
+        "Push back where the objection misreads your intent."
+    ),
+    "vote": (
+        "Cast your vote. Format:\n"
+        "VOTE: [for/against/abstain]\n"
+        "REASONING: [2-3 sentences explaining your vote]"
+    ),
+}
+
+
 def _strip_reasoning_markup(content: str) -> str:
     """Remove think/redacted_thinking blocks and stray tags."""
     cleaned = content
@@ -387,13 +421,9 @@ class SimulationAgent:
                 LLMMessage(role="user", content=f"INSTRUCTION: {instruction}")
             )
 
-        # 5. Final prompt
-        messages.append(
-            LLMMessage(
-                role="user",
-                content="Provide your response as your character would speak.",
-            )
-        )
+        # 5. Final prompt — phase-aware format guidance
+        closing = _PHASE_CLOSING.get(phase, _DEFAULT_CLOSING)
+        messages.append(LLMMessage(role="user", content=closing))
 
         return messages
 
