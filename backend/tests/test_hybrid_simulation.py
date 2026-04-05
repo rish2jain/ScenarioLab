@@ -13,6 +13,7 @@ from app.personas.archetypes import (
     InformationBias,
     RiskTolerance,
 )
+from app.simulation import engine as sim_engine_module
 from app.simulation.agent import SimulationAgent
 from app.simulation.engine import SimulationEngine
 from app.simulation.models import (
@@ -284,7 +285,9 @@ class TestCloudOnlyBackwardCompat:
         mock_ir_create,
         engine,
         minimal_config,
+        monkeypatch,
     ):
+        monkeypatch.setattr(sim_engine_module.settings, "inference_mode", "cloud")
         mock_seed_cls.return_value.get_seed = AsyncMock(return_value=None)
         engine._repo.save = AsyncMock()
         cloud = MagicMock()
