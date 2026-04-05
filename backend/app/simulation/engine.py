@@ -509,6 +509,7 @@ class SimulationEngine:
         env_class = get_environment(sim_state.config.environment_type)
         environment = env_class()
         setattr(environment, "_sim_config", sim_state.config)
+        environment._memory_manager = memory_manager
 
         # Set up visibility and turn managers
         visibility = VisibilityManager(sim_state.config.environment_type)

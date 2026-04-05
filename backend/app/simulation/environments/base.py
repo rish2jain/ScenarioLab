@@ -2,6 +2,7 @@
 
 import logging
 from abc import ABC, abstractmethod
+from typing import Any
 
 from app.simulation.agent import SimulationAgent
 from app.simulation.models import (
@@ -9,6 +10,7 @@ from app.simulation.models import (
     RoundState,
     SimulationMessage,
 )
+from app.simulation.objectives import build_round_agenda_line
 from app.simulation.turn_rules import TurnManager
 from app.simulation.visibility import VisibilityManager
 
@@ -23,6 +25,8 @@ class BaseEnvironment(ABC):
 
     def __init__(self):
         self.current_phase_idx = 0
+        self._sim_config: Any = None
+        self._memory_manager: Any = None  # Set by engine
 
     @abstractmethod
     async def run_phase(
@@ -42,8 +46,25 @@ class BaseEnvironment(ABC):
         """Evaluate round outcomes (votes, decisions, etc.)."""
         pass
 
-    def get_phase_instruction(self, phase: str, agent_role: str) -> str:
+    def get_phase_instruction(
+        self,
+        phase: str,
+        agent_role: str,
+        *,
+        round_number: int = 1,
+    ) -> str:
         """Get phase-specific instruction for an agent."""
+        body = self._resolve_phase_instruction(phase, agent_role)
+        line = build_round_agenda_line(
+            round_number,
+            getattr(self._sim_config, "parameters", None) or {},
+        )
+        if line:
+            return f"{body}\n\nRound focus (objective hypothesis): {line}"
+        return body
+
+    def _resolve_phase_instruction(self, phase: str, agent_role: str) -> str:
+        """Subclass override for phase copy; agenda is appended in ``get_phase_instruction``."""
         default = "Participate in the discussion."
         return self._default_instructions().get(phase, default)
 
@@ -91,14 +112,45 @@ class BaseEnvironment(ABC):
                 agent.state, round_state.messages
             )
 
+            # Enrich context with agent's cross-round memories
+            enriched_context = context
+            if self._memory_manager and round_number > 1:
+                sim_id = getattr(
+                    self._sim_config, "id", ""
+                )
+                if sim_id:
+                    try:
+                        mem_ctx = (
+                            await self._memory_manager
+                            .get_agent_context(
+                                agent_id=agent.id,
+                                simulation_id=sim_id,
+                                current_round=round_number,
+                            )
+                        )
+                        if mem_ctx:
+                            enriched_context = (
+                                f"{context}\n\n{mem_ctx}"
+                                if context
+                                else mem_ctx
+                            )
+                    except Exception:
+                        logger.debug(
+                            "Memory retrieval failed for %s",
+                            agent.name,
+                            exc_info=True,
+                        )
+
             # Get phase instruction
             instruction = self.get_phase_instruction(
-                phase, agent.archetype.role
+                phase,
+                agent.archetype.role,
+                round_number=round_number,
             )
 
             # Generate response
             message = await agent.generate_response(
-                context=context,
+                context=enriched_context,
                 phase=phase,
                 round_number=round_number,
                 visible_messages=visible_messages,
@@ -108,7 +160,9 @@ class BaseEnvironment(ABC):
             return message
 
         except Exception as e:
-            logger.error(f"Error processing turn for agent {agent.name}: {e}")
+            logger.error(
+                f"Error processing turn for agent {agent.name}: {e}"
+            )
             return None
 
     async def _run_voting_phase(
@@ -125,6 +179,7 @@ class BaseEnvironment(ABC):
                 vote_result = await agent.cast_vote(
                     proposal=proposal,
                     arguments=round_state.messages,
+                    round_number=round_state.round_number,
                 )
                 votes.append(vote_result)
 
