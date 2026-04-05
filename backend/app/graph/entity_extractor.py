@@ -139,10 +139,7 @@ class EntityExtractor:
         rel_types_str = ", ".join(self.RELATIONSHIP_TYPES)
         onto_block = self._ontology_prompt_block(ontology)
 
-        prompt = f"""You are an expert information extraction system for
-strategy consulting analysis.
-
-Extract entities and relationships from the following text. Focus on
+        prompt = f"""Extract entities and relationships from the following text. Focus on
 entities relevant to business strategy, competitive analysis, and
 organizational dynamics.
 
@@ -162,6 +159,33 @@ For each relationship, provide:
 - relationship_type: One of the types listed above
 - description: Brief description of the relationship
 - weight: Importance score from 0.0 to 1.0
+
+EXAMPLE:
+Text: "Acme Corp's CEO Jane Smith announced a $2B acquisition of BetaCo, \
+facing opposition from EU regulators who cited market concentration concerns."
+Expected extraction:
+- Entities: Acme Corp (organization), Jane Smith (person, CEO of Acme Corp), \
+BetaCo (organization, acquisition target), EU regulators (organization), \
+$2B (financial_figure)
+- Relationships: Jane Smith works_for Acme Corp, Acme Corp acquired BetaCo, \
+EU regulators regulates Acme Corp
+
+EDGE CASES:
+- Entity aliases: If the same entity is referred to by different names \
+(e.g., "the company" and "Acme Corp"), extract it ONCE using the most specific name.
+- Implicit relationships: Extract relationships that are clearly implied even if \
+not explicitly stated (e.g., "the CEO presented to the board" implies works_for \
+between CEO and the organization).
+- Ambiguous types: When an entity could be multiple types, prefer the most specific \
+(e.g., "SEC" is an organization, not a person).
+
+QUALITY GUIDELINES:
+- Prefer precision over recall: only extract entities you are confident about.
+- Every relationship MUST have both source and target as extracted entities.
+- Descriptions should be factual, not interpretive. State what the text says, \
+not what it implies.
+- Weight reflects relationship importance to the strategic analysis \
+(0.3 = minor, 0.6 = moderate, 0.9 = critical).
 
 Text to analyze:
 ---
@@ -189,7 +213,6 @@ Respond with valid JSON in this exact format:
   ]
 }}
 
-Extract as many meaningful entities and relationships as possible.
 Ensure all relationship source/target names match extracted entity names.
 """
         return prompt
@@ -199,7 +222,14 @@ Ensure all relationship source/target names match extracted entity names.
         prompt = self._build_extraction_prompt(text, ontology=ontology)
 
         messages = [
-            LLMMessage(role="system", content="You are a precise " "information extraction system."),
+            LLMMessage(
+                role="system",
+                content=(
+                    "You are an expert information extraction system for "
+                    "strategy consulting analysis. You extract structured "
+                    "entities and relationships from text with high precision."
+                ),
+            ),
             LLMMessage(role="user", content=prompt),
         ]
 

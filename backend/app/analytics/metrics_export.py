@@ -120,7 +120,7 @@ class MetricsExporter:
             data = {
                 "summary": {
                     "simulation_id": metrics.simulation_id,
-                    "compliance_violation_rate": (metrics.compliance_violation_rate),
+                    "compliance_violation_rate": metrics.compliance_violation_rate,
                     "time_to_consensus": metrics.time_to_consensus,
                     "policy_adoption_rate": metrics.policy_adoption_rate,
                 },
@@ -129,21 +129,21 @@ class MetricsExporter:
                         "type": "line",
                         "title": "Sentiment Trajectory",
                         "data": {
-                            "labels": [f"Round {s['round']}" for s in metrics.sentiment_trajectory],
+                            "labels": [f"Round {s.get('round', 'N/A')}" for s in metrics.sentiment_trajectory],
                             "datasets": [
                                 {
                                     "label": "Positive",
-                                    "data": [s["positive"] for s in metrics.sentiment_trajectory],
+                                    "data": [s.get("positive", 0) for s in metrics.sentiment_trajectory],
                                     "color": "#10b981",
                                 },
                                 {
                                     "label": "Negative",
-                                    "data": [s["negative"] for s in metrics.sentiment_trajectory],
+                                    "data": [s.get("negative", 0) for s in metrics.sentiment_trajectory],
                                     "color": "#ef4444",
                                 },
                                 {
                                     "label": "Neutral",
-                                    "data": [s["neutral"] for s in metrics.sentiment_trajectory],
+                                    "data": [s.get("neutral", 0) for s in metrics.sentiment_trajectory],
                                     "color": "#6b7280",
                                 },
                             ],
@@ -185,9 +185,9 @@ class MetricsExporter:
                             "datasets": [
                                 {
                                     "data": [
-                                        sum(1 for d in metrics.decision_outcomes if d["result"] == "approved"),
-                                        sum(1 for d in metrics.decision_outcomes if d["result"] == "rejected"),
-                                        sum(1 for d in metrics.decision_outcomes if d["result"] == "pending"),
+                                        sum(1 for d in metrics.decision_outcomes if d.get("result") == "approved"),
+                                        sum(1 for d in metrics.decision_outcomes if d.get("result") == "rejected"),
+                                        sum(1 for d in metrics.decision_outcomes if d.get("result") == "pending"),
                                     ],
                                     "colors": ["#10b981", "#ef4444", "#f59e0b"],
                                 }
@@ -202,9 +202,9 @@ class MetricsExporter:
                 },
                 "metrics": {
                     "sentiment_trajectory": metrics.sentiment_trajectory,
-                    "role_polarization_index": (metrics.role_polarization_index),
+                    "role_polarization_index": metrics.role_polarization_index,
                     "agent_activity_scores": metrics.agent_activity_scores,
-                    "coalition_formation_events": (metrics.coalition_formation_events),
+                    "coalition_formation_events": metrics.coalition_formation_events,
                     "key_turning_points": metrics.key_turning_points,
                     "decision_outcomes": metrics.decision_outcomes,
                 },

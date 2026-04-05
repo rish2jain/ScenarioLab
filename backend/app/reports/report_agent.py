@@ -21,6 +21,7 @@ from app.reports.deliverables import (
     score_risk_impact,
     score_risk_probability,
 )
+from app.reports.llm_json_fences import strip_llm_json_fences
 from app.reports.models import (
     ExecutiveSummary,
     KeyRecommendation,
@@ -52,6 +53,43 @@ class ReportAgent:
     # Shared system message for all JSON-producing LLM calls — avoids
     # duplicating near-identical instructions across every section prompt.
     _SYSTEM_JSON = "You are an expert strategy consultant. " "Respond with valid JSON only."
+
+    # Section-specific system messages that provide richer expertise context.
+    # Falls back to _SYSTEM_JSON if a section key is missing.
+    _SYSTEM_MESSAGES: dict[str, str] = {
+        "executive_summary": (
+            "You are a McKinsey-level strategy consultant writing for C-suite "
+            "executives. Ground every claim in simulation evidence — cite agent "
+            "names and round numbers. Respond with valid JSON only."
+        ),
+        "objective_assessment": (
+            "You are a senior strategy evaluator assessing whether a war-game "
+            "simulation answered its stated objective. Use specific evidence "
+            "from the transcript to justify every judgement. Respond with valid "
+            "JSON only."
+        ),
+        "risk_register": (
+            "You are a risk management expert identifying actionable risks "
+            "from simulation dynamics. Every risk must trace to specific "
+            "simulation evidence. Respond with valid JSON only."
+        ),
+        "scenario_matrix": (
+            "You are a scenario planning strategist developing forward-looking "
+            "scenarios grounded in observed simulation dynamics. Each scenario "
+            "must reference the decision branches and agent behaviors that "
+            "make it plausible. Respond with valid JSON only."
+        ),
+        "stakeholder_heatmap": (
+            "You are a stakeholder analysis expert mapping influence and "
+            "alignment dynamics. Base every assessment on observed agent "
+            "behavior, stated positions, and coalition patterns from the "
+            "simulation transcript. Respond with valid JSON only."
+        ),
+    }
+
+    def _system_message_for(self, section: str) -> str:
+        """Return the section-specific system message, falling back to the generic one."""
+        return self._SYSTEM_MESSAGES.get(section, self._SYSTEM_JSON)
 
     def __init__(
         self,
@@ -170,18 +208,27 @@ USER OBJECTIVE AND STRUCTURED PARSE:
 TRANSCRIPT (older rounds summarised, recent rounds full):
 {transcript}
 
+EVIDENCE REQUIREMENTS:
+- For each entry in "success_metrics_addressed", cite the round number (e.g. R2)
+  and the agent name who provided the most relevant evidence.
+- For each gap, classify its severity:
+  CRITICAL = the objective cannot be answered from this simulation
+  SIGNIFICANT = partial answer exists but key questions remain open
+  MINOR = mostly answered but nuances or edge cases are missing
+- Format each gap as: "[SEVERITY] description — what would be needed to close it"
+
 Respond with valid JSON only:
 {{
   "stated_objective": "one-paragraph restatement of what success looks like",
-  "success_metrics_addressed": ["metric or outcome where the discussion was substantive"],
-  "gaps": ["where the simulation did not resolve the objective or left key questions open"],
+  "success_metrics_addressed": ["metric — evidence from [Agent] in R[N]: brief quote or paraphrase"],
+  "gaps": ["[CRITICAL|SIGNIFICANT|MINOR] gap description — what is needed to close it"],
   "conclusion": "2-4 sentences: did we answer the user's question, and what is still missing?"
 }}"""
 
         try:
             response = await self.llm.generate(
                 messages=[
-                    LLMMessage(role="system", content=self._SYSTEM_JSON),
+                    LLMMessage(role="system", content=self._system_message_for("objective_assessment")),
                     LLMMessage(role="user", content=prompt),
                 ],
                 temperature=0.15,
@@ -236,15 +283,22 @@ KEY FINDINGS (extracted by analysis):
 {json.dumps(findings, indent=2)}
 
 TASK:
-Write a compelling executive summary (max 1000 words) that:
+Write an executive summary (max 1000 words) that:
 1. Provides a concise overview of the simulation and its purpose
 2. Explicitly relates findings to the stated objective (if one was provided)
 3. Highlights the most critical dynamics and outcomes
 4. Synthesizes stakeholder positions and key tensions
 5. Presents clear strategic implications
 
-The summary should be written in a professional consulting style,
-suitable for C-suite executives.
+GROUNDING REQUIREMENTS:
+- Every key finding MUST reference at least one specific agent name and
+  quote or paraphrase from the simulation transcript (e.g., "As [Agent]
+  noted in Round 3, '...'").
+- Each recommendation must specify: WHO should act, WHAT action to take,
+  and WHAT SUCCESS looks like (measurable or observable outcome).
+- Do NOT use generic phrases like "stakeholders should consider" or
+  "further analysis is needed" without specifying which stakeholders
+  and what specific analysis.
 
 Respond with valid JSON in this exact format:
 {{
@@ -253,9 +307,9 @@ Respond with valid JSON in this exact format:
     "recommendations": [
         {{
             "title": "Recommendation title",
-            "description": "Detailed description",
+            "description": "Detailed description with who/what/success criteria",
             "priority": "high|medium|low",
-            "rationale": "Why this matters"
+            "rationale": "Why this matters — cite simulation evidence"
         }}
     ]
 }}
@@ -265,7 +319,7 @@ IMPORTANT: Include at most 3 recommendations, ranked by impact."""
         try:
             response = await self.llm.generate(
                 messages=[
-                    LLMMessage(role="system", content=self._SYSTEM_JSON),
+                    LLMMessage(role="system", content=self._system_message_for("executive_summary")),
                     LLMMessage(role="user", content=prompt),
                 ],
                 temperature=0.3,
@@ -323,24 +377,38 @@ RISK SIGNALS DETECTED:
 
 TASK:
 Based on the detected risk signals, create a structured risk register.
+
+SEVERITY FRAMEWORK:
+- Score each risk on two dimensions:
+  Impact (1-5): 1=negligible, 2=minor, 3=moderate, 4=major, 5=catastrophic
+  Likelihood (1-5): 1=rare, 2=unlikely, 3=possible, 4=likely, 5=almost certain
+- Map the combined score to impact level:
+  critical (>=20), high (12-19), medium (6-11), low (<=5)
+
+ATTRIBUTION REQUIREMENT:
+- Each risk MUST trace to a specific simulation dynamic (e.g., "CFO raised
+  cash flow concerns in Round 2" or "Coalition between X and Y formed
+  against the proposal in Round 3").
+- Trigger conditions must be specific and observable, not vague.
+
 For each risk, provide:
-- Clear description of the risk
+- Clear description with source attribution (agent name + round)
 - Probability (0.0-1.0) based on signal strength and repetition
-- Impact level (low, medium, high, critical)
-- Risk owner (the stakeholder most responsible)
-- Mitigation strategy
-- Trigger condition
+- Impact level (low, medium, high, critical) per the severity framework
+- Risk owner (the specific stakeholder most responsible, by name)
+- Mitigation strategy (actionable, with responsible party)
+- Trigger condition (specific observable event from simulation dynamics)
 
 Respond with valid JSON in this exact format:
 {{
     "risks": [
         {{
-            "description": "Risk description",
+            "description": "Risk description citing agent and round",
             "probability": 0.7,
             "impact": "high",
             "owner": "Stakeholder name/role",
-            "mitigation": "How to mitigate this risk",
-            "trigger": "What triggers this risk"
+            "mitigation": "Specific mitigation with responsible party",
+            "trigger": "Specific trigger condition from simulation"
         }}
     ]
 }}
@@ -350,7 +418,7 @@ Include 3-7 significant risks. Be specific and actionable."""
         try:
             response = await self.llm.generate(
                 messages=[
-                    LLMMessage(role="system", content=self._SYSTEM_JSON),
+                    LLMMessage(role="system", content=self._system_message_for("risk_register")),
                     LLMMessage(role="user", content=prompt),
                 ],
                 temperature=0.2,
@@ -421,17 +489,27 @@ For each scenario:
 3. Identify 2-4 key drivers that shape this scenario
 4. Assess outcomes across each dimension (positive/negative description)
 
+GROUNDING REQUIREMENTS:
+- Each scenario description MUST reference the specific decision branches
+  or agent behaviors from the simulation that make it plausible (e.g.,
+  "This scenario follows from the coalition formed in Round 2 between
+  [Agent A] and [Agent B] opposing the proposal").
+- Key drivers must be traceable to observed simulation dynamics, not
+  hypothetical external factors.
+- Outcome descriptions must connect back to positions or concerns
+  raised by specific agents during the simulation.
+
 Respond with valid JSON in this exact format:
 {{
     "scenarios": [
         {{
             "scenario_name": "Name",
-            "description": "Detailed scenario narrative",
+            "description": "Detailed scenario narrative citing simulation evidence",
             "probability_range": [0.2, 0.4],
             "confidence_interval": 0.8,
-            "key_drivers": ["driver 1", "driver 2"],
+            "key_drivers": ["driver traced to simulation dynamic"],
             "outcomes": {{
-                "Financial Performance": "Positive outcome description",
+                "Financial Performance": "Outcome description citing agent evidence",
                 "Market Position": "Outcome description",
                 ...
             }}
@@ -444,7 +522,7 @@ Ensure scenarios are distinct, plausible, and cover a range of outcomes."""
         try:
             response = await self.llm.generate(
                 messages=[
-                    LLMMessage(role="system", content=self._SYSTEM_JSON),
+                    LLMMessage(role="system", content=self._system_message_for("scenario_matrix")),
                     LLMMessage(role="user", content=prompt),
                 ],
                 temperature=0.5,
@@ -541,6 +619,18 @@ For each stakeholder, confirm or adjust:
 - Support level (-1.0 to 1.0)
 - Key concerns (top 2-3)
 
+EVIDENCE REQUIREMENTS:
+- Each position assessment must cite the agent's own statements or voting
+  behavior (e.g., "Voted against in Round 3; stated 'we cannot accept
+  these terms'").
+- Influence scores must reflect observed behavior: did other agents defer
+  to them, form coalitions with them, or shift positions after their
+  arguments?
+- Key concerns must be drawn from the agent's actual statements, not
+  inferred from their role title alone.
+- If an agent's position shifted during the simulation, note the shift
+  and the round where it occurred.
+
 Respond with valid JSON in this exact format:
 {{
     "stakeholders": [
@@ -550,7 +640,7 @@ Respond with valid JSON in this exact format:
             "position": "support|neutral|oppose|...",
             "influence": 0.7,
             "support_level": 0.5,
-            "key_concerns": ["concern 1", "concern 2"]
+            "key_concerns": ["concern citing agent's own words or actions"]
         }}
     ]
 }}
@@ -560,7 +650,7 @@ Ensure the analysis reflects the actual dynamics observed in the simulation."""
         try:
             response = await self.llm.generate(
                 messages=[
-                    LLMMessage(role="system", content=self._SYSTEM_JSON),
+                    LLMMessage(role="system", content=self._system_message_for("stakeholder_heatmap")),
                     LLMMessage(role="user", content=prompt),
                 ],
                 temperature=0.25,
@@ -722,18 +812,8 @@ Ensure the analysis reflects the actual dynamics observed in the simulation."""
             return ReportMemoryToolContext(by_agent=[], skipped=str(e))
 
     def _clean_json_response(self, content: str) -> str:
-        """Clean up LLM response to extract valid JSON."""
-        content = content.strip()
-
-        # Remove markdown code blocks
-        if content.startswith("```json"):
-            content = content[7:]
-        if content.startswith("```"):
-            content = content[3:]
-        if content.endswith("```"):
-            content = content[:-3]
-
-        return content.strip()
+        """Clean up LLM response to extract valid JSON (strip markdown fences)."""
+        return strip_llm_json_fences(content)
 
     def _generate_fallback_executive_summary(self, findings: list) -> ExecutiveSummary:
         """Generate a basic executive summary without LLM."""

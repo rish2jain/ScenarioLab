@@ -54,8 +54,16 @@ class Settings(BaseSettings):
     tavily_api_key: str = ""
     sec_user_agent: str = "ScenarioLab/1.0 (research@scenariolab.ai)"
 
-    # Optional Zep Cloud (upstream-style graph)
-    zep_api_key: str = ""
+    # Graphiti temporal context graph (local Neo4j; replaces Zep Cloud stub)
+    graphiti_enabled: bool = False
+    # Neo4j database name for Graphiti only (same server as NEO4J_URI). Use a
+    # dedicated DB in production to avoid mixing with seed EntityExtractor nodes.
+    neo4j_graphiti_database: str = "neo4j"
+    # Overrides OPENAI for Graphiti LLM/embedder; if empty, uses LLM_API_KEY when LLM_PROVIDER=openai
+    graphiti_openai_api_key: str = ""
+    graphiti_max_coroutines: int | None = None
+    # Prepend Graphiti hybrid search facts to agent context (extra LLM cost per turn)
+    graphiti_inject_agent_context: bool = False
 
     # Graph seed extraction: per-seed asyncio.Lock cache (see graph.router)
     graph_seed_extraction_lock_ttl_seconds: float = 3600.0

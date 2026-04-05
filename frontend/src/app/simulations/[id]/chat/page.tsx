@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useState, useRef } from 'react';
+import { useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Send, User, Bot } from 'lucide-react';
@@ -50,7 +50,14 @@ export default function ChatPage() {
   const rawId = params.id;
   const simulationId = Array.isArray(rawId) ? rawId[0] : rawId ?? '';
   
-  const { messages, setMessages, selectedAgentId, setSelectedAgentId, addMessage } = useChatStore();
+  const {
+    messages,
+    setMessages,
+    selectedAgentId,
+    setSelectedAgentId,
+    addMessage,
+    updateMessage,
+  } = useChatStore();
   const { currentSimulation, setCurrentSimulation } = useSimulationStore();
   const { addToast } = useToast();
 
@@ -149,45 +156,27 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSendMessage = async () => {
-    if (!inputMessage.trim()) return;
-
-    const outboundMessage = inputMessage.trim();
-    const previousMessages = messages;
-    setIsSending(true);
-    
-    // Add user message
-    const userMessage: ChatMessage = {
-      id: createChatMessageId(),
-      simulationId,
-      content: outboundMessage,
-      timestamp: new Date().toISOString(),
-      isUser: true,
-    };
-    addMessage(userMessage);
-    setInputMessage('');
-    localStorage.removeItem(`chat_draft_${simulationId}`);
-
-    try {
-      // Send to API and get response
-      if (selectedAgentId) {
+  /** Deliver outbound text to the same recipient as when the user sent (not current UI selection). */
+  const deliverChatMessage = useCallback(
+    async (content: string, targetAgentId: string | null) => {
+      if (targetAgentId) {
         const response = await api.sendAgentChat(
           simulationId,
-          selectedAgentId,
-          outboundMessage
+          targetAgentId,
+          content
         );
 
-        const content =
+        const reply =
           typeof response?.response === 'string' ? response.response : '';
         const resolvedAgentId =
           (typeof response?.agent_id === 'string' && response.agent_id.trim())
             ? response.agent_id.trim()
-            : selectedAgentId;
+            : targetAgentId;
 
-        if (!resolvedAgentId || !content.trim()) {
+        if (!resolvedAgentId || !reply.trim()) {
           console.warn(
             '[ChatPage] sendAgentChat: missing agent_id or response text; skipping addMessage',
-            { response, selectedAgentId }
+            { response, targetAgentId }
           );
           addToast('The agent did not return a valid reply.', 'error');
           return;
@@ -203,7 +192,7 @@ export default function ChatPage() {
               ? response.agent_name.trim()
               : agentRow?.name ?? 'Agent',
           agentColor: agentRow?.color ?? DEFAULT_CHAT_AGENT_COLOR,
-          content,
+          content: reply,
           timestamp:
             typeof response?.timestamp === 'string' && response.timestamp.trim()
               ? response.timestamp
@@ -214,14 +203,41 @@ export default function ChatPage() {
       } else {
         const response = await api.sendChatMessage(
           simulationId,
-          outboundMessage,
+          content,
           undefined
         );
         addMessage(response);
       }
+    },
+    [simulationId, agents, addMessage, addToast]
+  );
+
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() || isSending) return;
+
+    const outboundMessage = inputMessage.trim();
+    /** Snapshot recipient so Retry does not follow a later agent selection change. */
+    const targetAgentId = selectedAgentId;
+
+    setIsSending(true);
+
+    const userMessage: ChatMessage = {
+      id: createChatMessageId(),
+      simulationId,
+      content: outboundMessage,
+      timestamp: new Date().toISOString(),
+      isUser: true,
+      targetAgentId,
+    };
+    addMessage(userMessage);
+    setInputMessage('');
+    localStorage.removeItem(`chat_draft_${simulationId}`);
+
+    try {
+      await deliverChatMessage(outboundMessage, targetAgentId);
     } catch (error) {
       console.error('Failed to send message:', error);
-      setMessages(previousMessages);
+      updateMessage(userMessage.id, { sendFailed: true });
       setInputMessage(outboundMessage);
       localStorage.setItem(`chat_draft_${simulationId}`, outboundMessage);
       addToast(
@@ -232,6 +248,36 @@ export default function ChatPage() {
       setIsSending(false);
     }
   };
+
+  const handleRetryFailedMessage = useCallback(
+    async (message: ChatMessage) => {
+      if (!message.isUser || !message.sendFailed || isSending) return;
+      const targetAgentId =
+        message.targetAgentId === undefined ? null : message.targetAgentId;
+
+      setIsSending(true);
+      updateMessage(message.id, { sendFailed: false });
+
+      try {
+        await deliverChatMessage(message.content, targetAgentId);
+      } catch (error) {
+        console.error('Failed to retry message:', error);
+        updateMessage(message.id, { sendFailed: true });
+        addToast(
+          error instanceof Error ? error.message : 'Failed to send message.',
+          'error'
+        );
+      } finally {
+        setIsSending(false);
+      }
+    },
+    [
+      isSending,
+      deliverChatMessage,
+      updateMessage,
+      addToast,
+    ]
+  );
 
   const selectedAgent = agents.find((a) => a.id === selectedAgentId);
 
@@ -443,7 +489,9 @@ export default function ChatPage() {
                   <div
                     className={`rounded-2xl px-4 py-2 ${
                       message.isUser
-                        ? 'bg-accent text-white rounded-br-none'
+                        ? `bg-accent text-white rounded-br-none${
+                            message.sendFailed ? ' ring-2 ring-red-400/60' : ''
+                          }`
                         : 'bg-slate-700 text-slate-200 rounded-bl-none'
                     }`}
                   >
@@ -460,6 +508,21 @@ export default function ChatPage() {
                     >
                       {formatTime(message.timestamp)}
                     </p>
+                    {message.isUser && message.sendFailed && (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-red-100/90">Failed to send</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          type="button"
+                          className="h-7 px-2 text-xs text-white hover:bg-white/15"
+                          onClick={() => void handleRetryFailedMessage(message)}
+                          disabled={isSending}
+                        >
+                          Retry
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

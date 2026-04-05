@@ -65,8 +65,6 @@ async def test_red_lines_dedupe_multi_keyword_same_sentence() -> None:
     positions = await analyzer.extract_positions(state)
     assert len(positions) == 1
     red = positions[0].red_lines
-    assert len(red) == len(set(red))
-    assert len(red) <= 3
     assert len(red) == 1
 
 
@@ -85,5 +83,5 @@ async def test_basic_red_lines_cap_at_three_unique() -> None:
     positions = await analyzer.extract_positions(state)
     assert len(positions) == 1
     red = positions[0].red_lines
-    assert len(red) <= 3
+    assert len(red) == 3
     assert len(red) == len(set(red))

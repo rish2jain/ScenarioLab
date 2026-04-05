@@ -359,7 +359,8 @@ cleanup() {
             read -p "Stop Neo4j container? (y/N) " -n 1 -r
             echo
             if [[ $REPLY =~ ^[Yy]$ ]]; then
-                docker stop scenariolab-neo4j >/dev/null 2>&1 || true
+                print_info "Stopping Neo4j (graceful shutdown, up to 30s)..."
+                docker stop -t 30 scenariolab-neo4j >/dev/null 2>&1 || true
                 print_success "Neo4j stopped"
             fi
         fi

@@ -26,7 +26,7 @@ This guide walks through every major feature for manual verification. Use it aft
 | 6 | [Simulation Controls](#6-simulation-controls) | P0 | 3 min |
 | 7 | [Simulation Sub-Pages](#7-simulation-sub-pages) | P1 | 5 min |
 | 8 | [Seed Document Upload](#8-seed-document-upload) | P1 | 3 min |
-| 9 | [Personas](#9-personas) | P1 | 3 min |
+| 9 | [Personas](#9-personas) | P1 | 5 min |
 | 10 | [Reports](#10-reports) | P1 | 3 min |
 | 11 | [Analytics](#11-analytics) | P2 | 3 min |
 | 12 | [API Keys](#12-api-keys) | P2 | 2 min |
@@ -34,8 +34,18 @@ This guide walks through every major feature for manual verification. Use it aft
 | 14 | [LLM Provider Switch](#14-llm-provider-switch) | P1 | 3 min |
 | 15 | [Graceful Degradation](#15-graceful-degradation) | P1 | 3 min |
 | 16 | [Backend API Docs](#16-backend-api-docs) | P2 | 1 min |
+| 17 | [Scenario Branching & Compare](#17-scenario-branching--compare) | P1 | 4 min |
+| 18 | [Backtesting](#18-backtesting) | P1 | 3 min |
+| 19 | [Rehearsal & Counterpart Agents](#19-rehearsal--counterpart-agents) | P1 | 4 min |
+| 20 | [Annotations](#20-annotations) | P2 | 3 min |
+| 21 | [Regulatory Scenario Generator](#21-regulatory-scenario-generator) | P2 | 3 min |
+| 22 | [Fine-Tuning](#22-fine-tuning) | P2 | 3 min |
+| 23 | [Graphiti Temporal Memory](#23-graphiti-temporal-memory) | P2 | 3 min |
+| 24 | [External API v1](#24-external-api-v1) | P2 | 4 min |
+| 25 | [WebSocket Real-Time Updates](#25-websocket-real-time-updates) | P2 | 2 min |
+| 26 | [Dual-Create & Preset Simulations](#26-dual-create--preset-simulations) | P2 | 3 min |
 
-**Total estimated time**: ~45 minutes for full pass
+**Total estimated time**: ~80 minutes for full pass
 
 ---
 
@@ -169,17 +179,18 @@ After a simulation completes, visit each tab:
 
 | Tab | Path | Verify |
 |-----|------|--------|
-| Chat | `/simulations/[id]/chat` | Chat input works; agent responds |
-| Sensitivity | `/simulations/[id]/sensitivity` | Chart renders or "not available" message |
-| Network | `/simulations/[id]/network` | Network graph visualization renders |
-| ZOPA | `/simulations/[id]/zopa` | Zone analysis displays |
-| Fairness | `/simulations/[id]/fairness` | Fairness metrics render |
-| Timeline | `/simulations/[id]/timeline` | Events shown chronologically |
-| Audit Trail | `/simulations/[id]/audit-trail` | Event log with hashes |
-| Report | `/simulations/[id]/report` | Narrative report generated |
-| Market Intel | `/simulations/[id]/market-intel` | Data displays or placeholder |
-| Voice | `/simulations/[id]/voice` | Audio controls present |
-| Attribution | `/simulations/[id]/attribution` | Source tracking shown |
+| Chat | `/simulations/[id]/chat` | Chat input works; agent responds; history persists on reload |
+| Sensitivity | `/simulations/[id]/sensitivity` | Tornado chart renders with parameter impact rankings |
+| Network | `/simulations/[id]/network` | Force-directed graph renders; nodes clickable; edges show sentiment colors |
+| ZOPA | `/simulations/[id]/zopa` | Zone of Possible Agreement visualization with party ranges and overlap |
+| Fairness | `/simulations/[id]/fairness` | Bias/fairness audit results with permutation test outcomes |
+| Timeline | `/simulations/[id]/timeline` | Events shown chronologically; scrub slider works; bookmarks saveable |
+| Audit Trail | `/simulations/[id]/audit-trail` | Event log with SHA-256 hashes; verify integrity button works |
+| Report | `/simulations/[id]/report` | Narrative report with exec summary, risk register, scenario matrix, heatmap |
+| Market Intel | `/simulations/[id]/market-intel` | Market intelligence feed displays or placeholder if not configured |
+| Voice | `/simulations/[id]/voice` | Audio controls present; transcribe and TTS work (requires OpenAI key) |
+| Attribution | `/simulations/[id]/attribution` | Shapley value attribution with confidence intervals |
+| Rehearsal | `/simulations/[id]/rehearsal` | Counterpart agent interaction; objection generation works |
 
 **Pass criteria**: Each page loads without JavaScript errors (check browser console).
 
@@ -202,14 +213,35 @@ After a simulation completes, visit each tab:
 
 ## 9. Personas
 
-**Goal**: Persona browsing and creation work.
+**Goal**: Persona browsing, designer CRUD, counterpart agents, and axioms work.
+
+### Persona Library
 
 | Step | Action | Expected Result |
 |------|--------|-----------------|
 | 9.1 | Navigate to `/personas` | Persona library loads |
 | 9.2 | Browse persona cards | Each shows role, traits, description |
-| 9.3 | Navigate to `/personas/designer` | Designer interface renders |
-| 9.4 | Navigate to `/personas/axioms` | Axioms page renders |
+| 9.3 | Click a persona card | Detail view shows authority level, risk tolerance, decision speed, coalition tendencies |
+
+### Persona Designer
+
+| Step | Action | Expected Result |
+|------|--------|-----------------|
+| 9.4 | Navigate to `/personas/designer` | Designer interface renders |
+| 9.5 | Create a custom persona (fill role, traits, objectives) | Persona saved; appears in designer list |
+| 9.6 | `GET /api/personas/designer` | Returns list including new persona |
+| 9.7 | Edit the persona | Changes persist after reload |
+| 9.8 | Click "Refresh Research" on a designer persona | Web evidence re-fetched and merged; updated data shown |
+| 9.9 | Validate persona coherence (`POST /api/personas/designer/validate`) | Returns coherence score and any warnings |
+| 9.10 | Delete the persona | Removed from list; `GET /api/personas/designer/{id}` returns 404 |
+
+### Axioms
+
+| Step | Action | Expected Result |
+|------|--------|-----------------|
+| 9.11 | Navigate to `/personas/axioms` | Axioms page renders |
+| 9.12 | Extract axioms from sample historical data (`POST /api/personas/axioms/extract`) | Returns extracted axioms with confidence scores |
+| 9.13 | Validate axioms against holdout data (`POST /api/personas/axioms/validate`) | Returns validation results with accuracy metrics |
 
 ---
 
@@ -224,6 +256,10 @@ After a simulation completes, visit each tab:
 | 10.3 | Check report sections | Executive Summary, Risk Register, Scenario Matrix present |
 | 10.4 | Export as PDF (if available) | Download initiates; file is valid PDF |
 | 10.5 | Export as PPTX (if available) | Download initiates; file opens in PowerPoint |
+| 10.6 | Export as interactive deck (`GET /api/reports/{id}/export/interactive-deck`) | Self-contained HTML file downloads; opens in browser with embedded JS |
+| 10.7 | Add `?logo_url=...&primary_color=%23007bff&company_name=Acme` to deck export | Branding applied in the deck |
+| 10.8 | Create a review checkpoint (`POST /api/reports/{id}/checkpoint`) | Checkpoint created; appears in report metadata |
+| 10.9 | Update checkpoint status (`PATCH /api/reports/{id}/checkpoint/{checkpoint_id}`) | Status updates (e.g., approved/rejected) |
 
 ---
 
@@ -330,6 +366,162 @@ cd backend
 | 16.2 | Expand `/api/simulations` section | All endpoints listed |
 | 16.3 | Try "Try it out" on `GET /api/simulations` | Returns 200 with simulation list |
 | 16.4 | Try `POST /api/llm/test` | Returns provider status |
+
+---
+
+## 17. Scenario Branching & Compare
+
+**Goal**: Create scenario branches and compare outcomes side-by-side.
+
+| Step | Action | Expected Result |
+|------|--------|-----------------|
+| 17.1 | Complete a simulation | Status: completed |
+| 17.2 | Create a branch (`POST /api/branches`) with modified config | Branch created; returns branch ID |
+| 17.3 | Get scenario tree (`GET /api/branches/tree/{root_id}`) | Tree structure with root and branch(es) |
+| 17.4 | Get branch lineage (`GET /api/branches/{id}/lineage`) | Returns lineage chain |
+| 17.5 | Compare two branches (`POST /api/branches/compare`) | Side-by-side metrics comparison returned |
+| 17.6 | Config diff (`GET /api/branches/{a}/diff/{b}`) | Returns diff of configuration changes |
+| 17.7 | Navigate to `/simulations/compare` | Compare page renders |
+| 17.8 | Select two completed simulations | Comparison data displays side-by-side |
+
+---
+
+## 18. Backtesting
+
+**Goal**: Run simulations against historical outcomes.
+
+| Step | Action | Expected Result |
+|------|--------|-----------------|
+| 18.1 | Navigate to `/simulations/backtest` | Backtest page renders |
+| 18.2 | List bundled backtest cases (`GET /api/simulations/backtest/cases`) | Returns available historical cases |
+| 18.3 | Run a backtest (`POST /api/simulations/backtest`) | Backtest executes; results compare simulated vs. actual outcomes |
+| 18.4 | Review accuracy metrics | Stakeholder stance, timeline, and outcome direction scores displayed |
+
+---
+
+## 19. Rehearsal & Counterpart Agents
+
+**Goal**: Create counterpart agents and run rehearsal sessions.
+
+| Step | Action | Expected Result |
+|------|--------|-----------------|
+| 19.1 | Create a counterpart agent (`POST /api/personas/counterpart/create`) | Agent created from base archetype |
+| 19.2 | List counterpart agents (`GET /api/personas/counterpart`) | New agent appears in list |
+| 19.3 | Run a rehearsal turn (`POST /api/personas/counterpart/{id}/rehearse`) | Agent responds with in-character pushback |
+| 19.4 | Generate objections (`POST /api/personas/counterpart/{id}/objections`) | Returns 5+ relevant objections |
+| 19.5 | Get feedback summary (`GET /api/personas/counterpart/{id}/feedback`) | Returns structured rehearsal feedback |
+| 19.6 | Navigate to `/simulations/[id]/rehearsal` | Rehearsal page renders with interaction UI |
+| 19.7 | Delete counterpart (`DELETE /api/personas/counterpart/{id}`) | Agent removed; 404 on subsequent GET |
+
+---
+
+## 20. Annotations
+
+**Goal**: Add and manage inline annotations on simulation events.
+
+| Step | Action | Expected Result |
+|------|--------|-----------------|
+| 20.1 | Create an annotation (`POST /api/annotations`) with agree/disagree/caveat tag | Annotation saved; returns annotation ID |
+| 20.2 | List annotations for a simulation (`GET /api/simulations/{id}/annotations`) | Annotations returned with tags and content |
+| 20.3 | Filter annotations by tag type | Only matching annotations returned |
+| 20.4 | Export annotations (`GET /api/simulations/{id}/annotations/export`) | JSON export with all annotation data |
+| 20.5 | Delete annotation (`DELETE /api/annotations/{id}`) | Annotation removed from list |
+
+---
+
+## 21. Regulatory Scenario Generator
+
+**Goal**: Auto-generate simulation scenarios from regulatory text.
+
+| Step | Action | Expected Result |
+|------|--------|-----------------|
+| 21.1 | Navigate to `/simulations/new/regulatory` | Regulatory scenario generator page renders |
+| 21.2 | Submit regulatory text (`POST /api/regulatory/generate`) | Returns generated scenario with agent roster and expected impacts |
+| 21.3 | Review auto-generated agent roster | Roster appropriate for regulation type |
+| 21.4 | Launch simulation from generated scenario | Simulation created and starts normally |
+
+---
+
+## 22. Fine-Tuning
+
+**Goal**: Fine-tuning interface and API work correctly.
+
+**Prerequisite**: Appropriate model and training data available.
+
+| Step | Action | Expected Result |
+|------|--------|-----------------|
+| 22.1 | Navigate to `/fine-tuning` | Fine-tuning page renders |
+| 22.2 | Prepare dataset (`POST /api/llm/fine-tune/prepare-dataset`) | Dataset prepared; confirmation returned |
+| 22.3 | Start fine-tuning job (`POST /api/llm/fine-tune/start`) | Job starts; returns job ID |
+| 22.4 | Check job status (`GET /api/llm/fine-tune/status/{job_id}`) | Returns progress and status |
+| 22.5 | List jobs (`GET /api/llm/fine-tune/jobs`) | All jobs listed with statuses |
+| 22.6 | List adapters (`GET /api/llm/fine-tune/adapters`) | Available LoRA adapters listed |
+| 22.7 | Activate adapter (`POST /api/llm/fine-tune/activate/{adapter_id}`) | Adapter activated for inference |
+| 22.8 | Create domain benchmark (`POST /api/llm/fine-tune/benchmark`) | Benchmark results returned |
+
+---
+
+## 23. Graphiti Temporal Memory
+
+**Goal**: Temporal memory integration works when enabled.
+
+**Prerequisite**: `GRAPHITI_ENABLED=true`, Neo4j running, `GRAPHITI_OPENAI_API_KEY` set.
+
+| Step | Action | Expected Result |
+|------|--------|-----------------|
+| 23.1 | Check status (`GET /api/graph/temporal-memory-status`) | Returns enabled status and connection info |
+| 23.2 | Run a short simulation (3 rounds) | Simulation completes; rounds ingested as Graphiti episodes |
+| 23.3 | Search temporal memory (`POST /api/graph/temporal/search`) with `simulation_id` and `query` | Returns relevant facts from simulation history |
+| 23.4 | Delete the simulation | Graphiti partition cleaned up; search returns empty |
+| 23.5 | Set `GRAPHITI_INJECT_AGENT_CONTEXT=true`, run another simulation | Agent prompts include retrieved temporal facts (check backend logs) |
+
+---
+
+## 24. External API v1
+
+**Goal**: External API with key-based authentication works.
+
+**Prerequisite**: `ADMIN_API_KEY=test-secret-123` in `.env`.
+
+| Step | Action | Expected Result |
+|------|--------|-----------------|
+| 24.1 | Create API key (`POST /api/v1/api-keys` with admin Bearer token) | API key created with scopes |
+| 24.2 | List API keys (`GET /api/v1/api-keys` with admin token) | New key in list |
+| 24.3 | Create simulation via external API (`POST /api/v1/simulations` with API key) | Simulation created; requires `write:simulations` scope |
+| 24.4 | Get simulation (`GET /api/v1/simulations/{id}` with API key) | Returns simulation data; requires `read:simulations` scope |
+| 24.5 | Start simulation (`POST /api/v1/simulations/{id}/start` with API key) | Simulation starts |
+| 24.6 | Get results (`GET /api/v1/simulations/{id}/results` with API key) | Returns results after completion |
+| 24.7 | Get report (`GET /api/v1/reports/{id}` with API key) | Returns report; requires `read:reports` scope |
+| 24.8 | Create webhook (`POST /api/v1/webhooks` with API key) | Webhook registered |
+| 24.9 | List webhooks (`GET /api/v1/webhooks`) | Webhook in list |
+| 24.10 | Revoke API key (`DELETE /api/v1/api-keys/{id}` with admin token) | Key revoked; subsequent API calls with that key return 401 |
+
+---
+
+## 25. WebSocket Real-Time Updates
+
+**Goal**: WebSocket connection delivers live simulation updates.
+
+| Step | Action | Expected Result |
+|------|--------|-----------------|
+| 25.1 | Connect to `ws://localhost:5001/api/simulations/ws/{id}` | WebSocket connection established |
+| 25.2 | Start the simulation | Round progress events received via WebSocket |
+| 25.3 | Verify message format | Messages include round number, agent actions, status changes |
+| 25.4 | Pause and resume | Pause/resume events received |
+| 25.5 | Disconnect and reconnect | No crash; reconnection succeeds |
+
+---
+
+## 26. Dual-Create & Preset Simulations
+
+**Goal**: Dual-create rollback safety and preset preview work.
+
+| Step | Action | Expected Result |
+|------|--------|-----------------|
+| 26.1 | Preview two presets (`POST /api/simulations/dual-run-preset`) | Returns two simulation payloads as JSON (no persistence) |
+| 26.2 | Create two simulations (`POST /api/simulations/dual-create`) | Both simulations created; both appear in list |
+| 26.3 | Verify rollback: trigger a failure on second creation | First simulation rolled back (deleted); neither appears in list |
+| 26.4 | Preview + create (`POST /api/simulations/dual-run-preset-create`) | Both previewed and created in one call |
 
 ---
 

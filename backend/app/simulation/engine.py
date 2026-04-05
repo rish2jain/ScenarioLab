@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from app.config import settings
 from app.database import SimulationRepository
+from app.graph.graphiti_service import delete_simulation_graph, schedule_round_episode_ingest
 from app.graph.seed_processor import SeedProcessor
 from app.llm.factory import get_llm_provider as _get_llm_provider
 from app.llm.factory import get_local_llm_provider
@@ -581,6 +582,17 @@ class SimulationEngine:
                                 agents=agents,
                             )
 
+                # Temporal graph (Graphiti): ingest completed round asynchronously
+                for round_state in sim_state.rounds:
+                    if round_state.round_number == round_num:
+                        schedule_round_episode_ingest(
+                            simulation_id,
+                            sim_state.config.name,
+                            round_num,
+                            round_state,
+                        )
+                        break
+
                 # Update agent stances; hybrid cloud priming exemplars → snapshot for resume
                 round_state = next(
                     (r for r in sim_state.rounds if r.round_number == round_num),
@@ -1035,6 +1047,14 @@ class SimulationEngine:
                     "clear_memories failed during delete for %s; continuing cleanup",
                     simulation_id,
                 )
+
+        try:
+            await delete_simulation_graph(simulation_id)
+        except Exception:
+            logger.exception(
+                "Graphiti cleanup failed during delete for %s; continuing cleanup",
+                simulation_id,
+            )
 
         # Remove from in-memory storage (under lock)
         async with self._lock:

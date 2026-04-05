@@ -1,5 +1,9 @@
 """MCP (Model Context Protocol) server integration for ScenarioLab."""
 
-from app.mcp.server import MCPToolDefinition, MCPToolResult, MirofishMCPServer
+from app.mcp.server import (
+    MCPToolDefinition,
+    MCPToolResult,
+    ScenarioLabMCPServer,
+)
 
-__all__ = ["MirofishMCPServer", "MCPToolDefinition", "MCPToolResult"]
+__all__ = ["ScenarioLabMCPServer", "MCPToolDefinition", "MCPToolResult"]

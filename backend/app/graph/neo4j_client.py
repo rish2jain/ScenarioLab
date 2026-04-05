@@ -255,10 +255,32 @@ class Neo4jClient:
         return {"nodes": nodes, "relationships": relationships}
 
     async def clear_graph(self, seed_id: str = None):
-        """Clear graph data, optionally scoped to a seed_id."""
+        """Clear graph data, optionally scoped to a seed_id.
+
+        All nodes written for entity extraction set ``seed_id`` on the node.
+        Uses ``DETACH DELETE`` so relationships are removed with their endpoints.
+        If the driver was idle long enough to drop, attempts a reconnect before
+        deleting so cleanup is less likely to be skipped silently.
+        """
         if seed_id:
+            if not self._driver:
+                logger.warning(
+                    "clear_graph(%s): no Neo4j driver; attempting reconnect before cleanup",
+                    seed_id,
+                )
+                await self.connect()
+            try:
+                await self._driver.verify_connectivity()
+            except Exception:
+                logger.warning(
+                    "Neo4j connectivity check failed; reconnecting before clear_graph(%s)",
+                    seed_id,
+                )
+                await self.close()
+                await self.connect()
             query = """
-            MATCH (n {seed_id: $seed_id})
+            MATCH (n)
+            WHERE n.seed_id = $seed_id
             DETACH DELETE n
             """
             await self.execute_query(query, {"seed_id": seed_id})

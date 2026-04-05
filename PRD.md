@@ -1,3 +1,5 @@
+<!-- markdownlint-disable-file MD013 -->
+
 # ScenarioLab Product Requirements Document (PRD)
 
 ## 1. Executive Summary
@@ -6,13 +8,14 @@
 
 **Tagline:** *AI-Powered War Gaming and Scenario Simulation Platform for Strategic Decision-Making.*
 
-**Key Differentiator:** ScenarioLab transforms the traditional $50K-$200K war-gaming engagement into an on-demand, repeatable capability, delivering consulting-grade deliverables including scenario matrices, risk registers, stakeholder heatmaps, and executive summaries. Supports flexible LLM backends—from cloud APIs to local models—so you can use whatever works best for your use case.
+**Key Differentiator:** ScenarioLab transforms the traditional $50K-$200K war-gaming engagement into an on-demand, repeatable capability, delivering consulting-grade deliverables including scenario matrices, risk registers, stakeholder heatmaps, and executive summaries. Supports flexible LLM backends—from cloud APIs to local inference (Ollama, llama.cpp) and CLI subprocess providers (Claude, ChatGPT, Gemini CLIs)—so you can match provider, compliance, and latency needs.
 
 ---
 
 ## 2. Product Vision
 
 ### 2.1 Vision Statement
+
 Create an AI-powered strategic simulation platform that enables consultants and enterprise leaders to rehearse high-stakes decisions in a zero-risk digital environment. By modeling real-world stakeholder dynamics with high-fidelity agent archetypes and strategy-native simulation environments, ScenarioLab bridges the gap between qualitative scenario analysis and quantitative decision support—positioning it as an essential tool for modern strategic advisory.
 
 **Positioning Note:** ScenarioLab is a scenario rehearsal platform, not a prediction engine. Accuracy benchmarks will be established via backtesting against historical events in Phase 3. All outputs should be framed as structured scenario analysis and stress-testing results rather than predictions of future outcomes.
@@ -20,7 +23,7 @@ Create an AI-powered strategic simulation platform that enables consultants and 
 ### 2.2 Target Users
 
 | Segment | Description | Use Cases |
-|---------|-------------|-----------|
+| --------- | ------------- | ----------- |
 | **Strategy Consultants** | McKinsey, BCG, Bain, Strategy& consultants; boutique advisory firms | M&A culture clash simulation, regulatory shock testing, competitive response war-gaming, boardroom dynamics rehearsal |
 | **Enterprise Strategy Teams** | Fortune 100 strategy officers, corporate development | Strategic initiative validation, stakeholder alignment testing, policy rollout simulation |
 | **Risk & Compliance Officers** | GRC professionals in financial services | Operational risk scenario testing, compliance policy impact assessment, crisis response rehearsal |
@@ -33,7 +36,7 @@ Create an AI-powered strategic simulation platform that enables consultants and 
 2. **Zero-Risk Strategic Rehearsal** - Test high-stakes decisions in a digital sandbox before real-world implementation, from M&A integrations to regulatory responses
 3. **Stakeholder-Accurate Agent Modeling** - Calibrate agent populations to mirror actual client organizational structures (via HR system exports) for structurally faithful simulations
 4. **Strategy-Native Environments** - Move beyond social media simulations to boardroom debates, negotiation tables, and competitive war rooms
-5. **Flexible LLM Backend** - Unified interface supporting any LLM provider (OpenAI, Anthropic, Google, Alibaba/Qwen) or local CLI models (Ollama, llama.cpp). Maximum flexibility and provider independence.
+5. **Flexible LLM Backend** - Unified factory-based provider layer: cloud APIs (OpenAI, Anthropic, and OpenAI-compatible endpoints), local servers (Ollama, llama.cpp), and CLI subprocess providers (Claude, ChatGPT, Gemini CLIs) with bounded timeouts for non-interactive runs. Maximum flexibility and provider independence.
 6. **MCP Server Integration** - Invoke simulations directly from Claude Desktop, Cursor, or existing CLI pipelines for seamless consultant workflows
 
 ---
@@ -43,13 +46,13 @@ Create an AI-powered strategic simulation platform that enables consultants and 
 ### 3.1 Feature Overview
 
 | Feature | Priority | Description |
-|---------|----------|-------------|
+| --------- | ---------- | ------------- |
 | Graph Building Engine | P0 | Seed extraction, memory injection, GraphRAG construction |
 | Multi-Agent Simulation | P0 | Strategy-native environments (boardroom, war games, negotiations) with dynamic temporal memory |
 | Report Generation | P0 | Consulting-grade deliverables: scenario matrices, risk registers, stakeholder heatmaps, exec summaries |
 | Consulting Persona Library | P0 | Pre-built agent archetypes: CEO, CFO, regulator, competitor exec, activist investor, union rep |
 | Strategy-Native Environments | P0 | Purpose-built simulation environments (boardroom, war room, negotiation, integration planning) with role-based visibility and structured decision rules |
-| Flexible LLM Backend | P0 | Unified interface supporting cloud LLM APIs (OpenAI, Anthropic, Google, Qwen) and local CLI models (Ollama, llama.cpp) |
+| Flexible LLM Backend | P0 | Unified interface: cloud APIs (OpenAI, Anthropic, OpenAI-compatible), local (Ollama, llama.cpp), CLI providers (cli-claude, cli-chatgpt, cli-gemini) |
 | MCP Server Integration | P0 | CLI/agentic workflow integration for Claude Desktop, Cursor, and IDE pipelines |
 | Interactive Chat | P1 | Chat with any agent in the simulated world |
 | Multi-Scenario Batch Execution | P1 | Compare scenarios side-by-side with Monte Carlo confidence intervals |
@@ -84,12 +87,14 @@ Create an AI-powered strategic simulation platform that enables consultants and 
 **User Story:** As a user, I want to upload seed materials so the system can extract entities and relationships for simulation.
 
 **Requirements:**
+
 - Support text documents, reports, and narrative content as seed input
 - Automatic entity extraction and relationship mapping
 - Individual and collective memory injection for agents
 - GraphRAG construction for knowledge retrieval
 
 **Acceptance Criteria:**
+
 - System processes seed materials within 60 seconds for documents under 10MB
 - Extracts minimum 80% of key entities as measured against a human-annotated reference corpus of 5 representative consulting documents (M&A brief, regulatory filing, competitive analysis, board memo, strategy report). Entity types: organizations, people, policies, financial figures, timelines, dependencies.
 - Constructs navigable knowledge graph with relationship weights
@@ -99,6 +104,7 @@ Create an AI-powered strategic simulation platform that enables consultants and 
 **User Story:** As a user, I want to run simulations with multiple agents that interact and evolve over time in strategy-native environments.
 
 **Requirements:**
+
 - Generate agents with consulting-specific archetypes (CEO, CFO, regulator, competitor exec, activist investor, union rep, media stakeholder)
 - Support strategy-native environments: boardroom debates, war games, negotiations, M&A integration scenarios
 - Dynamic temporal memory updates as simulation progresses
@@ -109,6 +115,7 @@ Create an AI-powered strategic simulation platform that enables consultants and 
 - Calibrate swarm demographics to mirror actual client org structure (10% risk officers, 60% front-office, 30% back-office)
 
 **Acceptance Criteria:**
+
 - Support 50-200 concurrent agents per simulation (optimized for consulting use cases)
 - Agents demonstrate believable boardroom and negotiation behaviors
 - Simulation state persists and can be resumed
@@ -120,6 +127,7 @@ Create an AI-powered strategic simulation platform that enables consultants and 
 **User Story:** As a user, I want to receive detailed scenario analysis reports after simulation completion.
 
 **Requirements:**
+
 - ReportAgent with rich toolset for environment analysis
 - Consulting-grade deliverables: scenario matrices, risk registers, stakeholder heatmaps, executive summaries
 - Deep interaction with post-simulation environment
@@ -133,6 +141,7 @@ Create an AI-powered strategic simulation platform that enables consultants and 
   - **Executive Summary:** ≤2 pages, maximum 3 key recommendations
 
 **Acceptance Criteria:**
+
 - Initial auto-generated report draft: within 30 seconds of simulation completion
 - Human-reviewed report with checkpoints: configurable, typically 5-15 minutes per checkpoint
 - Include at least 5 distinct scenario outcomes with probability ranges
@@ -145,12 +154,14 @@ Create an AI-powered strategic simulation platform that enables consultants and 
 **User Story:** As a user, I want to chat with individual agents to understand their perspectives and motivations.
 
 **Requirements:**
+
 - Select and chat with any agent from the simulation
 - Agents respond based on their simulated experiences and personality
 - Chat history persistence per simulation
 - Context-aware responses referencing simulation events
 
 **Acceptance Criteria:**
+
 - Response latency under 3 seconds
 - Agents maintain consistent personality throughout conversation
 - Reference specific simulation events when relevant
@@ -161,6 +172,7 @@ Create an AI-powered strategic simulation platform that enables consultants and 
 **User Story:** As a consultant, I want pre-built agent archetypes with realistic behavioral patterns so simulations produce credible boardroom dynamics.
 
 **Requirements:**
+
 - Library of 10-15 consulting-specific archetypes: CEO, CFO, CRO, Board Member, Activist Investor, Union Representative, Regulator, Competitor Executive, Media Stakeholder, HR Head, General Counsel, Strategy VP, Operations Head
 - Each archetype defined by structured attributes:
   - `role`: Functional position
@@ -174,6 +186,7 @@ Create an AI-powered strategic simulation platform that enables consultants and 
 - Archetype mixing rules for realistic organizational dynamics
 
 **Acceptance Criteria:**
+
 - 3 independent raters evaluate agent transcripts ≥4/5 for realistic decision-making
 - Agents reference prior simulation events in contextually appropriate ways
 - Behavioral axioms consistently manifest across different simulation scenarios
@@ -181,6 +194,7 @@ Create an AI-powered strategic simulation platform that enables consultants and 
 
 **Playbook Role Mapping:**
 The following playbook-specific roles reuse or specialize core archetypes:
+
 - Integration PMO → Operations Head archetype with program-management focus
 - Chief Compliance Officer → General Counsel / CRO hybrid archetype
 - Business Line Heads → Operations Head archetype with business-unit-specific context
@@ -192,6 +206,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want quantitative metrics extracted from simulations so I can present CFO-ready dashboards.
 
 **Requirements:**
+
 - Silent monitoring during simulation (non-intrusive observation)
 - Real-time metric collection without impacting agent behavior
 - **Key Metrics:**
@@ -204,6 +219,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Metric export formats: JSON, CSV, visual dashboard
 
 **Acceptance Criteria:**
+
 - Metrics computed within 60 seconds of simulation completion
 - All metrics exportable as JSON and visual dashboard
 - Monte Carlo runs complete within 10 minutes for 20-50 iterations
@@ -214,6 +230,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want simulation outputs auto-exported to Miro boards so I can present directly to steering committees.
 
 **Requirements:**
+
 - Frame hierarchy: Scenario → Outcomes → Risks → Recommendations
 - App cards for initiative tracking (with optional Jira/Asana sync)
 - Sticky note clustering for evidence and supporting data
@@ -222,6 +239,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - One-click board generation from simulation results
 
 **Acceptance Criteria:**
+
 - Board pack directly presentable to client SteerCo without manual rework
 - Export completes within 60 seconds
 - All deliverable schemas (Risk Register, Scenario Matrix, Stakeholder Heatmap) exportable to corresponding Miro elements
@@ -232,6 +250,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want to invoke simulations from Claude Desktop or Cursor without context-switching.
 
 **Requirements:**
+
 - CLI interface: `scenariolab-sim --playbook <name> --seed <file.md> --output <format>`
 - MCP protocol compliance for agentic workflow integration
 - Integration support for:
@@ -242,6 +261,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Programmatic result retrieval (JSON output for downstream processing)
 
 **Acceptance Criteria:**
+
 - Full simulation lifecycle executable via CLI (configure → run → report → export)
 - Results retrievable programmatically via API and CLI
 - MCP server responds within 2 seconds for status queries
@@ -254,25 +274,28 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **Environment Types:**
 
 | Environment | Round Structure | Information Visibility | Decision Mechanism |
-|-------------|-----------------|------------------------|--------------------|
+| ------------- | ----------------- | ------------------------ | -------------------- |
 | **Boardroom Debate** | Presentation → Q&A → Objection → Rebuttal → Vote | All participants see same materials; private caucuses allowed between rounds | Majority vote (51%), with Chair tie-breaker; Executive override for CEO decisions |
 | **War Room** | Intel briefing → Threat assessment → Response options → Decision → Action assignment | Role-based information access (e.g., CRO sees full risk data; BU heads see operational impact only) | Time-boxed consensus (2-minute decision windows); CRO escalation for compliance issues |
 | **Negotiation Table** | Position statements → Private caucus → Counter-proposal → Red-line identification → Agreement/Impasse | Bilateral exchanges between specific parties; mediator sees all communications | Mutual agreement required; BATNA (Best Alternative) triggers if impasse persists >3 rounds |
 | **Integration Planning** | Current state mapping → Future state vision → Gap analysis → Initiative prioritization → Resource allocation | Workstream leads see detailed plans; executives see summary dashboards only | Priority matrix scoring (impact × effort); CFO veto on budget exceedance |
 
 **Turn-Taking Rules:**
+
 - **Formal:** Strict rotation (boardroom, regulatory hearings)
 - **Dynamic:** Priority based on authority level or urgency (war rooms)
 - **Bilateral:** Two-party exchanges with optional mediator (negotiations)
 - **Parallel:** Simultaneous workstreams with synchronization points (integration planning)
 
 **Information Asymmetry Controls:**
+
 - Configurable visibility rules per role
 - Private message channels for coalition-building
 - Public broadcast for official statements
 - Intelligence leaks (simulated) for competitive scenarios
 
 **Acceptance Criteria:**
+
 - Each environment type supports its defined round structure without modification
 - Information visibility rules enforce role-based access correctly
 - Decision mechanisms produce unambiguous outcomes with audit trails
@@ -283,6 +306,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want to detect when agent behavior diverges from expected archetype patterns so I can identify emergent dynamics that may impact strategic outcomes.
 
 **Requirements:**
+
 - Detect agent behavior divergence from archetype baseline (e.g., risk-averse CFO suddenly goes aggressive due to coalition dynamics)
 - Use behavioral axioms from Persona Library as baseline reference
 - Statistical drift detection algorithms to flag emergent patterns
@@ -291,6 +315,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Causal explanation generation for flagged behaviors
 
 **Acceptance Criteria:**
+
 - Flags ≥80% of archetype deviations during simulation
 - False positive rate <20% for flagged behaviors
 - Flagged behaviors include confidence scores and causal explanations
@@ -302,6 +327,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want to extract persona attributes through structured interviews so I can quickly calibrate agents to real stakeholders without manual parameter tuning.
 
 **Requirements:**
+
 - Structured interview protocol (10-15 questions per persona)
 - Auto-extraction of persona attributes from interview responses
 - Natural language processing: "Tell me about the CEO's risk appetite" → LLM analyzes response, calibrates risk_tolerance parameter
@@ -309,6 +335,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Integration with Consulting Persona Library for attribute mapping
 
 **Acceptance Criteria:**
+
 - Persona extraction from interview completes in <60 seconds
 - Extracted attributes match manual calibration ≥85% of the time
 - Supports text, audio, and video input formats
@@ -320,6 +347,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want to track all assumptions underlying the simulation with evidence links so I can defend recommendations and perform sensitivity analysis.
 
 **Requirements:**
+
 - Track ALL assumptions in simulation: {assumption_id, value, confidence, evidence, sensitivity_score}
 - Show which assumptions drive which outcomes
 - Flag "HIGH SENSITIVITY" assumptions (small change = big outcome shift)
@@ -328,6 +356,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Evidence linking to seed materials and external sources
 
 **Acceptance Criteria:**
+
 - All agent initialization assumptions captured automatically
 - Sensitivity analysis runs within 120 seconds
 - Results include tornado chart visualization data
@@ -340,6 +369,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want to visualize agent relationships and coalitions in real-time so I can identify influence patterns and communication flows during simulations.
 
 **Requirements:**
+
 - Real-time force-directed graph visualization: nodes = agents, edges = communications/coalitions
 - Click nodes → view agent transcripts and state
 - Hover edges → view sentiment/agreement level
@@ -349,6 +379,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Filter by role, coalition, or sentiment threshold
 
 **Acceptance Criteria:**
+
 - Renders 200-node graph at ≥30fps
 - Updates within 1 second of simulation events
 - Supports zoom, pan, filter by role/coalition
@@ -361,6 +392,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want to scrub through simulation history so I can review key turning points and prepare detailed retrospective analysis.
 
 **Requirements:**
+
 - Interactive timeline slider to scrub through simulation events round-by-round
 - Drag slider to any round → see all agent states, communications, decisions at that moment
 - Store full state snapshots per round (delta-compressed)
@@ -369,6 +401,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Export annotated timeline as presentation material
 
 **Acceptance Criteria:**
+
 - Scrub latency <500ms per round
 - Supports bookmarking key turning points
 - Exportable as annotated timeline
@@ -381,6 +414,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want to have natural voice conversations with agents so I can conduct client workshops where stakeholders "talk to" simulated competitors/regulators.
 
 **Requirements:**
+
 - Natural voice conversation with agents during or after simulation
 - Stack: OpenAI Whisper (or equivalent) for transcription + TTS for generation
 - Client workshop mode: stakeholders "talk to" simulated competitors/regulators
@@ -388,6 +422,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Maintain agent personality consistency across voice interactions
 
 **Acceptance Criteria:**
+
 - Response latency <3 seconds
 - Voice quality rated ≥4/5 by testers
 - Maintains agent personality consistency across voice interactions
@@ -400,6 +435,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want to create scenario branches so I can compare "what-if" alternatives and explore strategic options systematically.
 
 **Requirements:**
+
 - Git-like branching for scenarios: "What if aggressive pricing?" vs "What if conservative hiring?"
 - DAG storage for scenario tree
 - Branch at scenario config level
@@ -408,6 +444,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Side-by-side comparison of branch outcomes
 
 **Acceptance Criteria:**
+
 - Branch creation <5 seconds
 - Side-by-side comparison of up to 5 branches
 - Merge/diff capability for scenario configs
@@ -420,6 +457,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want to detect when agents make statements contradicting established facts so I can ensure simulation credibility and accuracy.
 
 **Requirements:**
+
 - Flag agent statements contradicting established facts from seed material or prior simulation events
 - Store ground truth facts in Neo4j
 - Check generated statements against ground truth during agent reasoning
@@ -427,6 +465,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Flagged items include source evidence and suggested correction
 
 **Acceptance Criteria:**
+
 - Detects ≥90% of factual contradictions
 - False positive rate <15%
 - Flagged items include source evidence
@@ -439,6 +478,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want auto-generated narrative summaries of simulations so I can quickly communicate key insights to executives in story format.
 
 **Requirements:**
+
 - Auto-generate compelling narrative summary of simulation as a story
 - Focus on key turning points, coalition shifts, and surprising dynamics
 - Example: "In round 3, the CFO and Strategy VP formed an unlikely coalition around cost reduction..."
@@ -446,6 +486,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Highlight unexpected outcomes and counter-intuitive dynamics
 
 **Acceptance Criteria:**
+
 - Narrative generated within 30 seconds
 - Covers all major turning points
 - Rated ≥4/5 for readability by test users
@@ -458,6 +499,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want to visualize which parameters most impact outcomes so I can focus calibration efforts and present sensitivity insights to CFOs.
 
 **Requirements:**
+
 - Show which agent parameters/assumptions have biggest impact on outcomes
 - Run 10-20 parameter variants (e.g., CFO risk tolerance ±0.2)
 - Measure outcome sensitivity across variants
@@ -465,6 +507,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Rank parameters by impact magnitude
 
 **Acceptance Criteria:**
+
 - Sensitivity analysis completes within 5 minutes for 20 variants
 - Tornado chart auto-generated
 - Exportable as SVG/PNG
@@ -477,6 +520,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want agents to reference real-time market data so simulations reflect current conditions and breaking developments.
 
 **Requirements:**
+
 - Live integration of market data feeds (stock prices, news, social sentiment, regulatory announcements)
 - Dynamically update agent worldviews based on incoming data
 - Start with financial APIs (Alpha Vantage, NewsAPI) + semantic search for relevance
@@ -484,6 +528,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Data relevance filtering to prevent noise
 
 **Acceptance Criteria:**
+
 - Data ingestion latency <30 seconds
 - Agents reference real market events in reasoning
 - Configurable data sources
@@ -496,6 +541,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want domain-specific agent models so simulations reflect industry-specific language, norms, and decision patterns.
 
 **Requirements:**
+
 - Fine-tune domain-specific models (e.g., "FinServ CEO" trained on earnings call transcripts; "Pharma Regulator" trained on FDA testimony)
 - Support LoRA/QLoRA fine-tuning
 - Use public data sources (SEC filings, news archives) or client-provided datasets
@@ -503,6 +549,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Model versioning and A/B testing capability
 
 **Acceptance Criteria:**
+
 - Fine-tuned agent demonstrably outperforms generic agent on domain-specific reasoning benchmarks
 - Fine-tuning completes within 4 hours on a single NVIDIA A100 (40GB) or equivalent; within 8 hours on NVIDIA A10G (24GB). LoRA/QLoRA methods used to minimize hardware requirements.
 - LoRA/QLoRA adapters <100MB for efficient storage
@@ -514,6 +561,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As an executive, I want to rehearse presentations against AI counterparts so I can anticipate objections and refine my messaging before SteerCo meetings.
 
 **Requirements:**
+
 - Generate "client counterpart agent" from client briefs
 - Executives practice presentations against AI counterpart
 - Counterpart generates objections, pushback, and challenging questions calibrated to specific stakeholder
@@ -521,6 +569,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Multiple rehearsal modes: friendly, challenging, hostile
 
 **Acceptance Criteria:**
+
 - Counterpart generates ≥5 relevant objections per presentation
 - Responses reference client context from seed materials
 - Latency <3 seconds
@@ -533,6 +582,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want to export interactive presentations so stakeholders can explore simulation results at their own pace.
 
 **Requirements:**
+
 - Generate interactive decks (React-based) where stakeholders click to explore:
   - Agent personas & motivations
   - Risk details with simulation evidence
@@ -542,6 +592,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Mobile-responsive design
 
 **Acceptance Criteria:**
+
 - Deck loads in <3 seconds
 - All interactive elements functional offline
 - Exportable as self-contained HTML
@@ -554,6 +605,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want to quantify which agents drove specific outcomes so I can attribute responsibility and explain results with rigor.
 
 **Requirements:**
+
 - For each outcome, compute which agents/coalitions had highest explanatory power using game theory (Shapley values)
 - Use approximation algorithms (KernelSHAP) for 50-200 agent scale
 - Output: "The regulator's stance was 40% responsible for blocking the initiative"
@@ -561,6 +613,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Coalition-level attribution (not just individual agents)
 
 **Acceptance Criteria:**
+
 - Attribution computed within 10 minutes for 100-agent simulation
 - Results include confidence intervals
 - Exportable as visualization
@@ -573,6 +626,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want to audit simulations for unintended bias so I can ensure fair and equitable strategic recommendations.
 
 **Requirements:**
+
 - Post-simulation fairness audit: detect whether agent behavior patterns show unintended bias
 - Run perturbation simulations (e.g., gender-flipped agent names) and compare outcomes
 - Output: Fairness report showing which demographic groups had less influence/satisfaction
@@ -580,6 +634,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Mitigation recommendations for identified biases
 
 **Acceptance Criteria:**
+
 - Perturbation analysis runs within 2x base simulation time
 - Detects statistically significant disparities at p<0.05
 - Fairness report includes visualization of disparities
@@ -592,6 +647,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want auto-suggested playbook templates so I can quickly configure simulations without manual template selection.
 
 **Requirements:**
+
 - Given scenario description, auto-suggest most relevant playbook template
 - Pre-fill agent rosters, environment configs, seed material requirements
 - MVP: LLM-based semantic matching ("This sounds like a regulatory scenario" → suggest Regulatory Shock Test)
@@ -599,6 +655,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - One-click template application with editable pre-fill
 
 **Acceptance Criteria:**
+
 - Correct playbook suggested ≥80% of the time
 - Pre-filled config requires <5 minutes of manual adjustment
 - Suggestion confidence score displayed
@@ -610,6 +667,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want industry-specific scenario packs so I can quickly start simulations with relevant, credible setups.
 
 **Requirements:**
+
 - Pre-packaged scenario packs: "Fintech Disruption in Banking," "AI Talent Flight in Tech," "ESG Regulatory Tightening in Oil & Gas"
 - 5-10 scenarios per vertical with pre-configured agents, environment, expected deliverables
 - Content sourced from public case studies and industry reports
@@ -617,6 +675,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Regular updates as industry dynamics evolve
 
 **Acceptance Criteria:**
+
 - Each scenario runnable within 5 minutes of selection
 - Includes industry-specific agent archetypes
 - Scenarios based on real case studies
@@ -629,6 +688,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a workshop facilitator, I want gamification features so I can run engaging competitive war games with client teams.
 
 **Requirements:**
+
 - Optional gamification layer for human-participated war games
 - Track metrics: consensus points reached, speed, risk reduction score
 - Running scoreboard during workshop sessions
@@ -637,6 +697,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Post-game analytics and highlights
 
 **Acceptance Criteria:**
+
 - Scores computed in real-time
 - Leaderboard updates within 5 seconds
 - Supports 2-6 competing teams
@@ -649,6 +710,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a compliance consultant, I want to auto-generate scenarios from new regulations so I can quickly assess organizational impact.
 
 **Requirements:**
+
 - Auto-generate regulatory scenarios by parsing new regulations (LLM summarizes legal text)
 - Monitor regulatory sources (SEC, industry bulletins)
 - Template-based scenario generation
@@ -656,6 +718,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Expected impacts and compliance requirements identified
 
 **Acceptance Criteria:**
+
 - Scenario generated from regulatory text within 5 minutes
 - Includes auto-generated agent roster
 - Expected impacts identified with confidence scores
@@ -668,6 +731,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want to extract behavioral patterns from historical data so agents reflect actual client decision-making tendencies.
 
 **Requirements:**
+
 - Extract behavioral axioms from historical decision patterns (board minutes, earnings calls, prior war game outputs)
 - Example: "This client's CFO voted for risk mitigation 85% of the time" → bake into agent behavior
 - Pattern recognition across multiple data sources
@@ -675,6 +739,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Integration with Consulting Persona Library
 
 **Acceptance Criteria:**
+
 - Axiom extraction from 50+ historical data points completes within 30 minutes
 - Extracted axioms validated against holdout data with ≥75% accuracy
 - Axioms include confidence scores and source references
@@ -686,12 +751,14 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want to see projected token usage and cost before running a simulation so I can optimize parameters within budget constraints.
 
 **Requirements:**
+
 - Calculate estimated LLM calls based on agent count × rounds × Monte Carlo iterations
 - Display cost estimate per provider
 - Allow parameter adjustment to reduce cost
 - Show cost breakdown (agent reasoning vs. report generation vs. analytics)
 
 **Acceptance Criteria:**
+
 - Cost estimate displayed within 5 seconds of configuration
 - Estimate accuracy within ±20% of actual cost
 - Supports all configured LLM providers
@@ -701,12 +768,14 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want to add inline commentary and dispute agent outputs during replay so I can bridge AI analysis with expert judgment.
 
 **Requirements:**
+
 - Inline annotation on any agent statement or simulation event during timeline replay
 - Support agree/disagree/caveat tags
 - Annotations persist with simulation and appear in exported reports
 - Collaborative (multiple consultants can annotate same simulation)
 
 **Acceptance Criteria:**
+
 - Annotations saved within 1 second
 - Visible in all export formats (PDF, Miro, Interactive Deck)
 - Support ≥100 annotations per simulation
@@ -717,12 +786,14 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant working on global engagements, I want to upload seed materials in any language so the system processes them correctly.
 
 **Requirements:**
+
 - Support seed materials in at least: English, German, French, Spanish, Japanese, Mandarin Chinese, Korean, Portuguese, Arabic
 - Automatic language detection
 - Translation to English for internal processing with original-language preservation for reference
 - Agent outputs in user's configured language
 
 **Acceptance Criteria:**
+
 - Language detection accuracy ≥95%
 - Entity extraction quality within 10% of English-language baseline for supported languages
 - Processing time overhead <30% vs. English-only
@@ -732,11 +803,13 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want AI-assisted structuring of my seed materials before simulation launch so I can reduce setup time.
 
 **Requirements:**
+
 - LLM analyzes uploaded seed material and suggests: relevant playbook template, agent roster, key entities to model, recommended simulation parameters, missing information gaps
 - Interactive refinement ("Add more detail about the regulatory environment")
 - Auto-generates structured seed format from unstructured documents
 
 **Acceptance Criteria:**
+
 - Suggestions generated within 30 seconds of upload
 - Reduces manual configuration time from ~5 minutes to <2 minutes
 - Suggestion acceptance rate ≥70% (users accept without major modification)
@@ -746,12 +819,14 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want simulation outputs to honestly reflect decreasing confidence as simulations run longer, so deliverables maintain intellectual rigor.
 
 **Requirements:**
+
 - Confidence scores on agent positions and outcomes decrease as simulation rounds increase (reflecting memory drift and compounding uncertainty)
 - Decay rate configurable per environment type
 - Reports clearly indicate confidence level per round
 - Visual confidence band on timeline
 
 **Acceptance Criteria:**
+
 - Confidence decay curves validated against agent memory coherence metrics
 - Decay rate calibrated so round-20 confidence is 15-30% lower than round-1 for typical simulations
 - Clearly displayed in all reports and timeline views
@@ -761,6 +836,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a platform operator, I want anonymized patterns aggregated across simulations to improve archetype calibration over time, creating a proprietary data advantage.
 
 **Requirements:**
+
 - Opt-in only
 - Privacy-preserving aggregation (no client-identifiable data leaves the simulation)
 - Extract behavioral pattern statistics (e.g., "CFO archetypes block proposals 62% of the time across 500 simulations")
@@ -768,6 +844,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Differential privacy guarantees
 
 **Acceptance Criteria:**
+
 - Zero client data leakage (verified by privacy audit)
 - Archetype calibration improvement measurable after 100+ simulations
 - Opt-in rate tracked
@@ -778,12 +855,14 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant running a negotiation simulation, I want the system to auto-compute the Zone of Possible Agreement from agent positions so I can add quantitative rigor to negotiation analysis.
 
 **Requirements:**
+
 - For Negotiation Table environment, extract each agent's red-lines (non-negotiable positions) and BATNA (Best Alternative to Negotiated Agreement)
 - Compute overlap zone (ZOPA) across all negotiating parties
 - Visualize ZOPA as a multi-dimensional space
 - Identify which concessions would expand ZOPA
 
 **Acceptance Criteria:**
+
 - ZOPA computed within 30 seconds of simulation completion
 - Visualization shows each party's range and overlap
 - Correctly identifies no-deal scenarios when ZOPA is empty
@@ -794,6 +873,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a GRC professional, I want immutable audit logs of simulation runs so I can use simulation outputs as compliance documentation.
 
 **Requirements:**
+
 - Design audit trail schema from Phase 1 (even if full implementation is Phase 4)
 - Log: simulation configuration, all agent decisions with reasoning, all parameter changes, user interactions, report generation events
 - Immutable append-only log
@@ -801,6 +881,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Exportable for regulatory review
 
 **Acceptance Criteria:**
+
 - Phase 1-2: audit trail schema defined and core events logged (even if not tamper-proof yet)
 - Phase 4: full immutable audit trail with hash chain
 - Export to standard compliance formats (JSON, CSV with digital signatures)
@@ -811,7 +892,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 
 ### 4.1 System Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Frontend (Next.js)                        │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
@@ -837,43 +918,73 @@ The following playbook-specific roles reuse or specialize core archetypes:
         └─────────┘    └──────────┘    └──────────┘
 ```
 
-> **Note:** Diagram shows a representative configuration. The LLM component supports multiple providers (cloud APIs and local models). Memory uses Graphiti + Neo4j as the chosen stack.
+> **Note:** Diagram shows a representative configuration. The LLM component supports multiple providers (cloud APIs, local servers, and CLI subprocess backends). **Graph / memory:** Neo4j powers GraphRAG, entity extraction, and **Graphiti** (optional temporal context graph per simulation, `GRAPHITI_ENABLED`); when Neo4j is unavailable the backend degrades gracefully (SQLite and in-process persistence).
 
 ### 4.2 Technology Stack
 
 | Component | Technology | Version | Deployment Mode |
-|-----------|------------|---------|-----------------|
-| Frontend | Next.js + React | 14.x | Both |
-| Backend | Python (FastAPI/Flask) | 3.11-3.12 | Both |
+| ----------- | ------------ | --------- | ----------------- |
+| Frontend | Next.js + React + Tailwind + Zustand | 16.x (App Router) | Both |
+| Backend | Python (FastAPI) + uv | 3.11-3.12 | Both |
 | Package Manager | uv | Latest | Both |
-| LLM API | OpenAI-compatible API supporting multiple providers (OpenAI, Anthropic, Google, Alibaba/Qwen) and local CLI backends (Ollama, llama.cpp) | - | Both |
-| Memory | Graphiti + Neo4j for temporal knowledge graph and agent memory | 5.x | Both |
+| LLM API | Provider factory: OpenAI, Anthropic, Ollama, llama.cpp, cli-claude, cli-chatgpt, cli-gemini; OpenAI-compatible `LLM_BASE_URL` for Azure/proxies | - | Both |
+| Memory | Neo4j-backed temporal agent memory and GraphRAG (`app/graph`); SQLite fallback when Neo4j unavailable | 5.x Neo4j | Both |
 | Graph DB | Neo4j | 5.x | Both |
+| Reports DB | SQLite (aiosqlite, WAL) for report persistence | - | Both |
 | Container | Docker + Docker Compose | - | Both |
-| MCP Server | FastAPI-based MCP wrapper | - | Both |
+| MCP Server | In-process MCP server (`app/mcp`), toggle via `MCP_SERVER_ENABLED` | - | Both |
 
 ### 4.3 API Requirements
 
+#### External API (v1)
+
+ScenarioLab exposes an authenticated external API at `/api/v1/` for third-party integrations:
+
+| Category | Endpoints | Auth |
+|----------|-----------|------|
+| **API Key Management** | `POST/GET/DELETE /api/v1/api-keys` | Admin key (`ADMIN_API_KEY`) |
+| **Webhooks** | `POST/GET/DELETE /api/v1/webhooks` | API key |
+| **Simulations** | `POST /api/v1/simulations`, `GET .../results`, `POST .../start` | API key with `write:simulations` or `read:simulations` scope |
+| **Reports** | `GET /api/v1/reports/{id}` | API key with `read:reports` scope |
+
+All endpoints require `Authorization: Bearer <key>`. API keys are scoped (read/write per resource type).
+
+#### Dual-Create Rollback Safety
+
+The platform supports atomic creation of simulation pairs for A/B comparison:
+- `POST /api/simulations/dual-create`: Creates two simulations; if the second fails, the first is automatically rolled back (deleted).
+- `POST /api/simulations/dual-run-preset`: Preview two payloads without persistence.
+- `POST /api/simulations/dual-run-preset-create`: Preview and persist in one call.
+
+#### Seed Upload Protocol
+
+Uploads use a client-ID handshake for reliability:
+- Each upload receives an `X-Client-Upload-Id` header
+- `POST /api/seeds/upload/ack-client-id`: Acknowledge successful upload
+- `POST /api/seeds/upload/cancel-by-client-id`: Safe abort on browser disconnect
+
+#### LLM Response Sanitization
+
+All LLM output passes through defensive processing:
+- JSON fence stripping (`reports/llm_json_fences.py`): Removes markdown ` ```json ` / ` ``` ` wrappers before JSON parsing
+- Agent response sanitization (`simulation/agent.py:sanitize_llm_response()`): Strips `<think>` blocks, detects non-English hallucinations (>40% non-Latin chars)
+
 **LLM Configuration:**
-- OpenAI SDK-compatible API format for maximum provider flexibility
-- **Supported Cloud Providers:**
-  - OpenAI API (GPT-4, GPT-3.5, etc.)
-  - Anthropic API (Claude 3, etc.)
-  - Google AI API (Gemini, etc.)
-    - Note: Google provider currently uses OpenAI-compatible fallback interface
-  - Alibaba Qwen via Bailian Platform
-  - Any OpenAI-compatible endpoint
-- **Supported Local Backends:**
-  - Ollama (Llama 3.1, Mistral, etc.)
-  - llama.cpp (CLI-based)
+
+- Providers implemented in `backend/app/llm/`: `openai`, `anthropic`, `google`, `qwen`, `ollama`, `llamacpp`, `cli-claude`, `cli-chatgpt`, `cli-gemini`, `cli-codex` (CLI providers use subprocess execution with bounded timeouts)
+- **Cloud APIs:** OpenAI, Anthropic, Google, Qwen, and OpenAI-compatible clients; `LLM_BASE_URL` overrides for Azure OpenAI and other proxies
+- **Local servers:** Ollama, llama.cpp
+- **CLI inference:** Native Claude / OpenAI / Gemini / Codex CLI installers for air-gapped or keyless local workflows
+- **Hybrid inference:** `INFERENCE_MODE=hybrid` routes rounds between local and cloud providers; `GET /api/llm/capabilities` probes availability (cached)
 - Base URL examples:
   - Ollama: `http://localhost:11434/v1`
-  - Bailian: `https://dashscope.aliyuncs.com/compatible-mode/v1`
   - OpenAI: `https://api.openai.com/v1`
 
-**Memory Service:**
-- Graphiti + Neo4j for temporal knowledge graph and agent memory
-- Neo4j 5.x for graph database backend
+**Memory and graph service:**
+
+- Neo4j 5.x for knowledge graph, GraphRAG, and simulation memory (`SimulationMemoryManager` in `app/simulation/memory_manager.py`)
+- Optional **Graphiti** (`GRAPHITI_ENABLED`, OpenAI key for default embedder/LLM) for temporal facts per simulation (`group_id`); see `GET /api/graph/temporal-memory-status`
+- When Neo4j is not reachable, graph features degrade and core simulation/report flows continue using SQLite and in-memory state
 
 ---
 
@@ -881,7 +992,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 
 ### 5.1 User Flow
 
-```
+```text
 ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
 │  Upload  │───▶│ Configure│───▶│ Simulate │───▶│  Review  │───▶│  Chat/   │
 │  Seeds   │    │  Agents  │    │   Run    │    │  Report  │    │ Explore  │
@@ -892,22 +1003,23 @@ The following playbook-specific roles reuse or specialize core archetypes:
 
 1. **Dashboard** - Overview of simulations, recent reports, quick actions
 2. **Upload Interface** - Drag-and-drop seed material upload with preview
-3. **Simulation Monitor** - Real-time visualization of agent interactions
-4. **Report Viewer** - Structured scenario analysis reports with interactive elements
-5. **Chat Interface** - Conversational UI for agent interaction
-6. **Miro Board Export** - One-click export of simulation outputs to Miro boards
-7. **Consulting Playbooks** - Pre-configured templates for M&A, regulatory shock, competitive response
-8. **CLI/MCP Interface** - Command-line and Model Context Protocol integration for IDE workflows
-9. **Interactive Network Graph** - Force-directed visualization of agent dynamics and coalitions; nodes represent agents, edges show communications with sentiment coloring; supports zoom, pan, and filter by role/coalition
-10. **Timeline/Replay** - Scrub through simulation history with interactive timeline slider; bookmark key turning points; export annotated timelines
-11. **Voice Chat** - Natural voice conversation with simulated agents using Whisper transcription and TTS generation; enables client workshops where stakeholders "talk to" simulated competitors/regulators
-12. **Interactive Deck Viewer** - Self-contained interactive presentation export (React-based HTML); stakeholders click to explore agent personas, risk details, and Monte Carlo distributions; works offline
+3. **Simulation creation wizard** - Five-step flow at `/simulations/new` (playbook → agents → seeds → parameters → review/launch)
+4. **Simulation Monitor** - Real-time visualization of agent interactions
+5. **Report Viewer** - Structured scenario analysis reports with interactive elements
+6. **Chat Interface** - Conversational UI for agent interaction
+7. **Miro Board Export** - One-click export of simulation outputs to Miro boards
+8. **Consulting Playbooks** - Pre-configured templates for M&A, regulatory shock, competitive response
+9. **CLI/MCP Interface** - Command-line (`scenariolab-sim`) and Model Context Protocol integration for IDE workflows
+10. **Interactive Network Graph** - Force-directed visualization of agent dynamics and coalitions; nodes represent agents, edges show communications with sentiment coloring; supports zoom, pan, and filter by role/coalition
+11. **Timeline/Replay** - Scrub through simulation history with interactive timeline slider; bookmark key turning points; export annotated timelines
+12. **Voice Chat** - Natural voice conversation with simulated agents using Whisper transcription and TTS generation; enables client workshops where stakeholders "talk to" simulated competitors/regulators
+13. **Interactive Deck Viewer** - Self-contained interactive presentation export (React-based HTML); stakeholders click to explore agent personas, risk details, and Monte Carlo distributions; works offline
 
 #### 5.2.8 CLI/MCP Interface Workflow
 
 **Consultant Invocation Flow:**
 
-```
+```bash
 # From terminal or IDE integrated terminal
 $ scenariolab-sim --playbook mna-culture --seed ./deal-materials.md --output miro
 
@@ -916,6 +1028,7 @@ $ scenariolab-sim --playbook mna-culture --seed ./deal-materials.md --output mir
 ```
 
 **Workflow Description:**
+
 1. **Configuration** - Consultant selects playbook, provides seed material path, specifies output format
 2. **Validation** - System validates seed material format and completeness
 3. **Simulation Execution** - Runs multi-agent simulation with progress indicators
@@ -923,6 +1036,7 @@ $ scenariolab-sim --playbook mna-culture --seed ./deal-materials.md --output mir
 5. **Export** - Delivers outputs to specified destination (Miro board, local files, JSON API)
 
 **MCP Protocol Support:**
+
 - `scenariolab/simulate`: Initiate simulation with parameters
 - `scenariolab/status`: Check simulation progress
 - `scenariolab/results`: Retrieve completed simulation results
@@ -930,6 +1044,7 @@ $ scenariolab-sim --playbook mna-culture --seed ./deal-materials.md --output mir
 - `scenariolab/playbooks/list`: List available consulting playbooks
 
 **IDE Integration Examples:**
+
 - **Claude Desktop:** Natural language simulation requests with context awareness
 - **Cursor:** `/scenariolab` command palette for quick simulation invocation
 - **VS Code:** Extension with sidebar for playbook selection and result viewing
@@ -948,13 +1063,13 @@ $ scenariolab-sim --playbook mna-culture --seed ./deal-materials.md --output mir
 ### 6.1 Performance
 
 | Metric | Target |
-|--------|--------|
+| -------- | -------- |
 | Page Load Time | < 3 seconds |
 | API Response Time | < 500ms (p95) |
 | Simulation Initialization | < 60 seconds |
 | Report Generation | < 30 seconds |
 | Concurrent Users | 100+ |
-| **New Feature Performance Targets** ||
+| **New Feature Performance Targets** | |
 | Network Graph Rendering | ≥30fps for 200 nodes |
 | Timeline Scrub Latency | <500ms per round |
 | Voice Response Latency | <3 seconds |
@@ -967,6 +1082,7 @@ $ scenariolab-sim --playbook mna-culture --seed ./deal-materials.md --output mir
 ### 6.2 Security
 
 **Security Requirements:**
+
 - API key encryption at rest
 - Input validation and sanitization
 - Rate limiting on API endpoints
@@ -995,6 +1111,7 @@ $ scenariolab-sim --playbook mna-culture --seed ./deal-materials.md --output mir
 Running 50-200 agents × 5-50 rounds × 20-50 Monte Carlo iterations = potentially 5,000-500,000 LLM calls per simulation.
 
 **Cost Management Requirements:**
+
 - **Pre-simulation cost estimator**: Display projected token usage and estimated cost before execution; allow user to adjust parameters (fewer agents, fewer rounds, fewer Monte Carlo runs) to fit budget
 - **Token budgeting**: Configurable per-simulation token budget with automatic truncation/summarization when approaching limits
 - **Cost optimization strategies**: Agent response caching for identical prompts; batch inference where supported; tiered model usage (use smaller/cheaper models for routine agent reasoning, reserve larger models for critical decisions and report generation)
@@ -1008,7 +1125,8 @@ Running 50-200 agents × 5-50 rounds × 20-50 Monte Carlo iterations = potential
 
 ### 7.1 Deployment Options
 
-**Option 1: Source Code Deployment (Recommended)**
+#### Option 1: Source Code Deployment (Recommended)
+
 ```bash
 # Setup
 npm run setup:all
@@ -1021,7 +1139,8 @@ npm run dev
 # Backend: http://localhost:5001
 ```
 
-**Option 2: Docker Deployment**
+#### Option 2: Docker Deployment
+
 ```bash
 cp .env.example .env
 # Configure API keys
@@ -1031,16 +1150,34 @@ docker compose up -d
 ### 7.2 Environment Variables
 
 | Variable | Required | Description |
-|----------|----------|-------------|
-| `LLM_PROVIDER` | Yes | Provider name: `openai`, `anthropic`, `google`, `qwen`, `ollama`, `llamacpp` |
-| `LLM_API_KEY` | Conditional | API key for cloud providers (not needed for Ollama/llama.cpp) |
-| `LLM_BASE_URL` | Yes | API base URL (auto-configured for known providers, custom for others) |
-| `LLM_MODEL_NAME` | Yes | Model name (e.g., gpt-4, claude-3-opus, qwen-plus, llama3.1) |
-| `NEO4J_URI` | Yes | Neo4j connection URI (e.g., `bolt://localhost:7687`) |
-| `NEO4J_USER` | Yes | Neo4j username |
-| `NEO4J_PASSWORD` | Yes | Neo4j password |
+| ---------- | ---------- | ------------- |
+| `LLM_PROVIDER` | Yes | `openai`, `anthropic`, `google`, `qwen`, `ollama`, `llamacpp`, `cli-claude`, `cli-chatgpt`, `cli-gemini`, `cli-codex` |
+| `LLM_API_KEY` | Conditional | API key for cloud providers (not needed for Ollama/llama.cpp or CLI providers) |
+| `LLM_BASE_URL` | For most setups | Override for Azure OpenAI or local proxies (see `.env.example`) |
+| `LLM_MODEL_NAME` | Yes | Model identifier sent to the active provider |
+| `LLM_CONCURRENCY_DEFAULT` | No | Max concurrent LLM calls (default 3); per-provider overrides via `LLM_CONCURRENCY_OVERRIDES` JSON map |
+| `INFERENCE_MODE` | No | `cloud` (default), `hybrid`, or `local`; hybrid routes rounds between cloud and local |
+| `LOCAL_LLM_PROVIDER` | For hybrid | Local provider key (`ollama` or `llamacpp`) |
+| `LOCAL_LLM_BASE_URL` | For hybrid | Local provider URL (default `http://localhost:11434/v1`) |
+| `LOCAL_LLM_MODEL_NAME` | For hybrid | Local model name (default `qwen3:14b`) |
+| `HYBRID_CLOUD_ROUNDS` | For hybrid | Every Nth round uses cloud (default 1) |
+| `SIMULATION_MAX_AGENTS` | No | Max agents per simulation (default 48) |
+| `SIMULATION_LLM_PARALLELISM` | No | Concurrent LLM calls during simulation (default 4) |
+| `SIMULATION_ROUND_TIMEOUT_SECONDS` | No | Per-round wall-clock timeout; 0 = disabled (default) |
+| `INLINE_MONTE_CARLO_MAX_ITERATIONS` | No | Max Monte Carlo iterations from wizard (default 25) |
+| `DEBUG` | No | Exposes exception messages in HTTP errors; **never enable in production** |
+| `NEO4J_URI` | For graph features | Neo4j Bolt URI (e.g., `bolt://localhost:7687`); omit or unreachable → graceful degradation |
+| `NEO4J_USER` | With Neo4j | Neo4j username |
+| `NEO4J_PASSWORD` | With Neo4j | Neo4j password |
 | `MIRO_API_TOKEN` | No | Miro REST API token for board export |
-| `MCP_SERVER_ENABLED` | No | Enable MCP server integration (default: false) |
+| `MIRO_BOARD_ID` | No | Target Miro board when syncing |
+| `MCP_SERVER_ENABLED` | No | Enable built-in MCP server (`true` / `false`, default false) |
+| `TAVILY_API_KEY` | For autoresearch web search | Tavily API key (`/research` flows) |
+| `SEC_USER_AGENT` | For SEC EDGAR | Required string for SEC EDGAR API calls |
+| `GRAPHITI_ENABLED` | No | Enable Graphiti temporal graph (`true` / `false`); requires OpenAI-compatible key for Graphiti |
+| `NEO4J_GRAPHITI_DATABASE` | No | Neo4j database name for Graphiti (default `neo4j`) |
+| `GRAPHITI_OPENAI_API_KEY` | No | Optional; defaults from `LLM_API_KEY` when `LLM_PROVIDER=openai` |
+| `ADMIN_API_KEY` | For integration API key mgmt | Protects `/api/v1/api-keys` admin routes |
 
 ### 7.3 Monitoring & Logging
 
@@ -1056,7 +1193,8 @@ docker compose up -d
 **Phase Prioritization Rationale:** Phases are prioritized based on (1) client unblockers — features required for first paid engagements, (2) consulting workflow integration — tools that fit existing consultant habits, and (3) credibility building — capabilities that establish ScenarioLab as a serious consulting tool rather than a demo.
 
 ### Phase 1: MVP (30-Day Sprint)
-*Priority: Unblock first client engagements*
+
+**Priority:** Unblock first client engagements
 
 - [x] Core simulation engine
 - [x] Basic web interface
@@ -1068,7 +1206,8 @@ docker compose up -d
 - [x] Structured deliverable templates for ReportAgent
 
 ### Phase 2: Enhanced Experience
-*Priority: Consultant workflow integration and credibility*
+
+**Priority:** Consultant workflow integration and credibility
 
 - [x] Multi-scenario batch execution with comparison views
 - [x] Monte Carlo confidence intervals
@@ -1095,7 +1234,8 @@ docker compose up -d
 - [x] **Playbook Co-Pilot** - AI-assisted structuring of seed materials before simulation launch
 
 ### Phase 3: Advanced Features
-*Priority: Differentiation and accuracy validation*
+
+**Priority:** Differentiation and accuracy validation
 
 - [x] **Voice Chat with Simulated Agents** - Natural voice conversation with agents using Whisper + TTS
 - [x] Client Counterpart Agent for rehearsing executive presentations
@@ -1123,7 +1263,8 @@ docker compose up -d
 - [x] **Simulation Audit Trail** - Schema design (full implementation with immutable logs in Phase 4)
 
 ### Phase 4: Enterprise
-*Priority: Scale and compliance certification*
+
+**Priority:** Scale and compliance certification
 
 - [ ] Multi-tenant support
 - [ ] Advanced analytics dashboard
@@ -1148,7 +1289,7 @@ docker compose up -d
 ### 9.1 SaaS Metrics
 
 | Metric | Target |
-|--------|--------|
+| -------- | -------- |
 | User Signups | 1000 in first 3 months |
 | Simulation Runs | 5000+ per month |
 | Average Session Duration | 15+ minutes |
@@ -1158,14 +1299,14 @@ docker compose up -d
 ### 9.2 Consulting-Specific Metrics
 
 | Metric | Target | Measurement Method |
-|--------|--------|-------------------|
+| -------- | -------- | ------------------- |
 | Engagements Deployed | 50+ in first 6 months | Count of unique client engagements with simulation usage |
 | Time to First Simulation | <15 minutes | From login to completed first simulation run |
 | Consultant Satisfaction (Report Quality) | >4/5 | Post-simulation survey: "Deliverables ready for client presentation" |
 | Miro Board Export Adoption | >70% of simulations | % of simulations with Miro export enabled |
 | MCP Invocation Rate | >50% for IDE users | % of simulations initiated via CLI/MCP vs. web UI |
 | SteerCo Presentation Rate | >60% | % of simulations resulting in board/SteerCo presentation |
-| **New Feature Success Metrics** |||
+| **New Feature Success Metrics** | | |
 | Emergent Behavior Detection Rate | ≥80% | % of significant archetype deviations flagged by system |
 | Persona Setup Time (with interview extraction) | <10 minutes | Time to complete persona calibration using interview method |
 | Scenario Branch Exploration | Avg 3+ branches | Average number of scenario branches created per simulation |
@@ -1187,15 +1328,18 @@ docker compose up -d
 ## 10. Open Source & Community
 
 ### 10.1 License
+
 - Open source under appropriate license (TBD)
 
 ### 10.2 Acknowledgments
+
 - Powered by [OASIS](https://github.com/camel-ai/oasis) (Open Agent Social Interaction Simulations)
 - Strategic support from Shanda Group
 
 ### 10.3 Community
-- GitHub: https://github.com/666ghj/ScenarioLab
-- Contact: scenariolab@shanda.com
+
+- GitHub: <https://github.com/666ghj/ScenarioLab>
+- Contact: <scenariolab@shanda.com>
 
 ---
 
@@ -1204,12 +1348,12 @@ docker compose up -d
 ### 11.1 Glossary
 
 | Term | Definition |
-|------|------------|
+| ------ | ------------ |
 | **Seed Material** | Source documents used to initialize the simulation world |
 | **GraphRAG** | Graph-based Retrieval-Augmented Generation for knowledge retrieval |
 | **Agent** | AI entity with personality, memory, and behavioral logic |
 | **Simulation Round** | One iteration of agent interactions in the digital world |
-| **Graphiti** | Temporal knowledge graph library for agent memory and structured retrieval (successor to Zep-based memory architecture) |
+| **Neo4j memory layer** | Temporal agent memory and GraphRAG implemented in `app/graph` against Neo4j; design follows a Graphiti-style temporal pattern without requiring the external Graphiti package in default deployments |
 | **MCP** | Model Context Protocol for agentic workflow integration |
 | **War Gaming** | Structured simulation of competitive or strategic scenarios |
 | **Strategy-Native Environment** | Simulation setting designed for business strategy (boardroom, negotiation, war room, integration planning) rather than social media platforms. Defines round structure, information visibility rules, and decision mechanisms. |
@@ -1219,7 +1363,7 @@ docker compose up -d
 | **Consulting Playbook** | Pre-configured simulation template for specific consulting scenarios (M&A culture clash, regulatory shock test, competitive response war game, boardroom decision rehearsal) with defined agent rosters, environment configurations, and expected deliverables. |
 | **Client Counterpart Agent** | Specialized agent type that simulates client executive behavior for rehearsing presentations and anticipating objections before SteerCo meetings. |
 | **Monte Carlo Confidence Interval** | Statistical method running 20-50 simulation iterations per scenario to establish probability ranges and confidence bounds for outcomes. |
-| **LLM Provider** | The backend language model service used for agent inference. ScenarioLab supports multiple providers including cloud APIs (OpenAI, Anthropic, Google, Alibaba/Qwen) and local CLI-based models (Ollama, llama.cpp). |
+| **LLM Provider** | Backend inference service selected via `LLM_PROVIDER`: cloud (OpenAI, Anthropic), local servers (Ollama, llama.cpp), or CLI subprocess providers (Claude, ChatGPT, Gemini CLIs). |
 | **BATNA** | Best Alternative To a Negotiated Agreement - fallback option triggered in negotiation scenarios when impasse persists. |
 | **Scenario Rehearsal** | ScenarioLab's core positioning: stress-testing strategic decisions in simulated environments rather than predicting future outcomes. |
 | **Scenario Matrix** | Deliverable format showing 3-5 scenarios × 4-6 outcomes with probability ranges and confidence intervals. |
@@ -1238,8 +1382,7 @@ docker compose up -d
 ### 11.2 References
 
 - [OASIS Repository](https://github.com/camel-ai/oasis)
-- [Bailian Platform](https://bailian.console.aliyun.com/)
-- [Graphiti Repository](https://github.com/getzep/graphiti) - Temporal knowledge graph for agent memory
+- [Neo4j Documentation](https://neo4j.com/docs/) — graph database used for GraphRAG and temporal agent memory
 
 ---
 
@@ -1248,7 +1391,7 @@ docker compose up -d
 ### 12.1 M&A Culture Clash Simulation
 
 | Field | Specification |
-|-------|---------------|
+| ------- | --------------- |
 | **Use Case** | Pre-deal cultural integration assessment |
 | **Typical Duration** | 10-15 rounds, ~20 minutes |
 | **Agent Roster** | Acquirer CEO (1), Target CEO (1), CHROs (2), Business Unit Leaders (4-6), Integration PMO (1), Union Representative (1) |
@@ -1259,7 +1402,7 @@ docker compose up -d
 ### 12.2 Regulatory Shock Test
 
 | Field | Specification |
-|-------|---------------|
+| ------- | --------------- |
 | **Use Case** | Assess organizational response to new compliance requirements |
 | **Typical Duration** | 8-12 rounds, ~15 minutes |
 | **Agent Roster** | CRO (1), Chief Compliance Officer (1), Business Line Heads (3-4), Regulator (1), General Counsel (1), Operations Head (1) |
@@ -1270,7 +1413,7 @@ docker compose up -d
 ### 12.3 Competitive Response War Game
 
 | Field | Specification |
-|-------|---------------|
+| ------- | --------------- |
 | **Use Case** | Simulate competitor reactions to market entry or pricing move |
 | **Typical Duration** | 15-20 rounds, ~25 minutes |
 | **Agent Roster** | Your Strategy VP (1), Competitor CEO (1), Competitor CMO (1), Market Analysts (2), Key Customers (2), Industry Observer (1) |
@@ -1281,7 +1424,7 @@ docker compose up -d
 ### 12.4 Boardroom Decision Rehearsal
 
 | Field | Specification |
-|-------|---------------|
+| ------- | --------------- |
 | **Use Case** | Prepare for high-stakes board presentations |
 | **Typical Duration** | 5-10 rounds, ~15 minutes |
 | **Agent Roster** | Activist Board Member (1), Institutional Board Member (1), Independent Board Member (2), Board Chair (1), CEO (1), CFO (1), Strategy VP (1) |
@@ -1299,31 +1442,35 @@ docker compose up -d
 
 The AI-powered strategic simulation and war-gaming market is experiencing rapid growth, driven by enterprise demand for scenario planning tools and competitive intelligence platforms.
 
-| Market Segment | 2024 Value | 2033 Projection | CAGR |
-|----------------|------------|-----------------|------|
-| AI Strategy Simulation | $1.62B | $8.3B | 19.8% |
+| Market Segment         | 2024 Value | 2033 Projection | CAGR  |
+| ---------------------- | ---------- | --------------- | ----- |
+| AI Strategy Simulation | $1.62B     | $8.3B           | 19.8% |
 
 ### 13.2 Key Competitors
 
 #### Principle ($2M funded, Feb 2026)
+
 - **Positioning:** Pentagon-style corporate wargaming platform
 - **Key Features:** Persistent continuously-learning models; custom LLM on AWS Nova for "plausibility classification"
 - **Market Position:** "Living strategy" platform targeting enterprise and government
 - **Differentiation:** Military-grade simulation heritage; proprietary model training
 
 #### Palantir / Hadean
+
 - **Positioning:** Military-grade wargaming extending to corporate applications
 - **Key Features:** Edge deployment architecture; massive-scale simulation capabilities
 - **Market Position:** Defense contractor pivoting to commercial markets
 - **Differentiation:** Government-grade security; established enterprise relationships
 
 #### McKinsey / BCG / Bain (Internal AI Tools)
+
 - **Positioning:** Embedding AI into existing consulting workflows
 - **Key Features:** Proprietary models trained on internal engagement data
 - **Market Position:** Internal tools for consultant augmentation
 - **Strategic Gap:** NOT building standalone simulation platforms — focused on productivity tools rather than client-facing war-gaming products
 
 #### Strategyzer / Wardley Tools
+
 - **Positioning:** Visual strategy frameworks and mapping tools
 - **Key Features:** Business model canvas, Wardley mapping, visual collaboration
 - **Market Position:** Strategy visualization and framework tools
@@ -1334,7 +1481,7 @@ The AI-powered strategic simulation and war-gaming market is experiencing rapid 
 **Unique Value Proposition:** Open-source, consultant-native, LLM-flexible, MCP-integrated war-gaming platform.
 
 | Dimension | ScenarioLab Advantage |
-|-----------|-------------------|
+| ----------- | ------------------- |
 | **Open Source** | Community-driven development; transparent methodology; no vendor lock-in |
 | **Consultant-Native** | Built by consultants for consultants; playbook templates match actual engagement types |
 | **LLM-Flexible** | Supports any LLM provider (cloud or local); future-proof against model obsolescence |
@@ -1353,6 +1500,7 @@ The AI-powered strategic simulation and war-gaming market is experiencing rapid 
 ### 13.5 Strategic Opportunities
 
 The competitive landscape reveals a significant gap: **no standalone, open-source, consultant-native war-gaming platform exists**. Incumbents either:
+
 - Focus on internal consultant productivity (MBB firms)
 - Lack agent-based simulation (Strategyzer/Wardley)
 - Are closed-source and expensive (Principle, Palantir)
@@ -1362,5 +1510,8 @@ ScenarioLab fills this gap by combining open-source accessibility with consultin
 
 ---
 
-*Document Version: 3.0*
-*Last Updated: April 2026*
+Document Version: 3.1
+
+Last Updated: 2026-04-05
+
+**Changelog (3.1):** Aligned stack with the current monorepo: Next.js 16, FastAPI + uv, Neo4j-first graph/memory with SQLite degradation, CLI LLM providers, SQLite report persistence, five-step simulation wizard, and environment-variable table updates.

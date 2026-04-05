@@ -207,7 +207,9 @@ test.describe('P0: Upload', () => {
     });
     await expect(page.getByText('test-seed.md')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('text=Uploaded Files').first()).toBeVisible();
-    await expect(page.locator('.text-green-400').first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId('upload-success-indicator').first()).toBeVisible({
+      timeout: 10000,
+    });
   });
 });
 
@@ -319,17 +321,20 @@ test.describe('P0: Simulation Overview', () => {
   test('SIM-OV-005: Transcript renders messages with role labels', async ({ page }) => {
     await page.goto(SIM_BASE);
     await page.waitForLoadState('networkidle');
-    // Agent roles are displayed in the feed
-    // CEO or CFO must be present if agents have messages
-    const agentLabels = page.locator('text=/^(CEO|CFO|Strategy|Operations|Agent)$/');
+    // Roles may be bare titles or embedded, e.g. "John (CEO)", "Strategy Lead", "Operations"
+    const agentLabels = page.getByText(/\b(CEO|CFO|Strategy|Operations|Agent)\b/i);
     const labelCount = await agentLabels.count();
-    // Non-fatal: if no messages yet the feed may be empty
-    if (labelCount === 0) {
-      console.info('SIM-OV-005: No agent role labels found — feed may be empty for this sim');
-    }
-    // Timestamp pattern: HH:MM AM/PM
-    const timestampVis = await page.locator('text=/\\d{1,2}:\\d{2}\\s*(AM|PM)/i').isVisible().catch(() => false);
-    if (!timestampVis) console.info('SIM-OV-005: No timestamps visible — may be empty feed');
+    await expect
+      .soft(labelCount, 'SIM-OV-005: expected agent role labels in transcript when feed has messages')
+      .toBeGreaterThan(0);
+    const timestampVis = await page
+      .locator('text=/\\d{1,2}:\\d{2}\\s*(AM|PM)/i')
+      .first()
+      .isVisible()
+      .catch(() => false);
+    await expect
+      .soft(timestampVis, 'SIM-OV-005: expected transcript timestamps (h:mm AM/PM) when feed has messages')
+      .toBe(true);
   });
 
   test('SIM-OV-006: Agent initials/avatars rendered in transcript', async ({ page }) => {
@@ -497,13 +502,8 @@ test.describe('P1: Sensitivity Analysis', () => {
   test('SENS-002: Charts or analysis panels are present', async ({ page }) => {
     await page.goto(`${SIM_BASE}/sensitivity`);
     const charts = page.locator('canvas, svg, [class*="chart"], [class*="Chart"]');
-    try {
-      expect(await charts.count()).toBeGreaterThan(0);
-    } catch {
-      console.warn(
-        'SENS-002: No charts or analysis panels found — page may lack data or chart selectors'
-      );
-    }
+    await charts.first().waitFor({ state: 'attached', timeout: 10000 });
+    expect(await charts.count()).toBeGreaterThan(0);
   });
 });
 
@@ -649,11 +649,20 @@ test.describe('P1: Fine-Tuning', () => {
 });
 
 test.describe('P1: API Keys', () => {
-  async function unlockApiKeysPage(page: Page) {
+  /** Sets admin sessionStorage on the app origin; optionally navigates to a path or full URL. */
+  async function unlockApiKeysPage(page: Page, targetPathOrUrl?: string) {
     await page.goto(BASE);
     await page.evaluate(() => {
       sessionStorage.setItem('scenariolab_admin_api_key', 'e2e-mock-admin');
     });
+    if (targetPathOrUrl === undefined) {
+      return;
+    }
+    const target =
+      targetPathOrUrl.startsWith('http://') || targetPathOrUrl.startsWith('https://')
+        ? targetPathOrUrl
+        : `${BASE}${targetPathOrUrl.startsWith('/') ? targetPathOrUrl : `/${targetPathOrUrl}`}`;
+    await page.goto(target);
   }
 
   test('APIKEY-001: API Keys page loads', async ({ page }) => {
@@ -665,8 +674,7 @@ test.describe('P1: API Keys', () => {
   test('APIKEY-002: Create or Generate API Key button is visible after admin unlock', async ({
     page,
   }) => {
-    await unlockApiKeysPage(page);
-    await page.goto(`${BASE}/api-keys`);
+    await unlockApiKeysPage(page, '/api-keys');
     await expect(page.locator('text=/Generate|Create|New.*Key/i').first()).toBeVisible();
   });
 });
@@ -778,7 +786,7 @@ test.describe('P2: Accessibility Baseline', () => {
     for (const path of ['/', '/simulations', '/upload']) {
       await page.goto(`${BASE}${path}`);
       const h1Count = await page.locator('h1').count();
-      expect(h1Count).toBeGreaterThanOrEqual(1);
+      expect(h1Count, `Expected single h1 on ${path}, found ${h1Count}`).toBe(1);
     }
   });
 });

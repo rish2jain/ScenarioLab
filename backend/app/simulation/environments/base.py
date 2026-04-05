@@ -4,6 +4,8 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any
 
+from app.config import settings
+from app.graph.graphiti_service import graphiti_context_snippet
 from app.simulation.agent import SimulationAgent
 from app.simulation.models import (
     EnvironmentType,
@@ -126,6 +128,27 @@ class BaseEnvironment(ABC):
                     except Exception:
                         logger.debug(
                             "Memory retrieval failed for %s",
+                            agent.name,
+                            exc_info=True,
+                        )
+
+            if (
+                settings.graphiti_enabled
+                and settings.graphiti_inject_agent_context
+                and round_number > 1
+            ):
+                sim_id = getattr(self._sim_config, "id", "")
+                if sim_id:
+                    try:
+                        hint = f"{agent.archetype.role} {agent.state.name} round {round_number}"
+                        gt = await graphiti_context_snippet(sim_id, hint)
+                        if gt:
+                            enriched_context = (
+                                f"{gt}\n\n{enriched_context}" if enriched_context else gt
+                            )
+                    except Exception:
+                        logger.debug(
+                            "Graphiti context retrieval failed for %s",
                             agent.name,
                             exc_info=True,
                         )

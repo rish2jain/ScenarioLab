@@ -5,10 +5,40 @@ import uuid
 
 from pydantic import BaseModel, Field
 
+from app.graph.neo4j_client import get_application_neo4j_client
+
 logger = logging.getLogger(__name__)
 
 # In-memory cache for seed materials (backed by SQLite via SeedRepository)
 _seed_store: dict[str, "SeedMaterial"] = {}
+
+# ``delete_seed`` does not take the per-seed extraction lock; a background
+# extraction task can be between ``await``s in the create_node loop. Tombstone
+# only after we know the seed exists so random IDs do not leak into this set.
+_tombstoned_seed_graph_ids: set[str] = set()
+
+
+def tombstone_seed_graph(seed_id: str) -> None:
+    """Mark a seed as deleted for in-flight graph extraction (Neo4j writes)."""
+    _tombstoned_seed_graph_ids.add(seed_id)
+
+
+def is_seed_graph_tombstoned(seed_id: str) -> bool:
+    return seed_id in _tombstoned_seed_graph_ids
+
+
+def reset_seed_graph_tombstones_for_tests() -> None:
+    """Clear tombstone registry (pytest isolation)."""
+    _tombstoned_seed_graph_ids.clear()
+
+
+def clear_seed_graph_tombstone(seed_id: str) -> None:
+    """Remove a seed from the graph tombstone set (e.g. after a failed delete retry)."""
+    _tombstoned_seed_graph_ids.discard(seed_id)
+
+
+class SeedGraphCleanupError(RuntimeError):
+    """Neo4j cleanup failed; the seed was not removed from SQLite or the in-memory store."""
 
 
 class SeedMaterial(BaseModel):
@@ -60,6 +90,26 @@ class SeedProcessor:
                 raw_text = await self.extract_text_from_pdf(content)
             elif content_type in ("text/plain", "text/markdown", "text/text"):
                 raw_text = content.decode("utf-8", errors="ignore")
+            elif content_type == "application/vnd.ms-powerpoint" or (filename and filename.lower().endswith(".ppt")):
+                raise ValueError("Legacy PowerPoint (.ppt) is not supported. Save as .pptx and upload again.")
+            elif (content_type == "application/vnd.openxmlformats-officedocument.presentationml.presentation") or (
+                filename and filename.lower().endswith(".pptx")
+            ):
+                raw_text = self._extract_text_from_pptx(content)
+            elif content_type == "application/vnd.ms-excel" or (filename and filename.lower().endswith(".xls")):
+                raise ValueError("Legacy Excel (.xls) is not supported. Save as .xlsx and upload again.")
+            elif (content_type == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") or (
+                filename and filename.lower().endswith(".xlsx")
+            ):
+                raw_text = self._extract_text_from_xlsx(content)
+            elif content_type.startswith("image/") or (
+                filename and filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"))
+            ):
+                raw_text = self._extract_text_from_image(content, filename or "image")
+            elif content_type in ("application/vnd.openxmlformats-officedocument.wordprocessingml.document",) or (
+                filename and filename.lower().endswith(".docx")
+            ):
+                raw_text = self._extract_text_from_docx(content)
             else:
                 # Try to decode as text for unknown types
                 try:
@@ -83,6 +133,154 @@ class SeedProcessor:
         self._store[seed.id] = seed
         await self._get_repo().save(seed)
         return seed
+
+    @staticmethod
+    def _extract_text_from_pptx(content: bytes) -> str:
+        """Extract text from PPTX bytes."""
+        import io
+
+        try:
+            from pptx import Presentation
+
+            prs = Presentation(io.BytesIO(content))
+            parts: list[str] = []
+            for slide_num, slide in enumerate(prs.slides, 1):
+                slide_texts: list[str] = []
+                for shape in slide.shapes:
+                    if shape.has_text_frame:
+                        for para in shape.text_frame.paragraphs:
+                            text = para.text.strip()
+                            if text:
+                                slide_texts.append(text)
+                    if shape.has_table:
+                        for row in shape.table.rows:
+                            row_text = " | ".join(cell.text.strip() for cell in row.cells if cell.text.strip())
+                            if row_text:
+                                slide_texts.append(row_text)
+                if slide_texts:
+                    parts.append(f"--- Slide {slide_num} ---\n" + "\n".join(slide_texts))
+            return "\n\n".join(parts) if parts else "[PPTX: no text content found]"
+        except ImportError:
+            logger.warning("python-pptx not installed; install it for PPTX support")
+            return "[PPTX extraction requires python-pptx]"
+        except Exception as e:
+            logger.error(f"PPTX extraction error: {e}")
+            return f"[PPTX extraction failed: {e}]"
+
+    @staticmethod
+    def _extract_text_from_xlsx(content: bytes) -> str:
+        """Extract text from XLSX bytes."""
+        import io
+
+        try:
+            from openpyxl import load_workbook
+
+            wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+            parts: list[str] = []
+            for sheet_name in wb.sheetnames:
+                ws = wb[sheet_name]
+                rows: list[str] = []
+                for row in ws.iter_rows(values_only=True):
+                    cells = [str(c) if c is not None else "" for c in row]
+                    line = " | ".join(cells)
+                    if line.strip(" |"):
+                        rows.append(line)
+                if rows:
+                    parts.append(f"--- Sheet: {sheet_name} ---\n" + "\n".join(rows))
+            wb.close()
+            return "\n\n".join(parts) if parts else "[XLSX: no data found]"
+        except ImportError:
+            logger.warning("openpyxl not installed; install it for XLSX support")
+            return "[XLSX extraction requires openpyxl]"
+        except Exception as e:
+            logger.error(f"XLSX extraction error: {e}")
+            return f"[XLSX extraction failed: {e}]"
+
+    @staticmethod
+    def _normalize_exif_text(value: object) -> str | None:
+        """Normalize EXIF string/bytes (e.g. UserComment with encoding prefix) to a safe str."""
+        if value is None:
+            return None
+        if isinstance(value, str):
+            text = value.strip()
+            return text if text else None
+        if isinstance(value, bytes):
+            raw = value
+            prefixes = (
+                b"ASCII\x00\x00\x00",
+                b"UNICODE\x00",
+                b"UNDEFINED\x00",
+                b"JIS\x00\x00\x00",
+            )
+            for p in prefixes:
+                if raw.startswith(p):
+                    raw = raw[len(p) :]
+                    break
+            try:
+                text = raw.decode("utf-8").strip()
+            except UnicodeDecodeError:
+                text = raw.decode("latin-1", errors="replace").strip()
+            return text if text else None
+        try:
+            text = str(value).strip()
+            return text if text else None
+        except Exception:
+            return None
+
+    @staticmethod
+    def _extract_text_from_image(content: bytes, filename: str) -> str:
+        """Extract metadata and description placeholder from image bytes."""
+        import io
+
+        try:
+            from PIL import Image
+
+            img = Image.open(io.BytesIO(content))
+            width, height = img.size
+            mode = img.mode
+            fmt = img.format or "unknown"
+            info_lines = [
+                f"[Image: {filename}]",
+                f"Format: {fmt}, Size: {width}x{height}, Mode: {mode}",
+            ]
+            # Extract EXIF text data if present
+            exif = img.getexif()
+            if exif:
+                description = SeedProcessor._normalize_exif_text(exif.get(270, ""))
+                if description:
+                    info_lines.append(f"Description: {description}")
+                user_comment = SeedProcessor._normalize_exif_text(exif.get(37510, ""))
+                if user_comment:
+                    info_lines.append(f"Comment: {user_comment}")
+            img.close()
+            return "\n".join(info_lines)
+        except ImportError:
+            logger.warning("Pillow not installed; install it for image support")
+            return f"[Image: {filename}, {len(content)} bytes. Install Pillow for metadata extraction.]"
+        except Exception as e:
+            logger.error(f"Image extraction error: {e}")
+            return f"[Image metadata extraction failed: {e}]"
+
+    @staticmethod
+    def _extract_text_from_docx(content: bytes) -> str:
+        """Extract text from DOCX bytes using zipfile (no extra deps)."""
+        import io
+        import re
+        import zipfile
+
+        try:
+            with zipfile.ZipFile(io.BytesIO(content)) as zf:
+                if "word/document.xml" not in zf.namelist():
+                    return "[DOCX: no document.xml found]"
+                xml_content = zf.read("word/document.xml").decode("utf-8", errors="ignore")
+                # Strip XML tags, keep text
+                text = re.sub(r"<[^>]+>", " ", xml_content)
+                lines = [line.strip() for line in text.split("\n") if line.strip()]
+                cleaned = "\n".join(lines)
+                return cleaned if cleaned else "[DOCX: no text content found]"
+        except Exception as e:
+            logger.error(f"DOCX extraction error: {e}")
+            return f"[DOCX extraction failed: {e}]"
 
     async def extract_text_from_pdf(self, content: bytes) -> str:
         """Extract text from PDF bytes.
@@ -244,6 +442,27 @@ class SeedProcessor:
             await self._get_repo().save(seed)
 
         return seed
+
+    async def delete_seed(self, seed_id: str) -> bool:
+        """Delete a seed material from memory, DB, and any Neo4j graph scoped to this seed."""
+        in_memory = seed_id in self._store
+        if not in_memory and (await self._get_repo().get(seed_id)) is None:
+            return False
+
+        tombstone_seed_graph(seed_id)
+        neo4j = get_application_neo4j_client()
+        if neo4j is not None:
+            try:
+                await neo4j.clear_graph(seed_id)
+            except Exception as e:
+                logger.exception(
+                    "Neo4j cleanup failed for seed %s; seed not deleted from storage",
+                    seed_id,
+                )
+                clear_seed_graph_tombstone(seed_id)
+                raise SeedGraphCleanupError(f"Neo4j graph cleanup failed for seed {seed_id}") from e
+        self._store.pop(seed_id, None)
+        return await self._get_repo().delete(seed_id)
 
     async def update_seed(self, seed_id: str, **updates) -> SeedMaterial | None:
         """Update a seed material in memory and DB."""

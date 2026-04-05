@@ -347,7 +347,7 @@ export default function AuditTrailPage() {
                       <td className="py-3 px-4 text-sm text-slate-400 max-w-xs truncate">
                         {JSON.stringify(event.details)}
                       </td>
-                      <td className="py-3 px-4 text-sm text-slate-500 font-mono text-xs">
+                      <td className="py-3 px-4 text-slate-500 font-mono text-xs">
                         {event.hash.substring(0, 8)}...
                       </td>
                     </tr>

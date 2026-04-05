@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.llm.provider import LLMMessage, LLMProvider
+from app.reports.llm_json_fences import strip_llm_json_fences
 from app.simulation.objectives import format_simulation_objective_for_prompt
 
 logger = logging.getLogger(__name__)
@@ -15,8 +16,86 @@ logger = logging.getLogger(__name__)
 
 def _parse_llm_json(raw: str) -> Any:
     """Strip markdown JSON fences and parse JSON from LLM output."""
-    s = raw.strip().removeprefix("```json").removesuffix("```").strip()
+    s = strip_llm_json_fences(raw)
     return json.loads(s)
+
+
+def _sanitize_turning_points_from_llm(parsed: Any) -> list[dict]:
+    """Validate and normalize turning points from LLM JSON.
+
+    Walks the list in order and keeps up to five entries that are dicts with
+    sensible ``round``, ``description``, and ``significance`` values.
+    """
+    if not isinstance(parsed, list):
+        logger.warning("LLM turning points JSON was not a list; using empty list")
+        return []
+
+    cleaned: list[dict] = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        raw_round = item.get("round")
+        desc = item.get("description")
+        sig = item.get("significance")
+        if desc is None or sig is None or raw_round is None:
+            continue
+        if not isinstance(desc, str) or not isinstance(sig, str):
+            continue
+        desc = desc.strip()
+        sig = sig.strip()
+        if not desc or not sig:
+            continue
+
+        round_num: int | None = None
+        if isinstance(raw_round, bool):
+            continue
+        if isinstance(raw_round, int):
+            round_num = raw_round
+        elif isinstance(raw_round, float) and raw_round.is_integer():
+            round_num = int(raw_round)
+        elif isinstance(raw_round, str):
+            try:
+                round_num = int(raw_round.strip())
+            except ValueError:
+                continue
+
+        if round_num is None or round_num < 1:
+            continue
+
+        cleaned.append(
+            {
+                "round": round_num,
+                "description": desc,
+                "significance": sig,
+            }
+        )
+        if len(cleaned) == 5:
+            break
+
+    return cleaned
+
+
+def _collect_string_outcomes_from_llm_list(
+    items: list[Any],
+    *,
+    parsed: Any,
+    raw_preview: str,
+) -> list[str]:
+    """Keep only non-empty strings from an LLM JSON list; skip other types."""
+    out: list[str] = []
+    for item in items:
+        if isinstance(item, str):
+            s = item.strip()
+            if s:
+                out.append(s)
+        else:
+            logger.warning(
+                "LLM unexpected outcomes: skipped non-string outcome item %r; " "parsed=%r; raw_content=%r",
+                item,
+                parsed,
+                raw_preview,
+            )
+    return out
 
 
 class SimulationNarrative(BaseModel):
@@ -84,16 +163,24 @@ class NarrativeGenerator:
         # Prepare simulation summary
         sim_summary = self._prepare_simulation_summary(simulation_state)
 
-        prompt = f"""Write a compelling executive narrative (maximum 2 paragraphs) summarizing this strategic simulation.
+        prompt = f"""Write an executive narrative (maximum 2 paragraphs) summarizing this strategic simulation.
 
 SIMULATION OVERVIEW:
 {sim_summary}
 
-The narrative should:
-- Capture the key dynamics and tensions
-- Highlight surprising developments
-- Summarize the overall arc and outcome
-- Be written in an engaging, journalistic style
+TONE & STYLE:
+Write as a senior partner briefing a client — authoritative, concise, insight-driven.
+Avoid hedging language ("it seems", "perhaps", "it could be argued").
+Lead with the most important finding.
+
+STRUCTURE:
+- Paragraph 1: What happened and why it matters — the central question, the key outcome, and its strategic significance.
+- Paragraph 2: Key tensions, surprises, and strategic implications — what was unexpected, what coalitions formed or fractured, and what this means for decision-making.
+
+ANTI-PATTERNS (avoid these):
+- Do NOT list every agent's position sequentially. Synthesize the dynamics into a coherent narrative arc.
+- Do NOT use generic filler ("various stakeholders discussed the issue"). Name specific actors and specific positions.
+- Do NOT end with vague next-steps ("further analysis is needed"). End with a concrete strategic insight.
 
 Write 1-2 paragraphs maximum."""
 
@@ -102,7 +189,11 @@ Write 1-2 paragraphs maximum."""
                 messages=[
                     LLMMessage(
                         role="system",
-                        content=("You are a skilled narrative writer summarizing " "strategic war-game simulations."),
+                        content=(
+                            "You are a senior strategy consultant writing post-simulation briefings. "
+                            "Your narratives are sharp, evidence-based, and focused on strategic insight. "
+                            "You synthesize complex multi-stakeholder dynamics into clear, decisive prose."
+                        ),
                     ),
                     LLMMessage(role="user", content=prompt),
                 ],
@@ -203,9 +294,18 @@ Write 1-2 paragraphs maximum."""
             round_blocks.append(f"--- ROUND {rs.round_number} ---\n{msgs}")
 
         prompt = (
-            "Write a brief narrative summary (2-3 sentences) for EACH "
-            "round below. Connect the narratives so they read as a "
-            "coherent story arc.\n\n" + "\n\n".join(round_blocks) + "\n\nRespond with ONLY a JSON array: "
+            "Write a narrative summary (2-3 sentences) for EACH round below.\n\n"
+            "GUIDELINES:\n"
+            "- Each round's narrative should connect to the previous round — what changed, "
+            "what carried forward. Use transitional phrases ('Building on...', 'In response to...', "
+            "'Despite the previous round's...').\n"
+            "- Highlight the dominant tension or debate in each round. Name the key protagonists "
+            "and their positions — do not say 'participants discussed'; say who argued what.\n"
+            "- Follow a story arc: early rounds should set up the conflict, middle rounds should "
+            "show escalation or negotiation, and final rounds should show resolution or deadlock.\n"
+            "- Each narrative must be exactly 2-3 sentences. No bullet points, no headers.\n\n"
+            + "\n\n".join(round_blocks)
+            + "\n\nRespond with ONLY a JSON array: "
             '[{"round": N, "narrative": "..."}]'
         )
 
@@ -214,7 +314,11 @@ Write 1-2 paragraphs maximum."""
                 messages=[
                     LLMMessage(
                         role="system",
-                        content="You summarize simulation rounds concisely. " "Respond with valid JSON only.",
+                        content=(
+                            "You write round-by-round simulation chronicles that read as a coherent "
+                            "narrative arc. Each round summary names specific actors, captures the central "
+                            "tension, and connects causally to adjacent rounds. Respond with valid JSON only."
+                        ),
                     ),
                     LLMMessage(role="user", content=prompt),
                 ],
@@ -345,8 +449,20 @@ Write 1-2 paragraphs maximum."""
         arc_text = "\n\n".join(arc_summary)
 
         prompt = (
-            "Identify 2-3 major turning points where the direction or "
-            "dynamics significantly changed.\n\n"
+            "Identify 2-3 turning points where the simulation's direction or dynamics "
+            "significantly changed.\n\n"
+            "CRITERIA — a turning point is when:\n"
+            "(a) An agent reversed or materially shifted their stated position.\n"
+            "(b) A new coalition formed or an existing one broke apart.\n"
+            "(c) New information or an argument changed the group's trajectory.\n"
+            "(d) A vote or decision outcome was unexpected given the prior discussion.\n\n"
+            "EVIDENCE REQUIREMENT:\n"
+            "For each turning point, cite the specific agent(s) involved and what they "
+            "said or did that constituted the shift. Do not write generic descriptions "
+            "like 'the discussion changed direction' — name the actor and the action.\n\n"
+            "SIGNIFICANCE RUBRIC:\n"
+            "- 'major' = changed the simulation's final outcome or conclusion.\n"
+            "- 'minor' = shifted dynamics temporarily but did not alter the final conclusion.\n\n"
             f"SIMULATION ARC:\n{arc_text}\n\n"
             "Respond with ONLY valid JSON:\n"
             '[{"round": N, "description": "...", "significance": "major|minor"}]'
@@ -355,14 +471,20 @@ Write 1-2 paragraphs maximum."""
             messages=[
                 LLMMessage(
                     role="system",
-                    content="You identify turning points in simulations. " "Respond with valid JSON only.",
+                    content=(
+                        "You are a simulation analyst who identifies pivotal moments in strategic "
+                        "war-games. You distinguish genuine inflection points from normal discussion "
+                        "flow. Every turning point you identify must cite specific evidence. "
+                        "Respond with valid JSON only."
+                    ),
                 ),
                 LLMMessage(role="user", content=prompt),
             ],
             temperature=0.4,
             max_tokens=400,
         )
-        return _parse_llm_json(response.content)[:5]
+        parsed = _parse_llm_json(response.content)
+        return _sanitize_turning_points_from_llm(parsed)
 
     async def _identify_unexpected_outcomes(self, simulation_state) -> list[str]:
         """Identify unexpected outcomes from the simulation.
@@ -392,9 +514,22 @@ Write 1-2 paragraphs maximum."""
                     f"{a.name} ({a.archetype_id}): {a.current_stance}" for a in simulation_state.agents
                 )
                 prompt = (
-                    "Based on these final stances, identify unexpected "
-                    "outcomes — things that were surprising given each "
-                    "participant's role.\n\n"
+                    "Based on these final stances, identify unexpected outcomes.\n\n"
+                    "FRAMEWORK — an outcome is unexpected when:\n"
+                    "(a) An agent acted against their archetype's typical behavioral pattern "
+                    "(e.g., a CFO embracing high risk, a regulator relaxing oversight).\n"
+                    "(b) A typically conservative role (CFO, compliance, regulator) supported "
+                    "a risky or aggressive position.\n"
+                    "(c) A typically aggressive role (activist investor, CEO, disruptor) showed "
+                    "restraint or caution.\n"
+                    "(d) Coalitions formed between natural adversaries (e.g., activist investor "
+                    "aligning with incumbent management).\n\n"
+                    "SPECIFICITY REQUIREMENT:\n"
+                    "Each outcome must name the specific agent, state their expected behavior "
+                    "based on their role, and contrast it with their actual behavior. "
+                    "Do NOT write generic observations like 'some participants were surprising'. "
+                    "Example: 'Sarah Chen (CFO) endorsed the aggressive acquisition despite "
+                    "CFOs typically prioritizing balance-sheet protection.'\n\n"
                     f"FINAL STANCES:\n{stances_text}\n\n"
                     "Respond with ONLY a JSON array of strings:\n"
                     '["outcome 1", "outcome 2"]'
@@ -403,14 +538,46 @@ Write 1-2 paragraphs maximum."""
                     messages=[
                         LLMMessage(
                             role="system",
-                            content="You identify unexpected outcomes. " "Respond with valid JSON only.",
+                            content=(
+                                "You analyze simulation outcomes to find genuinely surprising results. "
+                                "You understand stakeholder archetypes and their expected behavioral "
+                                "patterns, and you flag deviations with specific evidence. "
+                                "Respond with valid JSON only."
+                            ),
                         ),
                         LLMMessage(role="user", content=prompt),
                     ],
                     temperature=0.5,
                     max_tokens=300,
                 )
-                outcomes.extend(_parse_llm_json(resp.content))
+                parsed = _parse_llm_json(resp.content)
+                raw_preview = resp.content
+                if len(raw_preview) > 800:
+                    raw_preview = raw_preview[:800] + "..."
+                if isinstance(parsed, list):
+                    outcomes.extend(
+                        _collect_string_outcomes_from_llm_list(
+                            parsed,
+                            parsed=parsed,
+                            raw_preview=raw_preview,
+                        )
+                    )
+                elif isinstance(parsed, dict) and "outcomes" in parsed and isinstance(parsed["outcomes"], list):
+                    outcomes.extend(
+                        _collect_string_outcomes_from_llm_list(
+                            parsed["outcomes"],
+                            parsed=parsed,
+                            raw_preview=raw_preview,
+                        )
+                    )
+                else:
+                    logger.error(
+                        "LLM unexpected outcomes: expected a JSON array of strings or an "
+                        "object with key 'outcomes' containing an array; parsed=%r; "
+                        "raw_content=%r",
+                        parsed,
+                        raw_preview,
+                    )
             except Exception as e:
                 logger.error(f"LLM unexpected outcomes failed: {e}")
 

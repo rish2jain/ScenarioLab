@@ -11,6 +11,7 @@ from app.analytics.router import router as analytics_router
 from app.api_integrations.router import router as api_v1_router
 from app.config import settings
 from app.database import close_database, init_database
+from app.graph.graphiti_service import start_graphiti, stop_graphiti
 from app.graph.neo4j_client import Neo4jClient, register_application_neo4j_client
 from app.graph.router import (
     reset_graphrag_cache,
@@ -23,6 +24,7 @@ from app.graph.router import (
 from app.llm.database import init_llm_tables
 from app.llm.router import router as llm_router
 from app.mcp.router import router as mcp_router
+from app.mcp.server import mcp_server
 from app.personas.router import router as personas_router
 from app.playbooks.router import router as playbooks_router
 from app.reports.router import router as reports_router
@@ -82,11 +84,24 @@ async def lifespan(app: FastAPI):
 
     start_seed_extraction_lock_cleanup_task()
 
+    try:
+        await start_graphiti()
+    except Exception as e:
+        logger.warning("Graphiti startup skipped: %s", e)
+
     yield
 
     # Shutdown
     logger.info("ScenarioLab backend shutting down...")
+    try:
+        await mcp_server.shutdown_background_simulation()
+    except Exception as e:
+        logger.warning("MCP background simulation shutdown: %s", e)
     await stop_seed_extraction_lock_cleanup_task()
+    try:
+        await stop_graphiti()
+    except Exception as e:
+        logger.warning("Graphiti shutdown: %s", e)
     await close_database()
     reset_graphrag_cache()
     if neo4j_client:

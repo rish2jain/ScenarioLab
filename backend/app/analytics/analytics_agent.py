@@ -243,7 +243,7 @@ class AnalyticsAgent:
                     LLMMessage(
                         role="system",
                         content=(
-                            "You detect policy violations in boardroom " "discussions. Respond with ONLY valid JSON."
+                            "You detect policy violations in boardroom discussions. Respond with ONLY valid JSON."
                         ),
                     ),
                     LLMMessage(role="user", content=prompt),
@@ -685,9 +685,9 @@ class AnalyticsAgent:
 
                 # Generate description
                 if pos_shift > 0:
-                    description = f"Significant positive shift in sentiment " f"(+{round(pos_shift * 100)}%)"
+                    description = f"Significant positive shift in sentiment (+{round(pos_shift * 100)}%)"
                 else:
-                    description = f"Significant negative shift in sentiment " f"(+{round(abs(neg_shift) * 100)}%)"
+                    description = f"Significant negative shift in sentiment (+{round(abs(neg_shift) * 100)}%)"
 
                 # Look for triggering event in messages
                 round_state = rounds[i]

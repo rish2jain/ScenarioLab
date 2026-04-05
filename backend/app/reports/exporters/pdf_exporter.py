@@ -4,12 +4,25 @@ Note: Full PDF support requires libraries like WeasyPrint or ReportLab.
 This implementation generates HTML that can be rendered to PDF.
 """
 
+import html
 import logging
 from datetime import datetime
 
 from app.reports.models import SimulationReport
 
 logger = logging.getLogger(__name__)
+
+_RECOMMENDATION_PRIORITY_TO_CLASS: dict[str, str] = {
+    "low": "priority-low",
+    "medium": "priority-medium",
+    "high": "priority-high",
+}
+
+
+def _recommendation_priority_css_class(priority: object) -> str:
+    """Map whitelisted recommendation priorities to fixed CSS class names."""
+    token = str(priority).strip().lower()
+    return _RECOMMENDATION_PRIORITY_TO_CLASS.get(token, "priority-unknown")
 
 
 async def export_to_pdf(report: SimulationReport) -> bytes:
@@ -48,7 +61,7 @@ def generate_report_html(report: SimulationReport) -> str:
         "<head>",
         '    <meta charset="UTF-8">',
         '    <meta name="viewport" content="width=device-width, ' 'initial-scale=1.0">',
-        f"    <title>Report: {report.simulation_name}</title>",
+        f"    <title>Report: {html.escape(report.simulation_name)}</title>",
         "    <style>",
         "        body { font-family: Arial, sans-serif; line-height: 1.6; "
         "max-width: 900px; margin: 0 auto; padding: 20px; color: #333; }",
@@ -62,6 +75,7 @@ def generate_report_html(report: SimulationReport) -> str:
         "        .priority-high { color: #e74c3c; font-weight: bold; }",
         "        .priority-medium { color: #f39c12; font-weight: bold; }",
         "        .priority-low { color: #27ae60; font-weight: bold; }",
+        "        .priority-unknown { color: #7f8c8d; font-weight: bold; }",
         "        .position-support { color: #27ae60; }",
         "        .position-oppose { color: #e74c3c; }",
         "        .position-neutral { color: #95a5a6; }",
@@ -76,19 +90,19 @@ def generate_report_html(report: SimulationReport) -> str:
     # Header
     html_parts.extend(
         [
-            f"    <h1>{report.simulation_name}</h1>",
+            f"    <h1>{html.escape(report.simulation_name)}</h1>",
             '    <div class="info-box">',
-            f"        <strong>Report ID:</strong> {report.id}<br>",
-            f"        <strong>Simulation ID:</strong> {report.simulation_id}<br>",
-            f"        <strong>Status:</strong> {report.status.upper()}<br>",
-            f"        <strong>Generated:</strong> {report.created_at}",
+            f"        <strong>Report ID:</strong> {html.escape(str(report.id))}<br>",
+            f"        <strong>Simulation ID:</strong> {html.escape(str(report.simulation_id))}<br>",
+            f"        <strong>Status:</strong> {html.escape(str(report.status).upper())}<br>",
+            f"        <strong>Generated:</strong> {html.escape(str(report.created_at))}",
             "    </div>",
         ]
     )
 
     # Executive Summary
     if report.executive_summary:
-        summary = report.executive_summary.summary_text.replace(chr(10), "<br>")
+        summary = html.escape(report.executive_summary.summary_text or "").replace(chr(10), "<br>")
         html_parts.extend(
             [
                 "    <h2>Executive Summary</h2>",
@@ -104,7 +118,7 @@ def generate_report_html(report: SimulationReport) -> str:
                 ]
             )
             for finding in report.executive_summary.key_findings:
-                html_parts.append(f"        <li>{finding}</li>")
+                html_parts.append(f"        <li>{html.escape(str(finding))}</li>")
             html_parts.append("    </ul>")
 
         if report.executive_summary.recommendations:
@@ -116,14 +130,14 @@ def generate_report_html(report: SimulationReport) -> str:
                 ]
             )
             for rec in report.executive_summary.recommendations:
-                priority_class = f"priority-{rec.priority}"
+                priority_class = _recommendation_priority_css_class(rec.priority)
                 html_parts.append(
                     f"        <tr>"
                     f'<td class="{priority_class}">'
-                    f"{rec.priority.upper()}</td>"
-                    f"<td>{rec.title}</td>"
-                    f"<td>{rec.description}<br>"
-                    f"<em>Rationale: {rec.rationale}</em></td>"
+                    f"{html.escape(str(rec.priority).upper())}</td>"
+                    f"<td>{html.escape(str(rec.title))}</td>"
+                    f"<td>{html.escape(str(rec.description))}<br>"
+                    f"<em>Rationale: {html.escape(str(rec.rationale))}</em></td>"
                     f"</tr>"
                 )
             html_parts.append("    </table>")
@@ -146,14 +160,14 @@ def generate_report_html(report: SimulationReport) -> str:
         )
 
         for risk in report.risk_register.items:
-            impact_class = f"priority-{risk.impact}"
+            impact_class = f"priority-{html.escape(str(risk.impact), quote=True)}"
             html_parts.append(
                 f"        <tr>"
-                f"<td>{risk.risk_id}</td>"
-                f"<td>{risk.description}</td>"
-                f"<td>{risk.probability:.0%}</td>"
-                f'<td class="{impact_class}">{risk.impact.upper()}</td>'
-                f"<td>{risk.owner}</td>"
+                f"<td>{html.escape(str(risk.risk_id))}</td>"
+                f"<td>{html.escape(str(risk.description))}</td>"
+                f"<td>{html.escape(f'{risk.probability:.0%}')}</td>"
+                f'<td class="{impact_class}">{html.escape(str(risk.impact).upper())}</td>'
+                f"<td>{html.escape(str(risk.owner))}</td>"
                 f"</tr>"
             )
 
@@ -171,12 +185,14 @@ def generate_report_html(report: SimulationReport) -> str:
 
         for scenario in report.scenario_matrix.scenarios:
             prob_min, prob_max = scenario.probability_range
-            drivers = ", ".join(scenario.key_drivers[:3])
+            drivers = ", ".join(html.escape(str(d)) for d in scenario.key_drivers[:3])
+            desc = scenario.description or ""
+            desc_snippet = desc[:100] + ("..." if len(desc) > 100 else "")
             html_parts.append(
                 f"        <tr>"
-                f"<td><strong>{scenario.scenario_name}</strong><br>"
-                f"{scenario.description[:100]}...</td>"
-                f"<td>{prob_min:.0%} - {prob_max:.0%}</td>"
+                f"<td><strong>{html.escape(str(scenario.scenario_name))}</strong><br>"
+                f"{html.escape(desc_snippet)}</td>"
+                f"<td>{html.escape(f'{prob_min:.0%} - {prob_max:.0%}')}</td>"
                 f"<td>{drivers}</td>"
                 f"</tr>"
             )
@@ -201,19 +217,21 @@ def generate_report_html(report: SimulationReport) -> str:
 
         for sh in report.stakeholder_heatmap.stakeholders:
             position_class = "position-neutral"
-            if "support" in sh.position and "strongly" not in sh.position:
+            pos_raw = sh.position or ""
+            if "support" in pos_raw and "strongly" not in pos_raw:
                 position_class = "position-support"
-            elif "oppose" in sh.position:
+            elif "oppose" in pos_raw:
                 position_class = "position-oppose"
 
+            pos_display = pos_raw.replace("_", " ").title()
             html_parts.append(
                 f"        <tr>"
-                f"<td>{sh.stakeholder}</td>"
-                f"<td>{sh.role}</td>"
+                f"<td>{html.escape(str(sh.stakeholder))}</td>"
+                f"<td>{html.escape(str(sh.role))}</td>"
                 f'<td class="{position_class}">'
-                f"{sh.position.replace('_', ' ').title()}</td>"
-                f"<td>{sh.influence:.0%}</td>"
-                f"<td>{sh.support_level:+.0%}</td>"
+                f"{html.escape(pos_display)}</td>"
+                f"<td>{html.escape(f'{sh.influence:.0%}')}</td>"
+                f"<td>{html.escape(f'{sh.support_level:+.0%}')}</td>"
                 f"</tr>"
             )
 
@@ -223,7 +241,7 @@ def generate_report_html(report: SimulationReport) -> str:
     html_parts.extend(
         [
             '    <div class="footer">',
-            f"        <p>Report generated by ScenarioLab on " f"{datetime.utcnow().isoformat()}</p>",
+            "        <p>Report generated by ScenarioLab on " f"{html.escape(datetime.utcnow().isoformat())}</p>",
             "    </div>",
             "</body>",
             "</html>",

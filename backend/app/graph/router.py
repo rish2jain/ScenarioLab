@@ -6,19 +6,27 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.config import settings
 from app.graph.entity_extractor import EntityExtractor
+from app.graph.graphiti_service import (
+    get_graphiti,
+    search_simulation_graph,
+)
 from app.graph.graphrag import GraphRAG
 from app.graph.neo4j_client import (
     Neo4jClient,
     get_application_neo4j_client,
     is_application_neo4j_registered,
 )
-from app.graph.seed_processor import SeedMaterial, SeedProcessor
-from app.graph.zep_adapter import zep_graph_adapter
+from app.graph.seed_processor import (
+    SeedGraphCleanupError,
+    SeedMaterial,
+    SeedProcessor,
+    is_seed_graph_tombstoned,
+)
 from app.llm.factory import get_llm_provider
 
 logger = logging.getLogger(__name__)
@@ -29,6 +37,7 @@ router = APIRouter(prefix="/api", tags=["graph"])
 _seed_processor: Optional[SeedProcessor] = None
 _entity_extractor: Optional[EntityExtractor] = None
 _graphrag: Optional[GraphRAG] = None
+
 
 # Serialize entity extraction per seed so duplicate background tasks (retry while
 # running, stuck processing re-queue) do not corrupt Neo4j or double-charge LLM.
@@ -46,6 +55,46 @@ class _SeedExtractionLockEntry:
 _seed_extraction_locks: dict[str, _SeedExtractionLockEntry] = {}
 _seed_extraction_locks_guard = asyncio.Lock()
 _seed_extraction_cleanup_task: asyncio.Task[None] | None = None
+
+# Maps ``X-Client-Upload-Id`` -> (server seed id, monotonic registered time).
+# The key stays after a **successful** upload until the client POSTs ack-client-id (or TTL
+# evicts the map entry without deleting the seed) so cancel-by-client-id still works if the
+# browser aborts while reading the response body.
+_pending_upload_client_keys: dict[str, tuple[str, float]] = {}
+_MAX_CLIENT_UPLOAD_ID_LEN = 512
+_PENDING_UPLOAD_CLIENT_KEY_TTL_SECONDS = 900.0
+
+# During seed graph extraction, ``is_seed_graph_tombstoned`` is polled every N items
+# instead of each Neo4j write to reduce overhead on large extractions.
+_SEED_GRAPH_TOMBSTONE_CHECK_EVERY = 10
+
+
+def _register_pending_upload_client_key(client_key: str, seed_id: str) -> None:
+    if client_key:
+        _pending_upload_client_keys[client_key] = (seed_id, time.monotonic())
+
+
+def _pop_pending_upload_client_key(client_key: str) -> None:
+    if client_key:
+        _pending_upload_client_keys.pop(client_key, None)
+
+
+def _evict_stale_pending_upload_client_keys() -> None:
+    now = time.monotonic()
+    stale = [
+        k
+        for k, (_, t0) in list(_pending_upload_client_keys.items())
+        if now - t0 > _PENDING_UPLOAD_CLIENT_KEY_TTL_SECONDS
+    ]
+    for k in stale:
+        _pending_upload_client_keys.pop(k, None)
+    if stale:
+        logger.debug("Evicted %d stale pending upload client key(s)", len(stale))
+
+
+def reset_pending_upload_client_keys_for_tests() -> None:
+    _pending_upload_client_keys.clear()
+
 
 _neo4j_unregistered_logged: bool = False
 
@@ -73,6 +122,7 @@ async def _seed_extraction_locks_cleanup_loop() -> None:
                         len(stale_ids),
                         ttl,
                     )
+            _evict_stale_pending_upload_client_keys()
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -123,6 +173,12 @@ async def _release_seed_extraction_lock(seed_id: str) -> None:
         if entry is None:
             return
         entry.touch()
+
+
+async def _purge_seed_extraction_lock(seed_id: str) -> None:
+    """Remove per-seed extraction lock state when the seed is deleted."""
+    async with _seed_extraction_locks_guard:
+        _seed_extraction_locks.pop(seed_id, None)
 
 
 def get_neo4j_client() -> Neo4jClient | None:
@@ -207,6 +263,23 @@ class SeedListResponse(BaseModel):
     seeds: list[SeedResponse]
 
 
+class CancelUploadByClientIdRequest(BaseModel):
+    client_upload_id: str = Field(..., min_length=1, max_length=512)
+
+
+class CancelUploadByClientIdResponse(BaseModel):
+    ok: bool
+    deleted: bool
+
+
+class AckUploadClientIdRequest(BaseModel):
+    client_upload_id: str = Field(..., min_length=1, max_length=512)
+
+
+class AckUploadClientIdResponse(BaseModel):
+    ok: bool
+
+
 class SkippedSeedEntry(BaseModel):
     """Seed skipped by POST /seeds/process (e.g. already graph-complete)."""
 
@@ -242,11 +315,25 @@ class GraphDataResponse(BaseModel):
     relationships: list[dict]
 
 
-class ZepHealthResponse(BaseModel):
-    """Zep Cloud adapter status from ``zep_graph_adapter.health()`` (no network call)."""
+class TemporalMemoryStatusResponse(BaseModel):
+    """Graphiti temporal graph status (local Neo4j partition)."""
 
-    zep_configured: bool
+    graphiti_enabled: bool
+    graphiti_ready: bool
+    neo4j_graphiti_database: str
     message: str
+
+
+class TemporalSearchRequest(BaseModel):
+    simulation_id: str
+    query: str
+    limit: int = 8
+
+
+class TemporalSearchResponse(BaseModel):
+    simulation_id: str
+    query: str
+    facts: list[dict]
 
 
 class SeedProcessRequest(BaseModel):
@@ -270,6 +357,18 @@ def _to_seed_response(seed: SeedMaterial) -> SeedResponse:
         relationship_count=seed.relationship_count,
         error_message=seed.error_message,
     )
+
+
+async def _abandon_seed_graph_writes_if_tombstoned(seed_id: str, neo4j: Neo4jClient) -> bool:
+    """If the seed was deleted, clear this seed's Neo4j slice and return True (stop writing)."""
+    if not is_seed_graph_tombstoned(seed_id):
+        return False
+    try:
+        await neo4j.clear_graph(seed_id)
+    except Exception:
+        logger.exception("clear_graph after tombstone for seed %s", seed_id)
+    logger.info("Stopped seed graph write (seed deleted): %s", seed_id)
+    return True
 
 
 async def _run_entity_extraction_for_seed(seed_id: str) -> None:
@@ -318,15 +417,32 @@ async def _run_entity_extraction_for_seed(seed_id: str) -> None:
                 )
                 return
 
+            if await _abandon_seed_graph_writes_if_tombstoned(seed_id, neo4j):
+                return
+
             try:
                 extractor = get_entity_extractor()
                 # Remove any partial graph from a previous failed run so retries do not duplicate nodes.
                 await neo4j.clear_graph(seed_id)
+                if await _abandon_seed_graph_writes_if_tombstoned(seed_id, neo4j):
+                    return
 
                 chunks = await processor.chunk_content(seed.processed_content, chunk_size=3000, overlap=300)
                 extraction_result = await extractor.extract_from_chunks(chunks)
 
-                for entity in extraction_result.entities:
+                still = await processor.get_seed(seed_id)
+                if still is None or still.status != "processing":
+                    logger.info(
+                        "Entity extraction abandoned after LLM for seed %s "
+                        "(deleted or status changed; skipping Neo4j write)",
+                        seed_id,
+                    )
+                    return
+
+                for idx, entity in enumerate(extraction_result.entities):
+                    if idx % _SEED_GRAPH_TOMBSTONE_CHECK_EVERY == 0:
+                        if await _abandon_seed_graph_writes_if_tombstoned(seed_id, neo4j):
+                            return
                     node_props = {
                         **entity.properties,
                         "id": entity.id,
@@ -337,7 +453,13 @@ async def _run_entity_extraction_for_seed(seed_id: str) -> None:
                     }
                     await neo4j.create_node("Entity", node_props)
 
-                for rel in extraction_result.relationships:
+                if await _abandon_seed_graph_writes_if_tombstoned(seed_id, neo4j):
+                    return
+
+                for idx, rel in enumerate(extraction_result.relationships):
+                    if idx % _SEED_GRAPH_TOMBSTONE_CHECK_EVERY == 0:
+                        if await _abandon_seed_graph_writes_if_tombstoned(seed_id, neo4j):
+                            return
                     rel_props = {
                         **rel.properties,
                         "id": rel.id,
@@ -351,6 +473,17 @@ async def _run_entity_extraction_for_seed(seed_id: str) -> None:
                         rel_type=rel.relationship_type.upper(),
                         properties=rel_props,
                     )
+
+                if await _abandon_seed_graph_writes_if_tombstoned(seed_id, neo4j):
+                    return
+
+                final = await processor.get_seed(seed_id)
+                if final is None or final.status != "processing":
+                    logger.info(
+                        "Entity extraction abandoned before persist for seed %s " "(deleted or status changed)",
+                        seed_id,
+                    )
+                    return
 
                 await processor.update_seed(
                     seed_id,
@@ -375,11 +508,24 @@ async def _run_entity_extraction_for_seed(seed_id: str) -> None:
         await _release_seed_extraction_lock(seed_id)
 
 
+async def _cleanup_seed_on_disconnect(processor: SeedProcessor, seed_id: str, client_key: str) -> None:
+    """Best-effort delete when the client disconnects; clear pending upload key."""
+    try:
+        await processor.delete_seed(seed_id)
+    except SeedGraphCleanupError:
+        logger.exception(
+            "Disconnect cleanup: Neo4j clear failed for seed %s (seed kept)",
+            seed_id,
+        )
+    _pop_pending_upload_client_key(client_key)
+
+
 # Endpoints
 
 
 @router.post("/seeds/upload", response_model=SeedResponse)
 async def upload_seed_file(
+    request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
 ):
@@ -388,25 +534,80 @@ async def upload_seed_file(
 
     # Read file content
     content = await file.read()
+    if await request.is_disconnected():
+        logger.info(
+            "Seed upload discarded after read (client disconnected): %s",
+            file.filename,
+        )
+        raise HTTPException(status_code=499, detail="Client closed connection")
+
     content_type = file.content_type or "text/plain"
 
     logger.info(f"Uploading file: {file.filename} ({content_type})")
 
-    # Process file
     seed = await processor.process_file(file.filename, content, content_type)
 
-    if seed.status == "failed":
-        raise HTTPException(status_code=400, detail=f"Failed to process file: {seed.error_message}")
+    raw_key = (request.headers.get("x-client-upload-id") or "").strip()
+    client_key = raw_key[:_MAX_CLIENT_UPLOAD_ID_LEN] if raw_key else ""
+    if client_key:
+        _register_pending_upload_client_key(client_key, seed.id)
 
-    # Defer LLM + Neo4j work so the client gets a prompt response (avoids proxy timeouts).
+    if await request.is_disconnected():
+        await _cleanup_seed_on_disconnect(processor, seed.id, client_key)
+        raise HTTPException(status_code=499, detail="Client closed connection")
+
+    if seed.status == "failed":
+        _pop_pending_upload_client_key(client_key)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to process file: {seed.error_message}",
+        )
+
     if seed.status == "processed" and seed.processed_content:
         updated = await processor.update_seed(seed.id, status="processing")
         if updated is None:
-            raise HTTPException(status_code=500, detail="Failed to update seed after upload")
+            logger.info(
+                "Seed %s disappeared during upload (likely client cancel)",
+                seed.id,
+            )
+            _pop_pending_upload_client_key(client_key)
+            raise HTTPException(status_code=499, detail="Client closed connection")
         seed = updated
         background_tasks.add_task(_run_entity_extraction_for_seed, seed.id)
 
+    if await request.is_disconnected():
+        await _cleanup_seed_on_disconnect(processor, seed.id, client_key)
+        raise HTTPException(status_code=499, detail="Client closed connection")
+
     return _to_seed_response(seed)
+
+
+@router.post("/seeds/upload/ack-client-id", response_model=AckUploadClientIdResponse)
+async def ack_upload_client_id(body: AckUploadClientIdRequest):
+    """Drop the pending client key after the client read a successful upload response."""
+    key = body.client_upload_id.strip()[:_MAX_CLIENT_UPLOAD_ID_LEN]
+    _pop_pending_upload_client_key(key)
+    return AckUploadClientIdResponse(ok=True)
+
+
+@router.post("/seeds/upload/cancel-by-client-id", response_model=CancelUploadByClientIdResponse)
+async def cancel_upload_by_client_id(body: CancelUploadByClientIdRequest):
+    """Best-effort delete when the client aborted before reading the upload response."""
+    key = body.client_upload_id.strip()[:_MAX_CLIENT_UPLOAD_ID_LEN]
+    entry = _pending_upload_client_keys.pop(key, None)
+    if entry is None:
+        return CancelUploadByClientIdResponse(ok=True, deleted=False)
+    seed_id = entry[0]
+    processor = get_seed_processor()
+    try:
+        deleted = await processor.delete_seed(seed_id)
+    except SeedGraphCleanupError:
+        logger.exception(
+            "cancel-by-client-id: Neo4j clear failed for seed %s (seed kept)",
+            seed_id,
+        )
+        deleted = False
+    return CancelUploadByClientIdResponse(ok=True, deleted=deleted)
 
 
 @router.get("/seeds", response_model=SeedListResponse)
@@ -428,6 +629,55 @@ async def get_seed(seed_id: str):
         raise HTTPException(status_code=404, detail="Seed not found")
 
     return _to_seed_response(seed)
+
+
+@router.delete("/seeds/{seed_id}")
+async def delete_seed(seed_id: str):
+    """Delete a single seed material."""
+    processor = get_seed_processor()
+    try:
+        deleted = await processor.delete_seed(seed_id)
+    except SeedGraphCleanupError as e:
+        raise HTTPException(
+            status_code=503,
+            detail="Graph database cleanup failed; seed was not deleted. Retry shortly.",
+        ) from e
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Seed not found")
+    await _purge_seed_extraction_lock(seed_id)
+    return {"ok": True, "id": seed_id}
+
+
+class SeedDeleteBatchRequest(BaseModel):
+    """Request body for batch seed deletion."""
+
+    ids: list[str]
+
+
+@router.post("/seeds/delete-batch")
+async def delete_seeds_batch(request: SeedDeleteBatchRequest):
+    """Delete multiple seed materials at once."""
+    processor = get_seed_processor()
+    deleted: list[str] = []
+    not_found: list[str] = []
+    graph_cleanup_failed: list[str] = []
+    for seed_id in request.ids:
+        try:
+            ok = await processor.delete_seed(seed_id)
+        except SeedGraphCleanupError:
+            logger.exception("Batch delete: Neo4j clear failed for seed %s", seed_id)
+            graph_cleanup_failed.append(seed_id)
+            continue
+        if ok:
+            deleted.append(seed_id)
+            await _purge_seed_extraction_lock(seed_id)
+        else:
+            not_found.append(seed_id)
+    return {
+        "deleted": deleted,
+        "not_found": not_found,
+        "graph_cleanup_failed": graph_cleanup_failed,
+    }
 
 
 @router.post("/seeds/process", response_model=SeedProcessResponse)
@@ -476,7 +726,9 @@ async def process_uploaded_seeds(
 
         if seed.status == "failed" and has_text:
             retry_updates: dict = {"status": "processing", "error_message": None}
-            if not (seed.processed_content or "").strip() and (seed.raw_content or "").strip():
+            # No usable processed text yet, but raw upload text exists (promote raw to processed).
+            has_only_raw_content = not (seed.processed_content or "").strip() and (seed.raw_content or "").strip()
+            if has_only_raw_content:
                 retry_updates["processed_content"] = seed.raw_content
             updated = await processor.update_seed(seed_id, **retry_updates)
             if updated is not None:
@@ -580,8 +832,40 @@ async def query_graph(request: GraphQueryRequest):
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
 
 
-@router.get("/graph/zep-status", response_model=ZepHealthResponse)
-async def zep_graph_status() -> ZepHealthResponse:
-    """Zep Cloud optional adapter status (see ZEP_API_KEY)."""
-    data = await zep_graph_adapter.health()
-    return ZepHealthResponse.model_validate(data)
+@router.get("/graph/temporal-memory-status", response_model=TemporalMemoryStatusResponse)
+async def temporal_memory_status() -> TemporalMemoryStatusResponse:
+    """Graphiti adapter status (enabled flag + client initialized at startup)."""
+    g = get_graphiti()
+    ready = g is not None
+    if not settings.graphiti_enabled:
+        msg = "Graphiti disabled. Set GRAPHITI_ENABLED=true and OpenAI credentials for Graphiti."
+    elif not ready:
+        msg = "Graphiti not initialized (missing OpenAI key, Neo4j error, or startup failure). " "See logs."
+    else:
+        msg = "Graphiti ready"
+    return TemporalMemoryStatusResponse(
+        graphiti_enabled=settings.graphiti_enabled,
+        graphiti_ready=ready,
+        neo4j_graphiti_database=settings.neo4j_graphiti_database,
+        message=msg,
+    )
+
+
+@router.post("/graph/temporal/search", response_model=TemporalSearchResponse)
+async def temporal_graph_search(request: TemporalSearchRequest) -> TemporalSearchResponse:
+    """Hybrid search over Graphiti facts scoped to ``simulation_id`` (group_id)."""
+    if not settings.graphiti_enabled or get_graphiti() is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Graphiti is not available",
+        )
+    facts = await search_simulation_graph(
+        request.simulation_id,
+        request.query,
+        limit=max(1, min(request.limit, 25)),
+    )
+    return TemporalSearchResponse(
+        simulation_id=request.simulation_id,
+        query=request.query,
+        facts=facts,
+    )

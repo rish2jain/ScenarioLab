@@ -46,6 +46,9 @@ class TestSettings:
         assert settings.llm_concurrency_default == 3
         assert settings.llm_concurrency_overrides == ""
         assert settings.debug is False
+        assert settings.graphiti_enabled is False
+        assert settings.neo4j_graphiti_database == "neo4j"
+        assert settings.graphiti_inject_agent_context is False
 
     def test_env_override(self, monkeypatch):
         monkeypatch.setenv("LLM_PROVIDER", "anthropic")

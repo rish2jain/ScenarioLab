@@ -1,8 +1,17 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { clsx } from 'clsx';
 import { Upload, File, X } from 'lucide-react';
+
+/** Parse a comma-separated HTML accept string into display tokens (extensions or MIME shortcuts). */
+function displayTokensFromAccept(accept: string): string[] {
+  return accept
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((t) => (t.startsWith('.') ? t.toLowerCase() : t));
+}
 
 interface DropZoneProps {
   onFilesDrop: (files: File[]) => void;
@@ -14,12 +23,13 @@ interface DropZoneProps {
 
 export function DropZone({
   onFilesDrop,
-  accept = '.md,.txt,.pdf,.docx',
+  accept = '.md,.txt,.pdf,.docx,.pptx,.xlsx,.png,.jpg,.jpeg,.gif,.webp,.bmp',
   maxFiles = 10,
   maxSize = 50 * 1024 * 1024, // 50MB
   className,
 }: DropZoneProps) {
   const [isDragOver, setIsDragOver] = useState(false);
+  const acceptDisplayTokens = useMemo(() => displayTokensFromAccept(accept), [accept]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -104,19 +114,15 @@ export function DropZone({
             or click to browse files
           </p>
         </div>
-        <div className="flex items-center gap-2 mt-2">
-          <span className="px-2 py-1 bg-slate-700 rounded text-xs text-slate-300">
-            .md
-          </span>
-          <span className="px-2 py-1 bg-slate-700 rounded text-xs text-slate-300">
-            .txt
-          </span>
-          <span className="px-2 py-1 bg-slate-700 rounded text-xs text-slate-300">
-            .pdf
-          </span>
-          <span className="px-2 py-1 bg-slate-700 rounded text-xs text-slate-300">
-            .docx
-          </span>
+        <div className="flex flex-wrap items-center gap-2 mt-2">
+          {acceptDisplayTokens.map((ext) => (
+            <span
+              key={ext}
+              className="px-2 py-1 bg-slate-700 rounded text-xs text-slate-300"
+            >
+              {ext}
+            </span>
+          ))}
         </div>
         <p className="text-slate-500 text-xs">
           Max file size: {(maxSize / 1024 / 1024).toFixed(0)}MB

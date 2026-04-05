@@ -223,10 +223,14 @@ Throughout this report, **Suggested mode** and **Estimated rounds** refer to the
 
 ## Quick Start
 
-In environments that expose it (for example Claude Code), **`/autoresearch`** is a slash command that drives **AutoResearch**: an automated, iterative research-and-transformation loop over a target file or directory (code, docs, prompts, etc.). The optional **`--metric`** string is **human-readable guidance** for what “better” means—the agent interprets it and typically breaks it into evaluable checks (tests, linters, PASS/FAIL rubrics); it is **not** a fixed machine schema. Prefix the value with **`measurable:`** when you state explicit thresholds or commands (line counts, coverage %, named scripts), or **`goal:`** when you describe architectural outcomes the loop should steer toward without a single parser-friendly number.
+**`/autoresearch`** (where available, e.g. Claude Code) is a slash command that runs **AutoResearch**: an automated, iterative research-and-transformation loop over a target file or directory (code, docs, prompts, etc.).
+
+The optional **`--metric`** is human-readable guidance for what “better” means—the agent interprets it into evaluable checks (tests, linters, PASS/FAIL rubrics), not a fixed machine schema.
+
+Prefix **`measurable:`** for explicit thresholds or commands (e.g. `measurable: pytest coverage >80%`, `measurable: each module under 400 lines`). Prefix **`goal:`** for architectural outcomes (e.g. `goal: split into domain repositories with CRUD tests`). **`goal:`** may still mention numbers when the main ask is structural; prefer **`measurable:`** when a crisp threshold is the primary pass/fail criterion.
 
 ```bash
-/autoresearch frontend/src/lib/api.ts --metric "goal: file split into <400-line modules with isolated mock data"
+/autoresearch frontend/src/lib/api.ts --metric "measurable: each module under 400 lines; goal: isolated mock data per module"
 /autoresearch backend/app/api_integrations/database.py --metric "goal: split into domain repos with unified DB connection, each with CRUD tests"
 /autoresearch backend/app/simulation/engine.py --metric "measurable: pytest coverage >80% on engine module; goal: deterministic turn output via fixtures"
 /autoresearch backend/app/database.py --metric "goal: consolidated DB layer, split into domain repositories"

@@ -146,7 +146,7 @@ else
   NEXT_VER="node-not-found"
   REACT_VER="node-not-found"
   info "Node.js not found in PATH"
-  info "Next.js: $NEXT_VER, React: $REACT_VER — frontend: $FRONTEND (versions unknown: Node not in PATH; cannot read $FRONTEND/node_modules — install Node and put it on PATH to resolve versions)"
+  info "Next.js: $NEXT_VER, React: $REACT_VER — frontend: $FRONTEND (versions unknown: Node.js not found in PATH — install Node and put it on PATH to resolve versions)"
 fi
 
 # Only nudge for supported Next majors we document (15.x / 16.x) with React 18 still installed

@@ -1,7 +1,8 @@
 """MCP (Model Context Protocol) server implementation for ScenarioLab."""
 
+import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import BaseModel
@@ -35,12 +36,46 @@ class MCPToolResult(BaseModel):
     error: str | None = None
 
 
-class MirofishMCPServer:
+class ScenarioLabMCPServer:
     """MCP server exposing ScenarioLab simulation tools."""
 
     def __init__(self, engine: SimulationEngine | None = None):
         self.simulation_engine = engine or simulation_engine
         self.tools = self._register_tools()
+        self._simulation_tasks: dict[str, asyncio.Task] = {}
+
+    def _on_simulation_task_done(self, task: asyncio.Task) -> None:
+        """Log failures from asyncio.create_task(run_simulation); avoids lost exceptions."""
+        try:
+            exc = task.exception()
+        except asyncio.CancelledError:
+            logger.debug("MCP background simulation task cancelled: %s", task.get_name())
+            return
+        if exc is not None:
+            logger.error(
+                "MCP background simulation task failed",
+                exc_info=(type(exc), exc, exc.__traceback__),
+            )
+
+    def _on_simulation_task_done_for_id(self, simulation_id: str, task: asyncio.Task) -> None:
+        """Done callback: log outcome and drop the task from the active map."""
+        try:
+            self._on_simulation_task_done(task)
+        finally:
+            self._simulation_tasks.pop(simulation_id, None)
+
+    async def shutdown_background_simulation(self) -> None:
+        """Cancel and await all spawned run_simulation tasks (e.g. process shutdown)."""
+        tasks_snapshot = list(self._simulation_tasks.values())
+        for t in tasks_snapshot:
+            if not t.done():
+                t.cancel()
+        for t in tasks_snapshot:
+            try:
+                await t
+            except asyncio.CancelledError:
+                pass
+        self._simulation_tasks.clear()
 
     def _register_tools(self) -> dict[str, MCPToolDefinition]:
         """Register all MCP tools."""
@@ -134,6 +169,32 @@ class MirofishMCPServer:
                 description="List available consulting playbook templates for simulation.",
                 parameters={"type": "object", "properties": {}},
             ),
+            "scenariolab/graphiti/search": MCPToolDefinition(
+                name="scenariolab/graphiti/search",
+                description=(
+                    "Search the Graphiti temporal knowledge graph for one simulation "
+                    "(group_id = simulation_id). Requires GRAPHITI_ENABLED and OpenAI credentials."
+                ),
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "simulation_id": {
+                            "type": "string",
+                            "description": "Simulation UUID",
+                        },
+                        "query": {
+                            "type": "string",
+                            "description": "Natural language question",
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Max facts to return",
+                            "default": 8,
+                        },
+                    },
+                    "required": ["simulation_id", "query"],
+                },
+            ),
         }
 
     def get_tool_definitions(self) -> list[MCPToolDefinition]:
@@ -162,6 +223,8 @@ class MirofishMCPServer:
                 return await self._handle_export(arguments)
             elif tool_name == "scenariolab/playbooks/list":
                 return await self._handle_list_playbooks(arguments)
+            elif tool_name == "scenariolab/graphiti/search":
+                return await self._handle_graphiti_search(arguments)
             else:
                 return MCPToolResult(
                     tool_name=tool_name,
@@ -240,16 +303,20 @@ class MirofishMCPServer:
         # Create simulation
         sim_state = await self.simulation_engine.create_simulation(config)
 
-        # Start simulation in background
-        import asyncio
-
-        asyncio.create_task(self.simulation_engine.run_simulation(sim_state.config.id))
+        # Start simulation in background (track each Task + log exceptions via done callback)
+        sim_id = sim_state.config.id
+        bg_task = asyncio.create_task(
+            self.simulation_engine.run_simulation(sim_id),
+            name=f"mcp-sim-{sim_id}",
+        )
+        self._simulation_tasks[sim_id] = bg_task
+        bg_task.add_done_callback(lambda t, sid=sim_id: self._on_simulation_task_done_for_id(sid, t))
 
         return MCPToolResult(
             tool_name="scenariolab/simulate",
             status="success",
             result={
-                "simulation_id": sim_state.config.id,
+                "simulation_id": sim_id,
                 "name": sim_state.config.name,
                 "status": sim_state.status.value,
                 "playbook": playbook_id,
@@ -399,7 +466,7 @@ class MirofishMCPServer:
                 "simulation_id": simulation_id,
                 "format": format_type,
                 "export_data": export_data,
-                "filename": f"scenariolab_{simulation_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.{format_type}",
+                "filename": f"scenariolab_{simulation_id}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.{format_type}",
             },
         )
 
@@ -423,6 +490,44 @@ class MirofishMCPServer:
                     }
                     for p in playbooks
                 ],
+            },
+        )
+
+    async def _handle_graphiti_search(self, args: dict) -> MCPToolResult:
+        """Handle scenariolab/graphiti/search tool call."""
+        from app.config import settings
+        from app.graph.graphiti_service import get_graphiti, search_simulation_graph
+
+        simulation_id = args.get("simulation_id")
+        query = args.get("query")
+        limit = int(args.get("limit", 8))
+
+        if not simulation_id or not query:
+            return MCPToolResult(
+                tool_name="scenariolab/graphiti/search",
+                status="error",
+                error="Missing simulation_id or query",
+            )
+
+        if not settings.graphiti_enabled or get_graphiti() is None:
+            return MCPToolResult(
+                tool_name="scenariolab/graphiti/search",
+                status="error",
+                error="Graphiti is not enabled or failed to initialize",
+            )
+
+        facts = await search_simulation_graph(
+            simulation_id,
+            query,
+            limit=max(1, min(limit, 25)),
+        )
+        return MCPToolResult(
+            tool_name="scenariolab/graphiti/search",
+            status="success",
+            result={
+                "simulation_id": simulation_id,
+                "query": query,
+                "facts": facts,
             },
         )
 
@@ -576,4 +681,4 @@ class MirofishMCPServer:
 
 
 # Global MCP server instance
-mcp_server = MirofishMCPServer()
+mcp_server = ScenarioLabMCPServer()

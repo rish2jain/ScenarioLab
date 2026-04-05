@@ -102,6 +102,7 @@ All config via environment variables loaded from `.env` at project root (see `.e
 | `LLM_BASE_URL` | Override for Azure / local proxies |
 | `LLM_MODEL_NAME` | Model sent to provider |
 | `NEO4J_URI/USER/PASSWORD` | Graph database connection |
+| `GRAPHITI_ENABLED` / `NEO4J_GRAPHITI_DATABASE` / `GRAPHITI_OPENAI_API_KEY` | Optional Graphiti temporal graph (OpenAI for default embedder/LLM) |
 | `MIRO_API_TOKEN` / `MIRO_BOARD_ID` | Optional Miro board sync |
 | `MCP_SERVER_ENABLED` | Toggle MCP server |
 | `TAVILY_API_KEY` | Web search for autoresearch |

@@ -219,6 +219,24 @@ export async function registerApiMocks(
     const req = route.request();
     const u = new URL(req.url());
 
+    if (u.pathname === '/api/seeds/upload/ack-client-id' && req.method() === 'POST') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true }),
+      });
+      return;
+    }
+
+    if (u.pathname === '/api/seeds/upload/cancel-by-client-id' && req.method() === 'POST') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, deleted: false }),
+      });
+      return;
+    }
+
     if (u.pathname === '/api/seeds/upload' && req.method() === 'POST') {
       const buf = req.postDataBuffer();
       let sniff = '';
@@ -278,6 +296,40 @@ export async function registerApiMocks(
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({}),
+    });
+  });
+
+  /** POST /sensitivity — register after the generic /api/ fallback route so this wins (SENS-002). */
+  await page.route(`**/api/simulations/${SIM_ID}/sensitivity`, async route => {
+    const u = new URL(route.request().url());
+    if (u.pathname !== `/api/simulations/${SIM_ID}/sensitivity`) {
+      await route.continue();
+      return;
+    }
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        simulation_id: SIM_ID,
+        parameters: [
+          {
+            name: 'Competitive response',
+            description: 'E2E mock sensitivity parameter',
+            base_value: 100,
+            low_value: 85,
+            high_value: 115,
+            low_outcome: 40,
+            high_outcome: 65,
+            impact_score: 0.25,
+          },
+        ],
+        baseline_outcome: { policy_adoption_rate: 52 },
+        outcome_metrics: ['Strategic Outcome'],
+      }),
     });
   });
 

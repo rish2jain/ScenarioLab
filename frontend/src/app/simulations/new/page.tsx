@@ -748,7 +748,7 @@ export default function NewSimulationPage() {
 
   const handleFilesDrop = async (files: File[]) => {
     for (const file of files) {
-      const tempId = crypto.randomUUID();
+      const tempId = `local-seed-${crypto.randomUUID()}`;
       addFile({
         id: tempId,
         name: file.name,
@@ -760,8 +760,11 @@ export default function NewSimulationPage() {
       });
 
       try {
-        const uploaded = await api.uploadFile(file, (progress) => {
-          updateFile(tempId, { progress });
+        const uploaded = await api.uploadFile(file, {
+          onProgress: (progress) => {
+            updateFile(tempId, { progress });
+          },
+          clientUploadId: tempId,
         });
         updateFile(tempId, { ...uploaded });
         setSelectedSeedIds((prev) => [...prev, uploaded.id]);

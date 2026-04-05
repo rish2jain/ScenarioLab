@@ -13,7 +13,7 @@ Given your 11 years in tech strategy/GRC and your work advising F100 banks, this
 | Air-gap deployment is mandatory — replace Zep Cloud + Chinese LLM APIs with local Ollama + Neo4j/local Zep | ✓ | ✓ | ✓ | Client confidentiality in financial services makes cloud dependencies a dealbreaker[^4][^5][^6] |
 | Generate consulting-grade deliverables (scenario matrices, risk registers, stakeholder heatmaps, exec summaries) not just reports | ✓ | ✓ | ✓ | ReportAgent currently produces generic narrative; consultants need framework-native artifacts[^3][^7] |
 | Add multi-scenario batch execution with comparison views | ✓ | ✓ | ✓ | Strategy consulting requires comparing scenarios side-by-side, not single-run predictions[^8][^9] |
-| Expose ScenarioLab as MCP tools for CLI/agentic workflow integration |  | ✓ | ✓ | Enables invoking simulations from Claude Desktop, Cursor, or existing CLI pipelines |
+| Expose MiroFish through an MCP server for CLI/agentic workflow integration |  | ✓ | ✓ | Enables invoking simulations from Claude Desktop, Cursor, or existing CLI pipelines |
 
 ## Where Models Disagree
 

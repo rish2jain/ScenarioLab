@@ -99,7 +99,7 @@ GENDER_NAME_MAPPINGS: dict[str, dict[str, str]] = {
         "Ethan": "Ethel",
         "Walter": "Wanda",
         "Noah": "Noelle",
-        "Jeremy": "Jeremiah",
+        "Jeremy": "Jeri",
         "Christian": "Christine",
         "Keith": "Keira",
         "Roger": "Rogene",
@@ -235,7 +235,7 @@ class FairnessAuditor:
 
         elif perturbation_type == "name_length":
             # Group by name length
-            name_lengths = [(a.id, len(a.name)) for a in agents]
+            name_lengths = [(a.id, len(a.name or "")) for a in agents]
             if name_lengths:
                 lengths = [length for _, length in name_lengths]
                 median = sorted(lengths)[len(lengths) // 2]
