@@ -333,14 +333,18 @@ Summarize the key developments and dynamics in 2-3 sentences."""
         self, simulation_state
     ) -> list[dict]:
         """Use LLM to identify turning points."""
-        # Prepare simulation arc
+        # Prepare simulation arc with all messages
         arc_summary = []
         for round_state in simulation_state.rounds:
             key_msgs = [
-                f"{msg.agent_name}: {msg.content[:80]}..."
-                for msg in round_state.messages[:2]
+                f"{msg.agent_name} ({msg.agent_role}): "
+                f"{msg.content[:300]}"
+                for msg in round_state.messages
             ]
-            arc_summary.append(f"Round {round_state.round_number}:\n" + "\n".join(key_msgs))
+            arc_summary.append(
+                f"Round {round_state.round_number}:\n"
+                + "\n".join(key_msgs)
+            )
 
         arc_text = "\n\n".join(arc_summary)
 

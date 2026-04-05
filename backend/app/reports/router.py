@@ -1,15 +1,21 @@
 """FastAPI router for report generation endpoints."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel
 
 from app.config import settings
 from app.llm.factory import get_llm_provider
+from app.playbooks.manager import get_all_playbooks
+from app.reports.annotations import (
+    Annotation,
+    AnnotationCreate,
+    annotation_manager,
+)
 from app.reports.exporters import (
     export_to_json,
     export_to_markdown,
@@ -17,17 +23,15 @@ from app.reports.exporters import (
     export_to_pdf,
 )
 from app.reports.models import ReviewCheckpoint, SimulationReport
+from app.db.reports import ReportRepository
 from app.reports.report_agent import ReportAgent
-from app.reports.annotations import (
-    Annotation,
-    AnnotationCreate,
-    annotation_manager,
-)
 from app.simulation.engine import simulation_engine
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["reports"])
+
+_report_repo = ReportRepository()
 
 
 class MiroStatusResponse(BaseModel):
@@ -39,8 +43,82 @@ class MiroStatusResponse(BaseModel):
     mode: str
 
 
-# In-memory storage for reports
+# In-memory cache (fast path); DB is authoritative.
 _report_store: dict[str, SimulationReport] = {}
+
+
+async def _get_or_generate_report(
+    simulation_id: str,
+    *,
+    generate_if_missing: bool,
+) -> tuple[SimulationReport, bool]:
+    """Fetch an existing report or generate one for a finished simulation.
+
+    Returns:
+        (report, was_created) where ``was_created`` is True only when a new
+        report was generated and stored; False when an existing report was
+        returned from the store.
+    """
+    sim_state = await simulation_engine.get_simulation(simulation_id)
+    if not sim_state:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Simulation not found: {simulation_id}",
+        )
+
+    if sim_state.status.value not in ["completed", "failed"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Simulation must be completed before generating report. "
+            f"Current status: {sim_state.status.value}",
+        )
+
+    # 1. Check in-memory cache
+    for report in _report_store.values():
+        if report.simulation_id == simulation_id:
+            return report, False
+
+    # 2. Check persistent DB
+    try:
+        db_data = await _report_repo.get_by_simulation(simulation_id)
+        if db_data:
+            report = SimulationReport.model_validate(db_data)
+            _report_store[report.id] = report  # warm cache
+            return report, False
+    except Exception:
+        logger.debug("DB report lookup failed", exc_info=True)
+
+    if not generate_if_missing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Report not found for simulation: {simulation_id}",
+        )
+
+    # 3. Generate and persist
+    try:
+        llm_provider = get_llm_provider()
+        report_agent = ReportAgent(llm_provider, sim_state)
+        report = await report_agent.generate_full_report()
+        _report_store[report.id] = report
+        # Persist to DB (non-fatal)
+        try:
+            await _report_repo.save(report.id, report)
+        except Exception:
+            logger.warning(
+                "Failed to persist report %s to DB",
+                report.id,
+                exc_info=True,
+            )
+        logger.info(
+            f"Report {report.id} done for sim {simulation_id}"
+        )
+        return report, True
+    except Exception as e:
+        logger.error(f"Error generating report: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate report: {str(e)}",
+        )
 
 
 class CheckpointRequest(BaseModel):
@@ -60,10 +138,12 @@ class CheckpointUpdateRequest(BaseModel):
 @router.post(
     "/simulations/{simulation_id}/report",
     response_model=SimulationReport,
-    status_code=status.HTTP_201_CREATED,
 )
-async def generate_report(simulation_id: str):
-    """Generate a report for a completed simulation.
+async def generate_report(simulation_id: str, response: Response):
+    """Generate (or return existing) report for a completed simulation.
+
+    Idempotent when a report already exists for this simulation
+    (returns the stored report with HTTP 200; new reports use 201).
 
     Args:
         simulation_id: The ID of the simulation to generate report for
@@ -76,51 +156,56 @@ async def generate_report(simulation_id: str):
     """
     logger.info(f"Generating report for simulation {simulation_id}")
 
-    # Get simulation from engine
-    sim_state = await simulation_engine.get_simulation(simulation_id)
-    if not sim_state:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Simulation not found: {simulation_id}",
-        )
+    report, was_created = await _get_or_generate_report(
+        simulation_id,
+        generate_if_missing=True,
+    )
+    response.status_code = (
+        status.HTTP_201_CREATED if was_created else status.HTTP_200_OK
+    )
+    return report
 
-    # Check if simulation is completed
-    if sim_state.status.value not in ["completed", "failed"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Simulation must be completed before generating report. "
-            f"Current status: {sim_state.status.value}",
-        )
 
-    # Check if report already exists
-    existing_report = None
-    for report in _report_store.values():
-        if report.simulation_id == simulation_id:
-            existing_report = report
-            break
+@router.get(
+    "/simulations/{simulation_id}/report",
+    response_model=SimulationReport,
+    summary="Get report for simulation",
+    description=(
+        "Returns an existing report only. Does not generate a new report; "
+        "use POST /api/simulations/{simulation_id}/report to create one."
+    ),
+)
+async def get_report_for_simulation(simulation_id: str):
+    """Return a previously generated report for this simulation.
 
-    if existing_report:
-        logger.info(f"Returning existing report {existing_report.id}")
-        return existing_report
+    Raises 404 if no report exists yet. Generation is explicit via POST on the
+    same path.
+    """
+    report, _ = await _get_or_generate_report(
+        simulation_id,
+        generate_if_missing=False,
+    )
+    return report
 
-    # Generate new report
-    try:
-        llm_provider = get_llm_provider()
-        report_agent = ReportAgent(llm_provider, sim_state)
-        report = await report_agent.generate_full_report()
 
-        # Store report
-        _report_store[report.id] = report
-
-        logger.info(f"Report {report.id} done for sim {simulation_id}")
-        return report
-
-    except Exception as e:
-        logger.error(f"Error generating report: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate report: {str(e)}",
-        )
+@router.get("/stats")
+async def get_dashboard_stats():
+    """Return dashboard summary stats used by the frontend home page."""
+    simulations = await simulation_engine.list_simulations()
+    playbooks = get_all_playbooks()
+    return {
+        "totalSimulations": len(simulations),
+        "activeSimulations": len(
+            [
+                sim
+                for sim in simulations
+                if sim.get("status") in {"running", "paused"}
+            ]
+        ),
+        "reportsGenerated": len(_report_store),
+        "playbooksAvailable": len(playbooks),
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @router.get("/reports/miro/status", response_model=MiroStatusResponse)
@@ -170,28 +255,45 @@ async def get_miro_status():
 
 @router.get("/reports", response_model=list[SimulationReport])
 async def list_reports():
-    """List all generated reports.
+    """List all generated reports (from cache + DB).
 
     Returns:
         List of all simulation reports
     """
-    return list(_report_store.values())
+    # Start with in-memory cache
+    seen_ids = {r.id for r in _report_store.values()}
+    results = list(_report_store.values())
+
+    # Add any DB-only reports not in cache
+    try:
+        db_list = await _report_repo.list_all()
+        for meta in db_list:
+            if meta["id"] not in seen_ids:
+                db_data = await _report_repo.get(meta["id"])
+                if db_data:
+                    report = SimulationReport.model_validate(
+                        db_data
+                    )
+                    _report_store[report.id] = report
+                    results.append(report)
+    except Exception:
+        logger.debug("DB report list failed", exc_info=True)
+
+    return results
 
 
 @router.get("/reports/{report_id}", response_model=SimulationReport)
 async def get_report(report_id: str):
-    """Get a specific report by ID.
-
-    Args:
-        report_id: The ID of the report to retrieve
-
-    Returns:
-        The simulation report
-
-    Raises:
-        HTTPException: If report not found
-    """
+    """Get a specific report by ID (cache + DB fallback)."""
     report = _report_store.get(report_id)
+    if not report:
+        try:
+            db_data = await _report_repo.get(report_id)
+            if db_data:
+                report = SimulationReport.model_validate(db_data)
+                _report_store[report.id] = report
+        except Exception:
+            logger.debug("DB report get failed", exc_info=True)
     if not report:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -374,7 +476,7 @@ async def create_checkpoint(report_id: str, request: CheckpointRequest):
     )
 
     report.checkpoints.append(checkpoint)
-    report.updated_at = datetime.utcnow().isoformat()
+    report.updated_at = datetime.now(timezone.utc).isoformat()
 
     # Update report status based on stage
     if request.stage == "final":
@@ -428,9 +530,9 @@ async def update_checkpoint(
     checkpoint.status = request.status
     if request.reviewer_notes:
         checkpoint.reviewer_notes = request.reviewer_notes
-    checkpoint.timestamp = datetime.utcnow().isoformat()
+    checkpoint.timestamp = datetime.now(timezone.utc).isoformat()
 
-    report.updated_at = datetime.utcnow().isoformat()
+    report.updated_at = datetime.now(timezone.utc).isoformat()
 
     # Update report status if all checkpoints approved
     if request.status == "approved":
@@ -461,7 +563,7 @@ async def create_annotation(request: AnnotationCreate):
     Returns:
         The created annotation
     """
-    annotation = annotation_manager.create_annotation(
+    annotation = await annotation_manager.create_annotation(
         simulation_id=request.simulation_id,
         agent_id=request.agent_id,
         message_id=request.message_id,
@@ -495,7 +597,7 @@ async def get_annotations(
     Returns:
         List of matching annotations
     """
-    annotations = annotation_manager.get_annotations(
+    annotations = await annotation_manager.get_annotations(
         simulation_id=simulation_id,
         tag=tag,
         annotator=annotator,
@@ -517,7 +619,7 @@ async def delete_annotation(annotation_id: str):
     Raises:
         HTTPException: If annotation not found
     """
-    success = annotation_manager.delete_annotation(annotation_id)
+    success = await annotation_manager.delete_annotation(annotation_id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -536,5 +638,5 @@ async def export_annotations(simulation_id: str):
     Returns:
         JSON export of all annotations
     """
-    export_data = annotation_manager.export_annotations(simulation_id)
+    export_data = await annotation_manager.export_annotations(simulation_id)
     return export_data

@@ -123,7 +123,7 @@ class SensitivityAnalyzer:
             1 for r in simulation_state.rounds
             for d in r.decisions
             if d.get("evaluation", {}).get("outcome")
-            in ["approved", "accepted"]
+            in ["approved", "accepted", "proposal_accepted"]
         )
         total_decisions = sum(
             len(r.decisions) for r in simulation_state.rounds

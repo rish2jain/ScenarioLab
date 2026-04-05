@@ -669,6 +669,9 @@ class SimulationEngine:
             await self._repo.save(sim_state)
             logger.info(f"Simulation {simulation_id} completed")
 
+            # Auto-trigger cross-simulation learning (non-blocking)
+            self._maybe_cross_sim_learn(sim_state)
+
             # Audit: simulation completed
             try:
                 await audit_manager.log_event(
@@ -833,6 +836,41 @@ class SimulationEngine:
                 rs["post_run_report"] = {"error": str(e)}
 
         sim_state.results_summary = rs
+
+    def _maybe_cross_sim_learn(
+        self, sim_state: SimulationState,
+    ) -> None:
+        """Fire-and-forget cross-simulation pattern extraction."""
+        try:
+            from app.analytics.cross_simulation import (
+                CrossSimulationLearner,
+            )
+
+            learner = CrossSimulationLearner()
+
+            async def _run():
+                try:
+                    await learner.opt_in(sim_state.config.id)
+                    patterns = learner.extract_patterns(sim_state)
+                    if patterns:
+                        logger.info(
+                            "Cross-sim: extracted %d patterns "
+                            "from %s",
+                            len(patterns),
+                            sim_state.config.id,
+                        )
+                except Exception:
+                    logger.debug(
+                        "Cross-sim learning failed for %s",
+                        sim_state.config.id,
+                        exc_info=True,
+                    )
+
+            asyncio.create_task(_run())
+        except Exception:
+            logger.debug(
+                "Cross-sim import failed", exc_info=True,
+            )
 
     async def _maybe_run_inline_monte_carlo(self, primary: SimulationState) -> None:
         """When wizard enables MC, run statistical batch after the primary sim."""

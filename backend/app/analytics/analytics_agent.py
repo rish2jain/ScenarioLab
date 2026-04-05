@@ -3,9 +3,28 @@
 import logging
 import re
 from collections import Counter
+from typing import Any
 
 from pydantic import BaseModel
 
+from app.analytics.prompts import (
+    ALIGNMENT_KEYWORDS,
+    APPROVAL_PATTERNS,
+    APPROVED_OUTCOMES,
+    COALITION_STOP_WORDS,
+    MIN_COALITION_SIZE,
+    NEGATION_WORDS,
+    NEGATIVE_WORDS,
+    POLICY_EXTRACTION_PATTERNS,
+    POSITIVE_WORDS,
+    PROPOSAL_PATTERNS,
+    REJECTED_OUTCOMES,
+    REJECTION_PATTERNS,
+    STOP_WORDS,
+    TURNING_POINT_HIGH_THRESHOLD,
+    TURNING_POINT_MEDIUM_THRESHOLD,
+    TURNING_POINT_THRESHOLD,
+)
 from app.simulation.models import (
     AgentState,
     RoundState,
@@ -14,6 +33,70 @@ from app.simulation.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _decision_meta_for_score(decision: dict[str, Any]) -> dict[str, Any]:
+    """Merge round ``evaluation`` with top-level decision keys for scoring."""
+    evaluation = decision.get("evaluation")
+    meta: dict[str, Any] = dict(evaluation) if isinstance(evaluation, dict) else {}
+    for k, v in decision.items():
+        if k == "evaluation":
+            continue
+        if k not in meta:
+            meta[k] = v
+    if "vote_result" not in meta:
+        res = decision.get("result")
+        if isinstance(res, dict) and any(
+            x in res for x in ("for", "against", "abstain", "total", "result")
+        ):
+            meta["vote_result"] = res
+    return meta
+
+
+def _derive_decision_turning_point_score(decision: dict[str, Any]) -> float:
+    """Score in ``[0, 1]`` from decision / evaluation metadata.
+
+    Uses explicit ``importance``, vote margins / unanimity, consensus ratios,
+    and boolean flags when present. Returns ``1.0`` when no usable signals exist
+    (same as the previous fixed default).
+    """
+    meta = _decision_meta_for_score(decision)
+
+    imp = meta.get("importance")
+    if isinstance(imp, (int, float)):
+        s = float(imp)
+        if s <= 1.0:
+            return round(max(0.0, min(1.0, s)), 2)
+        if s <= 10.0:
+            return round(min(1.0, s / 10.0), 2)
+        return 1.0
+
+    cc = meta.get("consensus_count")
+    tot = meta.get("total_votes", meta.get("total_count", meta.get("total")))
+    if isinstance(cc, (int, float)) and isinstance(tot, (int, float)) and tot > 0:
+        return round(min(1.0, float(cc) / float(tot)), 2)
+
+    # Prefer vote breakdown over coarse consensus flags when both exist.
+    vr = meta.get("vote_result")
+    if isinstance(vr, dict):
+        total = vr.get("total")
+        if isinstance(total, (int, float)) and total > 0:
+            for_v = int(vr.get("for", 0) or 0)
+            against_v = int(vr.get("against", 0) or 0)
+            bloc = max(for_v, against_v)
+            return round(min(1.0, float(bloc) / float(total)), 2)
+
+    if meta.get("unanimity") is True or meta.get("unanimous") is True:
+        return 1.0
+
+    if meta.get("consensus_reached") is True:
+        return 0.85
+    if meta.get("agreement_reached") is True:
+        return 0.9
+    if meta.get("decision_made") is True:
+        return 0.75
+
+    return 1.0
 
 
 class SimulationMetrics(BaseModel):
@@ -31,7 +114,7 @@ class SimulationMetrics(BaseModel):
     policy_adoption_rate: float
     # [{round: N, members: [...], topic: "..."}]
     coalition_formation_events: list[dict]
-    # [{round: N, description: "...", impact: "high/medium/low"}]
+    # [{round: N, description: "...", impact: "high/medium/low", score: float}]
     key_turning_points: list[dict]
     # {agent_id: activity_level}
     agent_activity_scores: dict[str, float]
@@ -42,47 +125,13 @@ class SimulationMetrics(BaseModel):
 class AnalyticsAgent:
     """Silent monitoring agent that extracts metrics."""
 
-    # Sentiment keyword lists for simple analysis
-    POSITIVE_WORDS = {
-        "agree", "support", "approve", "accept", "favor", "positive", "benefit",
-        "advantage", "improve", "success", "effective", "efficient", "optimal",
-        "excellent", "good", "great", "best", "ideal", "recommend", "endorse",
-        "confident", "optimistic", "progress", "gain", "win", "solution",
-        "opportunity", "growth", "innovation", "strength", "asset", "value"
-    }
-
-    NEGATIVE_WORDS = {
-        "disagree", "oppose", "reject", "deny", "refuse", "negative", "risk",
-        "disadvantage", "worsen", "failure", "ineffective", "inefficient",
-        "poor", "bad", "worst", "problem", "issue", "concern", "worry",
-        "doubt", "skeptical", "pessimistic", "loss", "lose", "threat",
-        "weakness", "liability", "cost", "burden", "challenge", "obstacle",
-        "barrier", "resistance", "objection", "criticism", "flaw", "defect"
-    }
-
-    # Proposal-related patterns
-    PROPOSAL_PATTERNS = [
-        r"propose\w*\s+(?:that\s+)?(?:we\s+)?(.{10,100}?)(?:\.|$|\n)",
-        r"suggest\w*\s+(?:that\s+)?(?:we\s+)?(.{10,100}?)(?:\.|$|\n)",
-        r"recommend\w*\s+(?:that\s+)?(?:we\s+)?(.{10,100}?)(?:\.|$|\n)",
-        r"move\s+(?:that\s+)?(?:we\s+)?(.{10,100}?)(?:\.|$|\n)",
-    ]
-
-    # Decision patterns
-    APPROVAL_PATTERNS = [
-        r"(?:approved?|accepted?|adopted?|agreed?|passed)",
-        r"(?:we\s+(?:will|shall)\s+(?:proceed|move\s+forward|implement))",
-        r"(?:consensus\s+(?:reached|achieved))",
-        r"(?:unanimous\s+(?:support|approval))",
-    ]
-
-    REJECTION_PATTERNS = [
-        r"(?:rejected?|denied?|declined?|opposed?|vetoed)",
-        r"(?:we\s+(?:will\s+not|cannot)\s+(?:proceed|"
-        r"move\s+forward|implement))",
-        r"(?:no\s+(?:consensus|agreement))",
-        r"(?:tabled?|postponed?|deferred)",
-    ]
+    # Keep references as class attributes so existing callers that read
+    # AnalyticsAgent.POSITIVE_WORDS etc. continue to work.
+    POSITIVE_WORDS = POSITIVE_WORDS
+    NEGATIVE_WORDS = NEGATIVE_WORDS
+    PROPOSAL_PATTERNS = PROPOSAL_PATTERNS
+    APPROVAL_PATTERNS = APPROVAL_PATTERNS
+    REJECTION_PATTERNS = REJECTION_PATTERNS
 
     def __init__(self, llm_provider=None):
         self.llm = llm_provider
@@ -176,16 +225,8 @@ class AnalyticsAgent:
         """Extract stated policies/constraints from agent persona prompt."""
         policies = []
 
-        # Look for common policy indicators
-        policy_patterns = [
-            r"(?:you must|you should|always|never|priority|ensure|maintain)"
-            r"\s+(.{10,150}?)(?:\.|$|\n)",
-            r"(?:objective|goal|mandate|responsibility):?"
-            r"\s*(.{10,150}?)(?:\.|$|\n)",
-        ]
-
         prompt_lower = prompt.lower()
-        for pattern in policy_patterns:
+        for pattern in POLICY_EXTRACTION_PATTERNS:
             matches = re.finditer(pattern, prompt_lower, re.IGNORECASE)
             for match in matches:
                 policies.append(match.group(1).strip())
@@ -194,23 +235,13 @@ class AnalyticsAgent:
 
     def _is_contradictory(self, content: str, policy: str) -> bool:
         """Simple heuristic to detect if content contradicts a policy."""
-        # Very basic check: if policy says "never X" and content says "X"
         policy_words = set(policy.lower().split())
         content_words = set(content.lower().split())
 
-        # Check for negation flips
-        negation_words = {
-            "never", "no", "not", "don't", "won't", "shouldn't", "mustn't"
-        }
-        has_policy_negation = bool(policy_words & negation_words)
+        has_policy_negation = bool(policy_words & NEGATION_WORDS)
 
         # Extract key policy terms (excluding common words)
-        common_words = {
-            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to",
-            "for", "of", "with", "by", "you", "must", "should", "always",
-            "never",
-        }
-        key_terms = policy_words - common_words - negation_words
+        key_terms = policy_words - STOP_WORDS - NEGATION_WORDS
 
         if not key_terms:
             return False
@@ -218,11 +249,9 @@ class AnalyticsAgent:
         # Check if key terms appear in content
         content_has_terms = bool(key_terms & content_words)
 
-        # Simple contradiction: policy says "never X" but content
-        # mentions X positively
+        # Simple contradiction: policy says "never X" but content mentions X
         if has_policy_negation and content_has_terms:
-            # Check if content also has negation (aligns with policy)
-            content_has_negation = bool(content_words & negation_words)
+            content_has_negation = bool(content_words & NEGATION_WORDS)
             if not content_has_negation:
                 return True
 
@@ -247,7 +276,7 @@ class AnalyticsAgent:
             # Check messages for consensus indicators
             for msg in round_state.messages:
                 content = msg.content.lower()
-                if any(re.search(p, content) for p in self.APPROVAL_PATTERNS):
+                if any(re.search(p, content) for p in APPROVAL_PATTERNS):
                     return i + 1
 
         return None  # No consensus reached
@@ -255,9 +284,22 @@ class AnalyticsAgent:
     async def compute_sentiment_trajectory(
         self, rounds: list[RoundState]
     ) -> list[dict]:
-        """Track sentiment over time using keyword-based analysis."""
-        trajectory = []
+        """Track sentiment over time.
 
+        Uses LLM-based semantic analysis when a provider is available;
+        falls back to keyword matching otherwise.
+        """
+        if self.llm:
+            return await self._llm_sentiment_trajectory(rounds)
+        return self._keyword_sentiment_trajectory(rounds)
+
+    async def _llm_sentiment_trajectory(
+        self, rounds: list[RoundState]
+    ) -> list[dict]:
+        """LLM-based sentiment: asks the model to rate each round."""
+        from app.llm.provider import LLMMessage
+
+        trajectory: list[dict] = []
         for round_state in rounds:
             if not round_state.messages:
                 trajectory.append({
@@ -268,33 +310,102 @@ class AnalyticsAgent:
                 })
                 continue
 
-            positive_count = 0
-            negative_count = 0
-
-            for msg in round_state.messages:
-                content = msg.content.lower()
-                words = set(re.findall(r'\b\w+\b', content))
-
-                pos_matches = len(words & self.POSITIVE_WORDS)
-                neg_matches = len(words & self.NEGATIVE_WORDS)
-
-                # Simple scoring: net sentiment per message
-                if pos_matches > neg_matches:
-                    positive_count += 1
-                elif neg_matches > pos_matches:
-                    negative_count += 1
-
-            total = len(round_state.messages)
-            trajectory.append({
-                "round": round_state.round_number,
-                "positive": round(positive_count / total, 2),
-                "negative": round(negative_count / total, 2),
-                "neutral": round(
-                    (total - positive_count - negative_count) / total, 2
-                ),
-            })
+            excerpt = "\n".join(
+                f"{m.agent_name}: {m.content[:200]}"
+                for m in round_state.messages
+            )
+            try:
+                resp = await self.llm.generate(
+                    messages=[
+                        LLMMessage(
+                            role="system",
+                            content=(
+                                "Rate the overall sentiment of this "
+                                "boardroom discussion round. Respond "
+                                "with ONLY valid JSON: "
+                                '{"positive": 0.0-1.0, '
+                                '"negative": 0.0-1.0, '
+                                '"neutral": 0.0-1.0} '
+                                "Values must sum to 1.0."
+                            ),
+                        ),
+                        LLMMessage(
+                            role="user", content=excerpt[:4000]
+                        ),
+                    ],
+                    temperature=0.1,
+                    max_tokens=100,
+                )
+                import json
+                data = json.loads(
+                    resp.content.strip()
+                    .removeprefix("```json")
+                    .removesuffix("```")
+                    .strip()
+                )
+                trajectory.append({
+                    "round": round_state.round_number,
+                    "positive": float(data.get("positive", 0)),
+                    "negative": float(data.get("negative", 0)),
+                    "neutral": float(data.get("neutral", 0)),
+                })
+            except Exception:
+                logger.debug(
+                    "LLM sentiment failed for round %d, "
+                    "falling back to keywords",
+                    round_state.round_number,
+                )
+                kw = self._keyword_sentiment_for_round(
+                    round_state
+                )
+                trajectory.append(kw)
 
         return trajectory
+
+    def _keyword_sentiment_trajectory(
+        self, rounds: list[RoundState]
+    ) -> list[dict]:
+        """Fallback keyword-based sentiment analysis."""
+        return [
+            self._keyword_sentiment_for_round(r) for r in rounds
+        ]
+
+    def _keyword_sentiment_for_round(
+        self, round_state: RoundState
+    ) -> dict:
+        """Keyword sentiment for a single round."""
+        if not round_state.messages:
+            return {
+                "round": round_state.round_number,
+                "positive": 0.0,
+                "negative": 0.0,
+                "neutral": 1.0,
+            }
+
+        positive_count = 0
+        negative_count = 0
+
+        for msg in round_state.messages:
+            content = msg.content.lower()
+            words = set(re.findall(r'\b\w+\b', content))
+            pos_matches = len(words & POSITIVE_WORDS)
+            neg_matches = len(words & NEGATIVE_WORDS)
+            if pos_matches > neg_matches:
+                positive_count += 1
+            elif neg_matches > pos_matches:
+                negative_count += 1
+
+        total = len(round_state.messages)
+        return {
+            "round": round_state.round_number,
+            "positive": round(positive_count / total, 2),
+            "negative": round(negative_count / total, 2),
+            "neutral": round(
+                (total - positive_count - negative_count)
+                / total,
+                2,
+            ),
+        }
 
     async def compute_polarization_index(
         self, agents: list[AgentState], messages: list[SimulationMessage]
@@ -318,8 +429,8 @@ class AnalyticsAgent:
             for msg in msgs:
                 content = msg.content.lower()
                 words = set(re.findall(r'\b\w+\b', content))
-                pos_matches = len(words & self.POSITIVE_WORDS)
-                neg_matches = len(words & self.NEGATIVE_WORDS)
+                pos_matches = len(words & POSITIVE_WORDS)
+                neg_matches = len(words & NEGATIVE_WORDS)
                 sentiment = (pos_matches - neg_matches) / max(len(words), 1)
                 total_sentiment += sentiment
 
@@ -360,7 +471,7 @@ class AnalyticsAgent:
                 content = msg.content
 
                 # Detect proposals
-                for pattern in self.PROPOSAL_PATTERNS:
+                for pattern in PROPOSAL_PATTERNS:
                     matches = re.finditer(pattern, content, re.IGNORECASE)
                     for match in matches:
                         proposals.append({
@@ -372,7 +483,8 @@ class AnalyticsAgent:
             for decision in round_state.decisions:
                 evaluation = decision.get("evaluation", {})
                 if evaluation.get("outcome") in [
-                    "approved", "accepted", "adopted"
+                    "approved", "accepted", "adopted",
+                    "proposal_accepted",  # legacy boardroom
                 ]:
                     adoptions.append(round_state.round_number)
 
@@ -380,7 +492,6 @@ class AnalyticsAgent:
             return 0.0
 
         # Count proposals that appear to have been adopted
-        # (simplified: if any approval happened after proposal)
         adopted_count = 0
         for proposal in proposals:
             for adoption_round in adoptions:
@@ -406,12 +517,6 @@ class AnalyticsAgent:
 
         # Detect coalition patterns per round
         for round_num, msgs in sorted(round_messages.items()):
-            # Look for alignment patterns
-            alignment_keywords = [
-                "agree with", "support", "join", "together",
-                "aligned", "same page", "united",
-            ]
-
             # Track who aligns with whom
             alignments: dict[str, set[str]] = {}
 
@@ -419,7 +524,7 @@ class AnalyticsAgent:
                 content_lower = msg.content.lower()
                 agent_id = msg.agent_id
 
-                for keyword in alignment_keywords:
+                for keyword in ALIGNMENT_KEYWORDS:
                     if keyword in content_lower:
                         # Find who they're aligning with
                         for other_agent in agents:
@@ -430,7 +535,7 @@ class AnalyticsAgent:
                                         alignments[agent_id] = set()
                                     alignments[agent_id].add(other_agent.id)
 
-            # Identify coalition groups (3+ agents with mutual alignment)
+            # Identify coalition groups (MIN_COALITION_SIZE+ agents)
             coalition_groups = self._find_coalition_groups(alignments)
 
             for group in coalition_groups:
@@ -448,7 +553,7 @@ class AnalyticsAgent:
     def _find_coalition_groups(
         self, alignments: dict[str, set[str]]
     ) -> list[set[str]]:
-        """Find groups of 3+ mutually aligned agents."""
+        """Find groups of MIN_COALITION_SIZE+ mutually aligned agents."""
         groups = []
         processed = set()
 
@@ -466,7 +571,7 @@ class AnalyticsAgent:
                     if agent_id in alignments[other_id]:
                         group.update(alignments[other_id])
 
-            if len(group) >= 3:
+            if len(group) >= MIN_COALITION_SIZE:
                 groups.append(group)
                 processed.update(group)
 
@@ -480,21 +585,11 @@ class AnalyticsAgent:
         member_msgs = [m for m in messages if m.agent_id in coalition_members]
 
         # Extract common keywords (excluding stop words)
-        stop_words = {
-            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to",
-            "for", "of", "with", "by", "is", "are", "was", "were", "be",
-            "been", "have", "has", "had", "do", "does", "did", "will",
-            "would", "could", "should", "may", "might", "must", "can",
-            "this", "that", "these", "those", "i", "you", "he", "she",
-            "it", "we", "they", "me", "him", "her", "us", "them", "my",
-            "your", "his", "her", "its", "our", "their",
-        }
-
         word_counts = Counter()
         for msg in member_msgs:
             words = re.findall(r'\b\w+\b', msg.content.lower())
             for word in words:
-                if word not in stop_words and len(word) > 3:
+                if word not in COALITION_STOP_WORDS and len(word) > 3:
                     word_counts[word] += 1
 
         # Return most common topic words
@@ -521,11 +616,20 @@ class AnalyticsAgent:
             pos_shift = curr["positive"] - prev["positive"]
             neg_shift = curr["negative"] - prev["negative"]
 
-            if abs(pos_shift) > 0.3 or abs(neg_shift) > 0.3:
+            abs_pos = abs(pos_shift)
+            abs_neg = abs(neg_shift)
+            pos_over_base = abs_pos > TURNING_POINT_THRESHOLD
+            neg_over_base = abs_neg > TURNING_POINT_THRESHOLD
+            pos_over_high = abs_pos > TURNING_POINT_HIGH_THRESHOLD
+            neg_over_high = abs_neg > TURNING_POINT_HIGH_THRESHOLD
+            pos_over_med = abs_pos > TURNING_POINT_MEDIUM_THRESHOLD
+            neg_over_med = abs_neg > TURNING_POINT_MEDIUM_THRESHOLD
+
+            if pos_over_base or neg_over_base:
                 # Determine impact level
-                if abs(pos_shift) > 0.5 or abs(neg_shift) > 0.5:
+                if pos_over_high or neg_over_high:
                     impact = "high"
-                elif abs(pos_shift) > 0.4 or abs(neg_shift) > 0.4:
+                elif pos_over_med or neg_over_med:
                     impact = "medium"
                 else:
                     impact = "low"
@@ -552,6 +656,7 @@ class AnalyticsAgent:
                     "round": curr["round"],
                     "description": description,
                     "impact": impact,
+                    "score": round(max(abs_pos, abs_neg), 2),
                 })
 
         # Check for decision points
@@ -567,10 +672,12 @@ class AnalyticsAgent:
                         for tp in turning_points
                     )
                     if not already_recorded:
+                        score = _derive_decision_turning_point_score(decision)
                         turning_points.append({
                             "round": round_state.round_number,
                             "description": "Key decision point reached",
                             "impact": "high",
+                            "score": score,
                         })
 
         # Sort by round number
@@ -630,15 +737,9 @@ class AnalyticsAgent:
                 outcome = evaluation.get("outcome", "unknown")
 
                 # Normalize outcome
-                approved = [
-                    "approved", "accepted", "adopted", "passed", "for"
-                ]
-                rejected = [
-                    "rejected", "denied", "declined", "opposed", "against"
-                ]
-                if outcome in approved:
+                if outcome in APPROVED_OUTCOMES:
                     result = "approved"
-                elif outcome in rejected:
+                elif outcome in REJECTED_OUTCOMES:
                     result = "rejected"
                 else:
                     result = "pending"
