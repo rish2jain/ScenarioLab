@@ -660,8 +660,9 @@ class SimulationEngine:
             sim_state.updated_at = datetime.now(timezone.utc).isoformat()
             await self._repo.save(sim_state)
 
-            await self._maybe_post_run_artifacts(sim_state)
+            # Run MC first so report can reference variance data
             await self._maybe_run_inline_monte_carlo(sim_state)
+            await self._maybe_post_run_artifacts(sim_state)
 
             # Now truly complete
             sim_state.status = SimulationStatus.COMPLETED
