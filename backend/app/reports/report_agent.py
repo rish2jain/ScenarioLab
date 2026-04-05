@@ -88,6 +88,26 @@ def _normalize_impact_label(
     return "medium"
 
 
+def _risk_impact_level_from_dimension_scores(
+    impact_score: int,
+    likelihood_score: int,
+) -> Literal["low", "medium", "high", "critical"]:
+    """Map 1–5 × 1–5 to categorical severity (same rule as risk-register LLM prompt).
+
+    critical >= 20, high 12–19, medium 6–11, low <= 5.
+    """
+    is_ = max(1, min(5, int(impact_score)))
+    ls = max(1, min(5, int(likelihood_score)))
+    combined = is_ * ls
+    if combined >= 20:
+        return "critical"
+    if combined >= 12:
+        return "high"
+    if combined >= 6:
+        return "medium"
+    return "low"
+
+
 class ReportAgent:
     """Generates consulting-grade reports from simulation results."""
 
@@ -490,11 +510,14 @@ Include 3-7 significant risks. Be specific and actionable."""
                     parsed_like_s if parsed_like_s is not None else _probability_to_likelihood_score(prob)
                 )
 
+                # Single source of truth for severity band: derived from scores (not raw LLM "impact").
+                impact_level = _risk_impact_level_from_dimension_scores(impact_score, likelihood_score)
+
                 items.append(
                     RiskItem(
                         description=risk_data.get("description", "Unknown risk"),
                         probability=prob,
-                        impact=impact,
+                        impact=impact_level,
                         impact_score=impact_score,
                         likelihood_score=likelihood_score,
                         owner=risk_data.get("owner", "Unassigned"),
@@ -906,14 +929,17 @@ Ensure the analysis reflects the actual dynamics observed in the simulation."""
             impact = score_risk_impact(signal.get("content", ""))
             owner = identify_risk_owner(signal, self.simulation.agents)
 
-            impact_label = _normalize_impact_label(impact)
+            impact_hint = _normalize_impact_label(impact)
+            impact_score = _impact_label_to_default_score(impact_hint)
+            likelihood_score = _probability_to_likelihood_score(prob)
+            impact_level = _risk_impact_level_from_dimension_scores(impact_score, likelihood_score)
             items.append(
                 RiskItem(
                     description=signal.get("content", "Unknown risk")[:100],
                     probability=prob,
-                    impact=impact_label,
-                    impact_score=_impact_label_to_default_score(impact_label),
-                    likelihood_score=_probability_to_likelihood_score(prob),
+                    impact=impact_level,
+                    impact_score=impact_score,
+                    likelihood_score=likelihood_score,
                     owner=owner,
                     mitigation="Further analysis required",
                     trigger="TBD",
