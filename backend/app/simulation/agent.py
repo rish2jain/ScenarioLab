@@ -4,7 +4,9 @@ import asyncio
 import logging
 import re
 import uuid
+import weakref
 from datetime import datetime, timezone
+from typing import Optional
 
 from app.config import settings
 from app.llm.inference_router import InferenceRouter
@@ -19,14 +21,16 @@ from app.simulation.models import (
 logger = logging.getLogger(__name__)
 
 # Per running event loop — a single global Semaphore binds to
-# one loop at creation time.
-_llm_semaphores: dict[int, asyncio.Semaphore] = {}
+# one loop at creation time. Weak keys drop entries when the loop is GC'd.
+_llm_semaphores: weakref.WeakKeyDictionary[
+    asyncio.AbstractEventLoop, asyncio.Semaphore
+] = weakref.WeakKeyDictionary()
 
 
 # Remove entire reasoning blocks (multi-line), not only the boundary tags.
 _THINK_BLOCK_RE = re.compile(
     r"(?:"
-    r"<think\b[^>]*>.*?(?:`</redacted_thinking>`|</redacted_thinking>)"
+    r"<think\b[^>]*>.*?(?:`</redacted_thinking>`|</redacted_thinking>|</think>)"
     r"|<redacted_thinking\b[^>]*>.*?</redacted_thinking>"
     r")",
     re.DOTALL | re.IGNORECASE,
@@ -55,7 +59,7 @@ def _strip_reasoning_markup(content: str) -> str:
     return cleaned.strip()
 
 
-def sanitize_llm_response(content: str) -> str:
+def sanitize_llm_response(content: Optional[str]) -> str:
     """Strip think-tags and detect likely non-English hallucinations.
 
     Returns cleaned content.  If the response is overwhelmingly non-Latin
@@ -110,9 +114,7 @@ def parse_vote_from_response(content: str) -> str:
         return "abstain"
     if re.search(r"\bagainst\b", low) or re.search(r"\boppose\b", low):
         return "against"
-    if re.search(r"\b(?:vote|am|voting)\s+for\b", low) or re.search(
-        r"\byes\b", low
-    ):
+    if re.search(r"\b(?:vote|am|voting)\s+for\b", low) or re.search(r"\byes\b", low):
         return "for"
     if re.search(r"\bsupport\b", low) or re.search(r"\bapprove\b", low):
         return "for"
@@ -121,11 +123,10 @@ def parse_vote_from_response(content: str) -> str:
 
 def _llm_limit_semaphore() -> asyncio.Semaphore:
     loop = asyncio.get_running_loop()
-    key = id(loop)
-    if key not in _llm_semaphores:
+    if loop not in _llm_semaphores:
         n = max(1, int(settings.simulation_llm_parallelism))
-        _llm_semaphores[key] = asyncio.Semaphore(n)
-    return _llm_semaphores[key]
+        _llm_semaphores[loop] = asyncio.Semaphore(n)
+    return _llm_semaphores[loop]
 
 
 class SimulationAgent:
@@ -171,9 +172,7 @@ class SimulationAgent:
         **kwargs,
     ) -> LLMResponse:
         provider = self.router.get_provider(round_number, task_type)
-        if self.router.should_inject_exemplars(
-            self.id, round_number, task_type
-        ):
+        if self.router.should_inject_exemplars(self.id, round_number, task_type):
             exemplar_msgs = self.router.build_exemplar_messages(self.id)
             if exemplar_msgs:
                 if not isinstance(messages, list):
@@ -207,9 +206,7 @@ class SimulationAgent:
         # Prepare context string
         context = customization.get("context", "")
         if not context:
-            context = (
-                "You are participating in a strategic war-game simulation."
-            )
+            context = "You are participating in a strategic war-game simulation."
 
         # Use safe substitution to avoid KeyError/ValueError on user content
         # containing braces like {json} or {data}
@@ -296,15 +293,11 @@ class SimulationAgent:
                 visibility="public",
             )
 
-            logger.debug(
-                f"Agent {self.name} generated response in phase {phase}"
-            )
+            logger.debug(f"Agent {self.name} generated response in phase {phase}")
             return message
 
         except Exception as e:
-            logger.error(
-                f"Failed to generate response for agent {self.name}: {e}"
-            )
+            logger.error(f"Failed to generate response for agent {self.name}: {e}")
             # Return a fallback message
             return SimulationMessage(
                 round_number=round_number,
@@ -329,9 +322,7 @@ class SimulationAgent:
         messages = []
 
         # 1. System prompt (persona)
-        messages.append(
-            LLMMessage(role="system", content=self.state.persona_prompt)
-        )
+        messages.append(LLMMessage(role="system", content=self.state.persona_prompt))
 
         # 2. Simulation context
         context_parts = []
@@ -342,29 +333,53 @@ class SimulationAgent:
         context_parts.append(f"CURRENT PHASE: {phase}")
 
         if self.state.current_stance:
-            context_parts.append(
-                f"YOUR CURRENT STANCE: {self.state.current_stance}"
-            )
+            context_parts.append(f"YOUR CURRENT STANCE: {self.state.current_stance}")
 
         if self.state.coalition_members:
             allies = ", ".join(self.state.coalition_members)
             context_parts.append(f"YOUR COALITION ALLIES: {allies}")
 
-        messages.append(
-            LLMMessage(role="user", content="\n\n".join(context_parts))
-        )
+        messages.append(LLMMessage(role="user", content="\n\n".join(context_parts)))
 
-        # 3. Recent conversation history
+        # 3. Recent conversation history — show all current-round
+        #    messages plus tail of prior round for continuity.
         if visible_messages:
-            history = "\n\n".join([
-                f"{msg.agent_name} ({msg.agent_role}): {msg.content}"
-                for msg in visible_messages[-10:]  # Last 10 messages
-            ])
-            messages.append(
-                LLMMessage(
-                    role="user", content=f"RECENT CONVERSATION:\n{history}"
+            current_round_msgs = [
+                m for m in visible_messages
+                if m.round_number == round_number
+            ]
+            prior_msgs = [
+                m for m in visible_messages
+                if m.round_number == round_number - 1
+            ][-5:]  # Last 5 from prior round
+
+            history_parts: list[str] = []
+            if prior_msgs:
+                history_parts.append(
+                    f"--- Prior round ({round_number - 1}) ---"
                 )
-            )
+                for m in prior_msgs:
+                    history_parts.append(
+                        f"{m.agent_name} ({m.agent_role}): "
+                        f"{m.content[:300]}"
+                    )
+                history_parts.append(
+                    f"\n--- Current round ({round_number}) ---"
+                )
+            for m in current_round_msgs:
+                history_parts.append(
+                    f"{m.agent_name} ({m.agent_role}): "
+                    f"{m.content}"
+                )
+
+            if history_parts:
+                history = "\n\n".join(history_parts)
+                messages.append(
+                    LLMMessage(
+                        role="user",
+                        content=f"RECENT CONVERSATION:\n{history}",
+                    )
+                )
 
         # 4. Phase-specific instruction
         if instruction:
@@ -392,11 +407,9 @@ class SimulationAgent:
             return "decision"
         elif "?" in content:
             return "question"
-        elif any(word in content_lower
-                 for word in ["object", "oppose", "disagree"]):
+        elif any(word in content_lower for word in ["object", "oppose", "disagree"]):
             return "objection"
-        elif any(word in content_lower
-                 for word in ["support", "agree", "endorse"]):
+        elif any(word in content_lower for word in ["support", "agree", "endorse"]):
             return "support"
         else:
             return "statement"
@@ -420,9 +433,9 @@ class SimulationAgent:
             ]
 
             if arguments:
-                args_text = "\n\n".join([
-                    f"{msg.agent_name}: {msg.content}" for msg in arguments
-                ])
+                args_text = "\n\n".join(
+                    [f"{msg.agent_name}: {msg.content}" for msg in arguments]
+                )
                 messages.append(
                     LLMMessage(role="user", content=f"ARGUMENTS:\n{args_text}")
                 )
@@ -454,7 +467,7 @@ class SimulationAgent:
             reasoning = response.content
             idx = response.content.lower().find("reasoning:")
             if idx != -1:
-                reasoning = response.content[idx + 10:].strip()
+                reasoning = response.content[idx + 10 :].strip()
 
             result = {
                 "agent_id": self.id,
@@ -495,10 +508,9 @@ class SimulationAgent:
         prior_stance = self.state.current_stance
 
         # Use more messages for richer context (up to 10, not just 5)
-        conversation = "\n\n".join([
-            f"{msg.agent_name}: {msg.content}"
-            for msg in round_messages[-10:]
-        ])
+        conversation = "\n\n".join(
+            [f"{msg.agent_name}: {msg.content}" for msg in round_messages[-10:]]
+        )
 
         # Include prior stance for cumulative awareness
         stance_ctx = ""
@@ -581,8 +593,7 @@ class SimulationAgent:
         """Store a memory from the current round."""
         if not self.memory:
             logger.debug(
-                f"No memory manager for agent {self.name}, "
-                "skipping memory storage"
+                f"No memory manager for agent {self.name}, " "skipping memory storage"
             )
             return
 
