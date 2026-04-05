@@ -1,8 +1,9 @@
 """ReportAgent for generating consulting-grade reports from simulations."""
 
+import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.llm.provider import LLMMessage, LLMProvider
 from app.reports.deliverables import (
@@ -70,17 +71,22 @@ class ReportAgent:
         )
 
         try:
-            # Generate each section
-            report.objective_assessment = (
-                await self.generate_objective_assessment()
+            # Generate all sections in parallel for speed
+            (
+                report.objective_assessment,
+                report.executive_summary,
+                report.risk_register,
+                report.scenario_matrix,
+                report.stakeholder_heatmap,
+                mem_ctx,
+            ) = await asyncio.gather(
+                self.generate_objective_assessment(),
+                self.generate_executive_summary(),
+                self.generate_risk_register(),
+                self.generate_scenario_matrix(),
+                self.generate_stakeholder_heatmap(),
+                self._memory_tool_context(),
             )
-            report.executive_summary = await self.generate_executive_summary()
-            report.risk_register = await self.generate_risk_register()
-            report.scenario_matrix = await self.generate_scenario_matrix()
-            report.stakeholder_heatmap = (
-                await self.generate_stakeholder_heatmap()
-            )
-            mem_ctx = await self._memory_tool_context()
             report.tool_context = ReportToolContext(
                 summary=self.collect_tool_context(),
                 round_audit=self.tool_audit_round_summary(),
@@ -88,7 +94,9 @@ class ReportAgent:
             )
             report.status = "draft"
 
-            report.updated_at = datetime.utcnow().isoformat()
+            report.updated_at = (
+                datetime.now(timezone.utc).isoformat()
+            )
 
             logger.info(f"Report done for {report.simulation_id}")
 

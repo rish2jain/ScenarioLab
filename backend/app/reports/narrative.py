@@ -5,6 +5,7 @@ import logging
 from pydantic import BaseModel
 
 from app.llm.provider import LLMMessage, LLMProvider
+from app.simulation.objectives import format_simulation_objective_for_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +137,16 @@ Write 1-2 paragraphs maximum."""
         lines = []
 
         lines.append(f"Simulation: {simulation_state.config.name}")
+        desc = (simulation_state.config.description or "").strip()
+        if desc:
+            lines.append(f"User objective / description: {desc}")
+        obj_block = format_simulation_objective_for_prompt(
+            simulation_state.config.description,
+            simulation_state.config.parameters,
+        )
+        if obj_block.strip():
+            lines.append("")
+            lines.append(obj_block)
         lines.append(f"Environment: {simulation_state.config.environment_type.value}")
         lines.append(f"Status: {simulation_state.status.value}")
 
@@ -146,16 +157,22 @@ Write 1-2 paragraphs maximum."""
             if agent.current_stance:
                 lines.append(f"  Final stance: {agent.current_stance}")
 
-        # Round summaries
+        # Round summaries — include all messages with enough
+        # content to preserve argument substance
         lines.append("\nRound Summaries:")
         for round_state in simulation_state.rounds:
             lines.append(f"\nRound {round_state.round_number}:")
             lines.append(f"  Phase: {round_state.phase}")
             lines.append(f"  Messages: {len(round_state.messages)}")
 
-            # Key messages
-            for msg in round_state.messages[:3]:
-                lines.append(f"  - {msg.agent_name}: {msg.content[:100]}...")
+            for msg in round_state.messages:
+                excerpt = msg.content[:300]
+                if len(msg.content) > 300:
+                    excerpt += "..."
+                lines.append(
+                    f"  - {msg.agent_name} ({msg.agent_role}): "
+                    f"{excerpt}"
+                )
 
         return "\n".join(lines)
 
@@ -277,7 +294,6 @@ Summarize the key developments and dynamics in 2-3 sentences."""
             for msg in round_state.messages:
                 # Check for significant stance changes
                 if msg.agent_id in prev_stances:
-                    prev_stance = prev_stances[msg.agent_id]
                     # Simple heuristic: significant content change
                     if len(msg.content) > 50:
                         # Check for contradiction keywords
