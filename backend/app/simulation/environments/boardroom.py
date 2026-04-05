@@ -228,11 +228,11 @@ class BoardroomEnvironment(BaseEnvironment):
         if "vote_result" in evaluation:
             result = evaluation["vote_result"]
             if result.get("result") == "passed":
-                evaluation["outcome"] = "proposal_accepted"
+                evaluation["outcome"] = "accepted"
             elif result.get("result") == "rejected":
-                evaluation["outcome"] = "proposal_rejected"
+                evaluation["outcome"] = "rejected"
             else:
-                evaluation["outcome"] = "tie_or_inconclusive"
+                evaluation["outcome"] = "inconclusive"
 
         return evaluation
 
