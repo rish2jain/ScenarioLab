@@ -236,25 +236,85 @@ class BoardroomEnvironment(BaseEnvironment):
 
         return evaluation
 
-    def get_phase_instruction(self, phase: str, agent_role: str) -> str:
-        """Get phase-specific instruction for an agent."""
-        instructions = {
+    # Role-specific instruction overlays keyed by (phase, role_keyword).
+    # Matched via substring so "CFO" matches "Chief Financial Officer".
+    _ROLE_OVERLAYS: dict[tuple[str, str], str] = {
+        ("qa", "cfo"): (
+            "Probe the financial assumptions: margins, payback "
+            "period, capital requirements, and downside scenarios."
+        ),
+        ("qa", "cro"): (
+            "Assess risk exposure: regulatory, operational, and "
+            "reputational. Quantify where possible."
+        ),
+        ("qa", "analyst"): (
+            "Challenge with data: market sizing, competitive "
+            "benchmarks, and customer evidence."
+        ),
+        ("qa", "competitor"): (
+            "Identify how competitors would respond and what "
+            "defensive gaps the proposal creates."
+        ),
+        ("objection", "cfo"): (
+            "Object on financial grounds: insufficient ROI, "
+            "unquantified risk, or missing budget detail."
+        ),
+        ("objection", "cro"): (
+            "Object on risk grounds: compliance gaps, "
+            "unmitigated exposure, or missing controls."
+        ),
+        ("objection", "operations"): (
+            "Object on execution grounds: capacity "
+            "constraints, timeline risks, or dependencies."
+        ),
+        ("presentation", "ceo"): (
+            "Present the strategic vision. Frame the "
+            "opportunity, articulate the thesis, and set "
+            "success criteria for the board."
+        ),
+        ("rebuttal", "ceo"): (
+            "Address objections directly. Acknowledge valid "
+            "concerns with mitigations; push back on "
+            "objections that misread the strategic intent."
+        ),
+    }
+
+    def _resolve_phase_instruction(
+        self, phase: str, agent_role: str,
+    ) -> str:
+        """Get phase-specific instruction, enriched by role."""
+        base = {
             "presentation": (
-                "Present your proposal clearly and persuasively. "
-                "Explain the strategic rationale and expected outcomes."
+                "Present your proposal clearly and "
+                "persuasively. Explain the strategic "
+                "rationale and expected outcomes."
             ),
             "qa": (
-                "Ask a clarifying question about the proposal. "
-                "Focus on understanding implications and risks."
+                "Ask a clarifying question about the "
+                "proposal. Focus on understanding "
+                "implications and risks."
             ),
             "objection": (
-                "Raise any objections or concerns about the proposal. "
-                "Be specific about your concerns."
+                "Raise any objections or concerns about "
+                "the proposal. Be specific about your "
+                "concerns."
             ),
             "rebuttal": (
-                "Address the objections raised. Provide counter-arguments "
-                "or acknowledge valid concerns."
+                "Address the objections raised. Provide "
+                "counter-arguments or acknowledge valid "
+                "concerns."
             ),
             "vote": "Cast your vote on the proposal.",
         }
-        return instructions.get(phase, "Participate in the discussion.")
+        instruction = base.get(
+            phase, "Participate in the discussion."
+        )
+
+        # Look for a role-specific overlay
+        role_lower = (agent_role or "").lower()
+        for (p, role_key), overlay in self._ROLE_OVERLAYS.items():
+            if p == phase and role_key in role_lower:
+                instruction = overlay
+                break
+
+        return instruction

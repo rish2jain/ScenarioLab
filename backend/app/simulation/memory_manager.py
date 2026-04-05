@@ -95,7 +95,13 @@ class SimulationMemoryManager:
         parts = [f"Round {round_number}, Phase: {phase}"]
 
         for msg in messages:
-            parts.append(f"- {msg.agent_name}: {msg.content[:150]}")
+            # Use enough content to preserve substance (500 chars)
+            content = msg.content[:500]
+            if len(msg.content) > 500:
+                content += "..."
+            parts.append(
+                f"- {msg.agent_name} ({msg.agent_role}): {content}"
+            )
 
         return "\n".join(parts)
 
