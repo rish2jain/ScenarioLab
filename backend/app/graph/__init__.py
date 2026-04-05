@@ -1,4 +1,4 @@
-"""Graph Building Engine for MiroFish.
+"""Graph Building Engine for ScenarioLab.
 
 This module provides knowledge graph functionality including:
 - Neo4j database client for graph operations

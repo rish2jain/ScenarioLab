@@ -3,7 +3,7 @@
 <cite>
 **Referenced Files in This Document**
 - [PRD.md](file://PRD.md)
-- [Research/Enhancing MiroFish for Strategy Consultants.md](file://Research/Enhancing MiroFish for Strategy Consultants.md)
+- [Research/Enhancing ScenarioLab for Strategy Consultants.md](file://Research/Enhancing ScenarioLab for Strategy Consultants.md)
 </cite>
 
 ## Table of Contents
@@ -19,7 +19,7 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-MiroFish is an AI-powered strategic simulation and war-gaming platform designed for strategy consultants and enterprise decision-makers. Unlike traditional prediction engines, MiroFish functions as an AI decision lab for scenario rehearsal and strategic stress-testing. It constructs high-fidelity parallel digital worlds where intelligent agents—modeled after real-world stakeholders—interact in strategy-native environments (boardrooms, negotiations, war games) to help consultants test decisions before real-world implementation.
+ScenarioLab is an AI-powered strategic simulation and war-gaming platform designed for strategy consultants and enterprise decision-makers. Unlike traditional prediction engines, ScenarioLab functions as an AI decision lab for scenario rehearsal and strategic stress-testing. It constructs high-fidelity parallel digital worlds where intelligent agents—modeled after real-world stakeholders—interact in strategy-native environments (boardrooms, negotiations, war games) to help consultants test decisions before real-world implementation.
 
 Key positioning:
 - Tagline: AI-Powered War Gaming and Scenario Planning Platform for Strategic Decision-Making
@@ -39,31 +39,31 @@ Common use cases:
 - Competitive strategy development: competitor reaction modeling, market entry simulations
 
 ## Project Structure
-The repository contains two primary documents that define MiroFish’s strategic direction and technical foundation:
+The repository contains two primary documents that define ScenarioLab’s strategic direction and technical foundation:
 - PRD.md: Product Requirements Document outlining vision, features, architecture, and roadmap
-- Research/Enhancing MiroFish for Strategy Consultants.md: Synthesis of three AI models’ recommendations for enhancing MiroFish for strategy consultants
+- Research/Enhancing ScenarioLab for Strategy Consultants.md: Synthesis of three AI models’ recommendations for enhancing ScenarioLab for strategy consultants
 
 ```mermaid
 graph TB
 PRD["PRD.md<br/>Product Requirements Document"]
-Research["Research/Enhancing MiroFish for Strategy Consultants.md<br/>Strategic Enhancement Synthesis"]
-PRD --> |"Defines vision, features,<br/>architecture, roadmap"| MiroFish["MiroFish Platform"]
-Research --> |"Synthesizes model insights,<br/>priorities, and UX paradigms"| MiroFish
-MiroFish --> |"Enables"| Consultants["Strategy Consultants"]
-MiroFish --> |"Enables"| Executives["Enterprise Executives"]
-MiroFish --> |"Enables"| Researchers["Researchers"]
+Research["Research/Enhancing ScenarioLab for Strategy Consultants.md<br/>Strategic Enhancement Synthesis"]
+PRD --> |"Defines vision, features,<br/>architecture, roadmap"| ScenarioLab["ScenarioLab Platform"]
+Research --> |"Synthesizes model insights,<br/>priorities, and UX paradigms"| ScenarioLab
+ScenarioLab --> |"Enables"| Consultants["Strategy Consultants"]
+ScenarioLab --> |"Enables"| Executives["Enterprise Executives"]
+ScenarioLab --> |"Enables"| Researchers["Researchers"]
 ```
 
 **Diagram sources**
 - [PRD.md](file://PRD.md)
-- [Research/Enhancing MiroFish for Strategy Consultants.md](file://Research/Enhancing MiroFish for Strategy Consultants.md)
+- [Research/Enhancing ScenarioLab for Strategy Consultants.md](file://Research/Enhancing ScenarioLab for Strategy Consultants.md)
 
 **Section sources**
 - [PRD.md](file://PRD.md)
-- [Research/Enhancing MiroFish for Strategy Consultants.md](file://Research/Enhancing MiroFish for Strategy Consultants.md)
+- [Research/Enhancing ScenarioLab for Strategy Consultants.md](file://Research/Enhancing ScenarioLab for Strategy Consultants.md)
 
 ## Core Components
-MiroFish’s core capabilities center on multi-agent swarm intelligence, strategy-native environments, and consulting-grade deliverables:
+ScenarioLab’s core capabilities center on multi-agent swarm intelligence, strategy-native environments, and consulting-grade deliverables:
 
 - Multi-Agent Simulation Engine
   - Strategy-native environments: boardroom debates, war games, negotiations
@@ -91,10 +91,10 @@ MiroFish’s core capabilities center on multi-agent swarm intelligence, strateg
 
 **Section sources**
 - [PRD.md](file://PRD.md)
-- [Research/Enhancing MiroFish for Strategy Consultants.md](file://Research/Enhancing MiroFish for Strategy Consultants.md)
+- [Research/Enhancing ScenarioLab for Strategy Consultants.md](file://Research/Enhancing ScenarioLab for Strategy Consultants.md)
 
 ## Architecture Overview
-MiroFish follows a layered architecture with clear separation between frontend, backend, and data services. The system integrates LLMs, memory services, and graph databases to support multi-agent simulations and report generation.
+ScenarioLab follows a layered architecture with clear separation between frontend, backend, and data services. The system integrates LLMs, memory services, and graph databases to support multi-agent simulations and report generation.
 
 ```mermaid
 graph TB
@@ -124,7 +124,7 @@ API --> GraphDB
 ## Detailed Component Analysis
 
 ### Multi-Agent Swarm Intelligence
-MiroFish’s simulation engine creates strategy-native environments where agents interact through structured rounds (proposal → critique → counter-proposal → vote). Agent archetypes are consulting-specific and calibrated to reflect actual client organizational structures.
+ScenarioLab’s simulation engine creates strategy-native environments where agents interact through structured rounds (proposal → critique → counter-proposal → vote). Agent archetypes are consulting-specific and calibrated to reflect actual client organizational structures.
 
 ```mermaid
 flowchart TD
@@ -186,13 +186,13 @@ API-->>User : Structured Deliverables<br/>Scenario Matrices, Risk Registers, Exe
 - [PRD.md](file://PRD.md)
 
 ### MCP Server Integration
-MiroFish exposes an MCP server for CLI/agentic workflow integration, enabling invocation from Claude Desktop, Cursor, or IDE pipelines.
+ScenarioLab exposes an MCP server for CLI/agentic workflow integration, enabling invocation from Claude Desktop, Cursor, or IDE pipelines.
 
 ```mermaid
 sequenceDiagram
 participant Dev as "Developer/Consultant"
 participant MCP as "MCP Server"
-participant API as "MiroFish Backend"
+participant API as "ScenarioLab Backend"
 participant LLM as "LLM Provider"
 Dev->>MCP : Invoke Simulation Command
 MCP->>API : Forward Request
@@ -246,7 +246,7 @@ Calibrate --> Agents["Consulting-Specific Agent Archetypes"]
 - [PRD.md](file://PRD.md)
 
 ### Zero-Risk Strategic Rehearsal
-MiroFish enables testing high-stakes decisions in a digital sandbox before real-world implementation, covering M&A integrations, regulatory responses, and competitive strategy development.
+ScenarioLab enables testing high-stakes decisions in a digital sandbox before real-world implementation, covering M&A integrations, regulatory responses, and competitive strategy development.
 
 ```mermaid
 flowchart TD
@@ -263,7 +263,7 @@ Insights --> Action["Informed Real-World Action"]
 - [PRD.md](file://PRD.md)
 
 ## Dependency Analysis
-MiroFish’s dependencies span frontend, backend, and infrastructure layers, with clear integration points for LLMs, memory services, and graph databases.
+ScenarioLab’s dependencies span frontend, backend, and infrastructure layers, with clear integration points for LLMs, memory services, and graph databases.
 
 ```mermaid
 graph TB
@@ -310,11 +310,11 @@ FastAPI --> Neo4j
 - Positioning language: Frame outputs as scenario rehearsal, strategic stress-testing, or stakeholder-response simulation rather than predictions
 
 **Section sources**
-- [Research/Enhancing MiroFish for Strategy Consultants.md](file://Research/Enhancing MiroFish for Strategy Consultants.md)
+- [Research/Enhancing ScenarioLab for Strategy Consultants.md](file://Research/Enhancing ScenarioLab for Strategy Consultants.md)
 - [PRD.md](file://PRD.md)
 
 ## Conclusion
-MiroFish represents a transformative approach to strategic advisory by combining multi-agent swarm intelligence with strategy-native environments. Its consulting-grade deliverables, air-gapped deployment, and MCP integration position it as an essential tool for modern strategy teams. By focusing on zero-risk strategic rehearsal, stakeholder-accurate agent modeling, and on-demand capabilities, MiroFish enables consultants to move beyond traditional $50K–$200K war-gaming engagements into a scalable, repeatable, and enterprise-ready platform.
+ScenarioLab represents a transformative approach to strategic advisory by combining multi-agent swarm intelligence with strategy-native environments. Its consulting-grade deliverables, air-gapped deployment, and MCP integration position it as an essential tool for modern strategy teams. By focusing on zero-risk strategic rehearsal, stakeholder-accurate agent modeling, and on-demand capabilities, ScenarioLab enables consultants to move beyond traditional $50K–$200K war-gaming engagements into a scalable, repeatable, and enterprise-ready platform.
 
 [No sources needed since this section summarizes without analyzing specific files]
 

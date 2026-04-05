@@ -1,5 +1,5 @@
 {
-  "name": "mirofish",
+  "name": "scenariolab",
   "private": true,
   "scripts": {
     "start": "bash start.sh",

@@ -2,7 +2,7 @@
 
 <cite>
 **Referenced Files in This Document**
-- [Research/Enhancing MiroFish for Strategy Consultants.md](file://Research/Enhancing MiroFish for Strategy Consultants.md)
+- [Research/Enhancing ScenarioLab for Strategy Consultants.md](file://Research/Enhancing ScenarioLab for Strategy Consultants.md)
 - [PRD.md](file://PRD.md)
 </cite>
 
@@ -19,7 +19,7 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document provides strategic enhancement guidelines for MiroFish tailored to consulting workflows. It synthesizes findings across three models to define a consultative direction grounded in:
+This document provides strategic enhancement guidelines for ScenarioLab tailored to consulting workflows. It synthesizes findings across three models to define a consultative direction grounded in:
 - Consulting-specific agent archetypes
 - Local deployment requirements for financial services
 - Miro integration patterns for board automation
@@ -34,19 +34,19 @@ It also outlines strategic recommendations for:
 
 ## Project Structure
 The repository consolidates two primary sources:
-- A synthesis of three models’ recommendations for MiroFish’s strategic evolution
+- A synthesis of three models’ recommendations for ScenarioLab’s strategic evolution
 - A product requirements document (PRD) that defines features, architecture, and roadmap
 
 ```mermaid
 graph TB
-A["Repository Root"] --> B["Research/Enhancing MiroFish for Strategy Consultants.md"]
+A["Repository Root"] --> B["Research/Enhancing ScenarioLab for Strategy Consultants.md"]
 A --> C["PRD.md"]
 B --> D["Synthesis of model consensus and disagreements"]
 C --> E["Feature set, architecture, roadmap, playbooks"]
 ```
 
 **Section sources**
-- [Research/Enhancing MiroFish for Strategy Consultants.md:1-273](file://Research/Enhancing MiroFish for Strategy Consultants.md#L1-L273)
+- [Research/Enhancing ScenarioLab for Strategy Consultants.md:1-273](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L1-L273)
 - [PRD.md:1-435](file://PRD.md#L1-L435)
 
 ## Core Components
@@ -78,7 +78,7 @@ This section distills the strategic enhancements that align across models and th
   - Export boards programmatically for client-ready deliverables.
 
 **Section sources**
-- [Research/Enhancing MiroFish for Strategy Consultants.md:7-51](file://Research/Enhancing MiroFish for Strategy Consultants.md#L7-L51)
+- [Research/Enhancing ScenarioLab for Strategy Consultants.md:7-51](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L7-L51)
 - [PRD.md:39-56](file://PRD.md#L39-L56)
 - [PRD.md:397-423](file://PRD.md#L397-L423)
 
@@ -138,7 +138,7 @@ Rounds --> Validate["Validation via Process Transparency"]
 ```
 
 **Section sources**
-- [Research/Enhancing MiroFish for Strategy Consultants.md:43-47](file://Research/Enhancing MiroFish for Strategy Consultants.md#L43-L47)
+- [Research/Enhancing ScenarioLab for Strategy Consultants.md:43-47](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L43-L47)
 - [PRD.md:75-92](file://PRD.md#L75-L92)
 
 ### Air-Gapped Deployment with Ollama + Neo4j
@@ -155,7 +155,7 @@ D --> E["Enable MCP Server for CLI/IDE Workflows"]
 ```
 
 **Section sources**
-- [Research/Enhancing MiroFish for Strategy Consultants.md:39](file://Research/Enhancing MiroFish for Strategy Consultants.md#L39)
+- [Research/Enhancing ScenarioLab for Strategy Consultants.md:39](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L39)
 - [PRD.md:257-290](file://PRD.md#L257-L290)
 
 ### MCP Server Integration for Claude Desktop Workflows
@@ -178,7 +178,7 @@ MCP-->>Dev : "Return simulation outputs"
 ```
 
 **Section sources**
-- [Research/Enhancing MiroFish for Strategy Consultants.md:16](file://Research/Enhancing MiroFish for Strategy Consultants.md#L16)
+- [Research/Enhancing ScenarioLab for Strategy Consultants.md:16](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L16)
 - [PRD.md:172](file://PRD.md#L172)
 
 ### Miro Integration Patterns for Board Automation
@@ -197,7 +197,7 @@ REP-->>API : "Export complete"
 ```
 
 **Section sources**
-- [Research/Enhancing MiroFish for Strategy Consultants.md:31](file://Research/Enhancing MiroFish for Strategy Consultants.md#L31)
+- [Research/Enhancing ScenarioLab for Strategy Consultants.md:31](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L31)
 - [PRD.md:209](file://PRD.md#L209)
 
 ### Batch Execution and Comparative Analysis
@@ -214,8 +214,8 @@ Confidence --> Deliver["Consulting-Grade Deliverables"]
 ```
 
 **Section sources**
-- [Research/Enhancing MiroFish for Strategy Consultants.md:15](file://Research/Enhancing MiroFish for Strategy Consultants.md#L15)
-- [Research/Enhancing MiroFish for Strategy Consultants.md:47](file://Research/Enhancing MiroFish for Strategy Consultants.md#L47)
+- [Research/Enhancing ScenarioLab for Strategy Consultants.md:15](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L15)
+- [Research/Enhancing ScenarioLab for Strategy Consultants.md:47](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L47)
 - [PRD.md:52-54](file://PRD.md#L52-L54)
 
 ### Analytics Validation Approaches
@@ -234,7 +234,7 @@ D --> G["Hard Numbers + Narrative"]
 ```
 
 **Section sources**
-- [Research/Enhancing MiroFish for Strategy Consultants.md:18-49](file://Research/Enhancing MiroFish for Strategy Consultants.md#L18-L49)
+- [Research/Enhancing ScenarioLab for Strategy Consultants.md:18-49](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L18-L49)
 - [PRD.md:94-112](file://PRD.md#L94-L112)
 
 ### Consulting Playbook Templates
@@ -306,7 +306,7 @@ ANA --> REP
 - [PRD.md:277-290](file://PRD.md#L277-L290)
 
 ## Conclusion
-By focusing on consulting-specific agent archetypes, strategy-native environments, and air-gapped local deployment, MiroFish can become a production-grade, SteerCo-ready platform. Integrating MCP server support and Miro automation streamlines workflows for consultants, while batch execution and analytics validation provide both process transparency and statistical rigor. The proposed playbook templates and roadmap enable rapid adoption across M&A, regulatory, and competitive scenarios.
+By focusing on consulting-specific agent archetypes, strategy-native environments, and air-gapped local deployment, ScenarioLab can become a production-grade, SteerCo-ready platform. Integrating MCP server support and Miro automation streamlines workflows for consultants, while batch execution and analytics validation provide both process transparency and statistical rigor. The proposed playbook templates and roadmap enable rapid adoption across M&A, regulatory, and competitive scenarios.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
@@ -319,5 +319,5 @@ By focusing on consulting-specific agent archetypes, strategy-native environment
 - Calibrate agent demographics to client org structure for realism and trust.
 
 **Section sources**
-- [Research/Enhancing MiroFish for Strategy Consultants.md:51](file://Research/Enhancing MiroFish for Strategy Consultants.md#L51)
+- [Research/Enhancing ScenarioLab for Strategy Consultants.md:51](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L51)
 - [PRD.md:301-335](file://PRD.md#L301-L335)

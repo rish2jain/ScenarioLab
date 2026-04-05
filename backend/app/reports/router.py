@@ -380,7 +380,7 @@ async def export_interactive_deck(
     report_id: str,
     logo_url: str | None = None,
     primary_color: str = "#3B82F6",
-    company_name: str = "MiroFish",
+    company_name: str = "ScenarioLab",
 ):
     """Export report as interactive HTML presentation deck.
 

@@ -1,6 +1,6 @@
 # AutoResearch Scout Report
 
-**Scope:** Full MiroFish repo (backend + frontend)
+**Scope:** Full ScenarioLab repo (backend + frontend)
 **Domain:** all
 **Date:** 2026-04-03 (rescan)
 **Candidates found:** 9 scored 6+ / ~130 files scanned

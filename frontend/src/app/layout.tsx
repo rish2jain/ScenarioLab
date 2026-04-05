@@ -9,7 +9,7 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "MiroFish - AI War-Gaming Platform",
+  title: "ScenarioLab - AI War-Gaming Platform",
   description: "Strategic war-gaming platform for consultants",
   icons: {
     icon: "/icon.svg",

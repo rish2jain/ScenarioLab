@@ -52,7 +52,7 @@ neo4j_client: Neo4jClient | None = None
 async def lifespan(app: FastAPI):
     """Lifespan handler for startup and shutdown events."""
     global neo4j_client
-    logger.info("MiroFish backend starting up...")
+    logger.info("ScenarioLab backend starting up...")
 
     # Initialize SQLite database
     await init_database()
@@ -85,7 +85,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    logger.info("MiroFish backend shutting down...")
+    logger.info("ScenarioLab backend shutting down...")
     await stop_seed_extraction_lock_cleanup_task()
     await close_database()
     reset_graphrag_cache()
@@ -96,7 +96,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="MiroFish API",
+    title="ScenarioLab API",
     description="AI war-gaming platform for strategy consultants",
     version="0.1.0",
     lifespan=lifespan,
@@ -129,7 +129,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 @app.get("/api/health", tags=["health"])
 async def health_check():
     """Health check endpoint."""
-    return {"status": "ok", "service": "mirofish-backend"}
+    return {"status": "ok", "service": "scenariolab-backend"}
 
 
 # Include routers
@@ -151,7 +151,7 @@ app.include_router(research_router)
 async def root():
     """Root endpoint."""
     return {
-        "message": "Welcome to MiroFish API",
+        "message": "Welcome to ScenarioLab API",
         "docs": "/docs",
         "health": "/api/health",
         "personas": "/api/personas",

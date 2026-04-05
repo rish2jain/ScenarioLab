@@ -1,6 +1,6 @@
 <img src="https://r2cdn.perplexity.ai/pplx-full-logo-primary-dark%402x.png" style="height:64px;margin-right:32px"/>
 
-# Enhancing MiroFish for Strategy Consultants
+# Enhancing ScenarioLab for Strategy Consultants
 
 Given your 11 years in tech strategy/GRC and your work advising F100 banks, this is a deeply relevant enhancement project. All three models produced rich, complementary blueprints. Here's the synthesis.
 
@@ -13,7 +13,7 @@ Given your 11 years in tech strategy/GRC and your work advising F100 banks, this
 | Air-gap deployment is mandatory — replace Zep Cloud + Chinese LLM APIs with local Ollama + Neo4j/local Zep | ✓ | ✓ | ✓ | Client confidentiality in financial services makes cloud dependencies a dealbreaker[^4][^5][^6] |
 | Generate consulting-grade deliverables (scenario matrices, risk registers, stakeholder heatmaps, exec summaries) not just reports | ✓ | ✓ | ✓ | ReportAgent currently produces generic narrative; consultants need framework-native artifacts[^3][^7] |
 | Add multi-scenario batch execution with comparison views | ✓ | ✓ | ✓ | Strategy consulting requires comparing scenarios side-by-side, not single-run predictions[^8][^9] |
-| Expose MiroFish as MCP tools for CLI/agentic workflow integration |  | ✓ | ✓ | Enables invoking simulations from Claude Desktop, Cursor, or existing CLI pipelines |
+| Expose ScenarioLab as MCP tools for CLI/agentic workflow integration |  | ✓ | ✓ | Enables invoking simulations from Claude Desktop, Cursor, or existing CLI pipelines |
 
 ## Where Models Disagree
 
@@ -36,7 +36,7 @@ Given your 11 years in tech strategy/GRC and your work advising F100 banks, this
 
 ## Comprehensive Analysis
 
-The convergence across all three models on four foundational enhancements represents a reliable blueprint you can act on immediately. First, **air-gapped local deployment** is non-negotiable for your F100 banking clients. MiroFish's mainline dependency on Zep Cloud and Alibaba's Qwen API is a hard blocker. The community is already moving toward Graphiti + Neo4j, and MiroFish-Offline demonstrates the Ollama + Neo4j pattern works. Given your existing Ollama setup and preference for Claude CLI > Codex CLI > Gemini CLI backends, you should fork the memory layer first and point `LLM_BASE_URL` to your local inference endpoint. This single change unblocks all client-facing work.[^4][^5][^6]
+The convergence across all three models on four foundational enhancements represents a reliable blueprint you can act on immediately. First, **air-gapped local deployment** is non-negotiable for your F100 banking clients. ScenarioLab's mainline dependency on Zep Cloud and Alibaba's Qwen API is a hard blocker. The community is already moving toward Graphiti + Neo4j, and ScenarioLab-Offline demonstrates the Ollama + Neo4j pattern works. Given your existing Ollama setup and preference for Claude CLI > Codex CLI > Gemini CLI backends, you should fork the memory layer first and point `LLM_BASE_URL` to your local inference endpoint. This single change unblocks all client-facing work.[^4][^5][^6]
 
 Second, **replacing social media simulation environments with strategy-native ones** is where the real product differentiation emerges. All three models agree that simulating Twitter and Reddit debates is irrelevant for boardroom decisions, M\&A integration dynamics, or regulatory shock testing. Claude Opus 4.6 Thinking's proposal for structured round-based environments (proposal → critique → counter-proposal → vote) directly mirrors how McKinsey structures war gaming exercises. The OASIS engine underneath is modular enough to support new environment types alongside the existing Twitter/Reddit ones, so this is architecturally feasible without a ground-up rewrite.[^3][^1][^14][^13][^15]
 
@@ -46,26 +46,26 @@ The most significant disagreement concerns **primary UX paradigm**. GPT-5.4 Thin
 
 On **validation and credibility**, the models diverge usefully. GPT-5.4 Thinking emphasizes process transparency — assumption registers, evidence tracing, human-review checkpoints at each pipeline stage — which is what you need to defend outputs in a partner meeting. Claude Opus 4.6 Thinking and Gemini 3.1 Pro Thinking push for statistical rigor via Monte Carlo batch runs with confidence intervals, which is what you need to present to a CFO or risk committee. You should build both: checkpoints for the consulting process, Monte Carlo for the quantitative outputs. Gemini 3.1 Pro Thinking's proposed AnalyticsAgent that silently monitors swarm state changes (compliance violation rates, time-to-consensus, sentiment trajectories) is the most practical bridge between these approaches — it produces the hard numbers while the narrative ReportAgent handles the storyline.
 
-One critical caution all models share: **don't overclaim prediction accuracy**. MiroFish has no accuracy benchmarks yet. For consulting, the safer and more commercially defensible positioning is "scenario rehearsal," "strategic stress-testing," or "stakeholder-response simulation" — not "predicting the future." Claude Opus 4.6 Thinking's backtesting proposal (feeding historical events and comparing against actual outcomes) is the right long-term path to building calibration credibility, but until that data exists, frame outputs as structured scenario analysis rather than predictions.[^1]
+One critical caution all models share: **don't overclaim prediction accuracy**. ScenarioLab has no accuracy benchmarks yet. For consulting, the safer and more commercially defensible positioning is "scenario rehearsal," "strategic stress-testing," or "stakeholder-response simulation" — not "predicting the future." Claude Opus 4.6 Thinking's backtesting proposal (feeding historical events and comparing against actual outcomes) is the right long-term path to building calibration credibility, but until that data exists, frame outputs as structured scenario analysis rather than predictions.[^1]
 
-For your **30-day MVP**, prioritize in this order: (1) local deployment with Ollama + Neo4j replacing Zep Cloud, (2) MCP server wrapper around the FastAPI backend, (3) 3-5 consulting playbook templates (M\&A culture clash, regulatory shock test, competitive response war game), (4) consulting persona library with 10-15 archetypes, and (5) structured deliverable templates for the ReportAgent. This gets MiroFish from "viral open-source demo" to "actually usable in your next client engagement" — and positions you to build the Miro integration and Monte Carlo layers in month two.[^5][^3]
+For your **30-day MVP**, prioritize in this order: (1) local deployment with Ollama + Neo4j replacing Zep Cloud, (2) MCP server wrapper around the FastAPI backend, (3) 3-5 consulting playbook templates (M\&A culture clash, regulatory shock test, competitive response war game), (4) consulting persona library with 10-15 archetypes, and (5) structured deliverable templates for the ReportAgent. This gets ScenarioLab from "viral open-source demo" to "actually usable in your next client engagement" — and positions you to build the Miro integration and Monte Carlo layers in month two.[^5][^3]
 <span style="display:none">[^100][^101][^102][^103][^104][^105][^106][^107][^108][^109][^17][^18][^19][^20][^21][^22][^23][^24][^25][^26][^27][^28][^29][^30][^31][^32][^33][^34][^35][^36][^37][^38][^39][^40][^41][^42][^43][^44][^45][^46][^47][^48][^49][^50][^51][^52][^53][^54][^55][^56][^57][^58][^59][^60][^61][^62][^63][^64][^65][^66][^67][^68][^69][^70][^71][^72][^73][^74][^75][^76][^77][^78][^79][^80][^81][^82][^83][^84][^85][^86][^87][^88][^89][^90][^91][^92][^93][^94][^95][^96][^97][^98][^99]</span>
 
 <div align="center">⁂</div>
 
-[^1]: <https://dev.to/sarvabharan/mirofish-simulating-the-future-one-agent-at-a-time-1mce>
+[^1]: <https://dev.to/sarvabharan/scenariolab-simulating-the-future-one-agent-at-a-time-1mce>
 
 [^2]: <https://www.youtube.com/watch?v=5SSGximONlY>
 
-[^3]: <https://github.com/666ghj/MiroFish/blob/main/README-EN.md>
+[^3]: <https://github.com/666ghj/ScenarioLab/blob/main/README-EN.md>
 
-[^4]: <https://github.com/666ghj/MiroFish/issues/109>
+[^4]: <https://github.com/666ghj/ScenarioLab/issues/109>
 
-[^5]: <https://github.com/666ghj/MiroFish/issues/235>
+[^5]: <https://github.com/666ghj/ScenarioLab/issues/235>
 
 [^6]: <https://www.youtube.com/watch?v=y4ll8v3Uv5M>
 
-[^7]: <https://pyshine.com/MiroFish-AI-Swarm-Intelligence-Engine/>
+[^7]: <https://pyshine.com/ScenarioLab-AI-Swarm-Intelligence-Engine/>
 
 [^8]: <https://www.sorenkaplan.com/ai-enabled-strategic-planning-tools/>
 
@@ -89,7 +89,7 @@ For your **30-day MVP**, prioritize in this order: (1) local deployment with Oll
 
 [^18]: <https://miro.com/templates/strategic-planning/>
 
-[^19]: <https://dev.to/arshtechpro/mirofish-the-open-source-ai-engine-that-builds-digital-worlds-to-predict-the-future-ki8>
+[^19]: <https://dev.to/arshtechpro/scenariolab-the-open-source-ai-engine-that-builds-digital-worlds-to-predict-the-future-ki8>
 
 [^20]: <https://www.linkedin.com/posts/khushigauli_ai-multiagentsystems-llms-activity-7441369523796021249-cX67>
 
@@ -97,7 +97,7 @@ For your **30-day MVP**, prioritize in this order: (1) local deployment with Oll
 
 [^22]: <https://developers.miro.com/docs/frame-1>
 
-[^23]: <https://www.linkedin.com/pulse/swarm-intelligence-comes-forecasting-how-mirofish-simulates-borish-lahve>
+[^23]: <https://www.linkedin.com/pulse/swarm-intelligence-comes-forecasting-how-scenariolab-simulates-borish-lahve>
 
 [^24]: <https://www.marktechpost.com/2024/12/27/camel-ai-open-sourced-oasis-a-next-generation-simulator-for-realistic-social-media-dynamics-with-one-million-agents/>
 
@@ -113,13 +113,13 @@ For your **30-day MVP**, prioritize in this order: (1) local deployment with Oll
 
 [^30]: <https://developers.miro.com/docs/stickynote-1>
 
-[^31]: <https://www.blocmates.com/articles/what-is-mirofish-the-agent-engine-that-can-predict-anything-and-everything>
+[^31]: <https://www.blocmates.com/articles/what-is-scenariolab-the-agent-engine-that-can-predict-anything-and-everything>
 
 [^32]: <https://fablestudio.github.io/openai-wargames/>
 
 [^33]: <https://www.proactiveworldwide.com/resources/market-and-competitive-intelligence-blog/war-gaming-strategic-vision/>
 
-[^34]: <https://emelia.io/hub/mirofish-ai-swarm-prediction>
+[^34]: <https://emelia.io/hub/scenariolab-ai-swarm-prediction>
 
 [^35]: <https://help.miro.com/hc/en-us/articles/17774560667794-Board-Export-API-overview>
 
@@ -127,13 +127,13 @@ For your **30-day MVP**, prioritize in this order: (1) local deployment with Oll
 
 [^37]: <https://www.reddit.com/r/LocalLLM/comments/1ryvnga/built_a_local_swarm_intelligence_engine_for_macos/>
 
-[^38]: <https://www.beitroot.co/blog/mirofish-open-source-swarm-intelligence-engine>
+[^38]: <https://www.beitroot.co/blog/scenariolab-open-source-swarm-intelligence-engine>
 
 [^39]: <https://www.youtube.com/watch?v=ISulTJ51Sdc>
 
-[^40]: <https://github.com/nikmcfly/MiroFish-Offline>
+[^40]: <https://github.com/nikmcfly/ScenarioLab-Offline>
 
-[^41]: <https://www.linkedin.com/posts/dansimms_github-666ghjmirofish-a-simple-and-universal-activity-7442510096045133824-X-q6>
+[^41]: <https://www.linkedin.com/posts/dansimms_github-666ghjscenariolab-a-simple-and-universal-activity-7442510096045133824-X-q6>
 
 [^42]: <https://miro.com/templates/strategic-planning/?amp=\&page=75>
 
@@ -173,47 +173,47 @@ For your **30-day MVP**, prioritize in this order: (1) local deployment with Oll
 
 [^60]: <https://www.academia.edu/9620058/USING_AGENT_BASED_SIMULATION_TO_EMPIRICALLY_EXAMINE_COMPLEXITY_IN_CARBON_FOOTPRINT_BUSINESS_PROCESS>
 
-[^61]: <https://blog.devgenius.io/how-to-turn-mirofish-into-a-production-grade-polymarket-research-engine-41926798b5ce>
+[^61]: <https://blog.devgenius.io/how-to-turn-scenariolab-into-a-production-grade-polymarket-research-engine-41926798b5ce>
 
 [^62]: <https://www.youtube.com/watch?v=8z1-P_cN8oE>
 
-[^63]: <https://sanjayshankar.me/mirofish-setup-guide-ai-market-simulation/>
+[^63]: <https://sanjayshankar.me/scenariolab-setup-guide-ai-market-simulation/>
 
-[^64]: <https://lobehub.com/skills/aradotso-trending-skills-mirofish-swarm-intelligence>
+[^64]: <https://lobehub.com/skills/aradotso-trending-skills-scenariolab-swarm-intelligence>
 
 [^65]: <https://www.instagram.com/reel/DWHb7a7DJLZ/>
 
 [^66]: <https://github.com/camel-ai/oasis>
 
-[^67]: <https://www.linkedin.com/posts/marcovanhurne_mirofishreadme-enmd-at-main-666ghjmirofish-activity-7443943344000614400-PUzs>
+[^67]: <https://www.linkedin.com/posts/marcovanhurne_scenariolabreadme-enmd-at-main-666ghjscenariolab-activity-7443943344000614400-PUzs>
 
 [^68]: <https://www.youtube.com/watch?v=4xBoNpf8utk>
 
-[^69]: <https://mezha.net/eng/bukvy/mirofish-dvyhun-peredbachennia-na-osnovi-shi-z-vidkrytym-kodom-shcho-vykorystovuie-roiovyi-intelekt/>
+[^69]: <https://mezha.net/eng/bukvy/scenariolab-dvyhun-peredbachennia-na-osnovi-shi-z-vidkrytym-kodom-shcho-vykorystovuie-roiovyi-intelekt/>
 
 [^70]: <https://www.houseofethics.lu/2026/03/29/the-miro-mirage-the-ai-swarm-agent-prediction-engine-simulating-social-dynamics/>
 
-[^71]: <https://github.com/666ghj/MiroFish/issues/187>
+[^71]: <https://github.com/666ghj/ScenarioLab/issues/187>
 
-[^72]: <https://sourceforge.net/projects/mirofish.mirror/>
+[^72]: <https://sourceforge.net/projects/scenariolab.mirror/>
 
-[^73]: <https://github.com/amadad/mirofish>
+[^73]: <https://github.com/amadad/scenariolab>
 
-[^74]: <https://regolo.ai/run-mirofish-with-regolo-ai-a-complete-integration-guide/>
+[^74]: <https://regolo.ai/run-scenariolab-with-regolo-ai-a-complete-integration-guide/>
 
-[^75]: <https://lobehub.com/skills/mozartinos-mirofish-guide>
+[^75]: <https://lobehub.com/skills/mozartinos-scenariolab-guide>
 
-[^76]: <https://apidog.com/blog/mirofish-swarm-intelligence-simulation-engine/>
+[^76]: <https://apidog.com/blog/scenariolab-swarm-intelligence-simulation-engine/>
 
-[^77]: <https://dev.to/therealmrmumba/everything-you-need-to-know-about-mirofish-the-ai-swarm-engine-predicting-everything-5fp3>
+[^77]: <https://dev.to/therealmrmumba/everything-you-need-to-know-about-scenariolab-the-ai-swarm-engine-predicting-everything-5fp3>
 
 [^78]: <https://onlydeadfish.co.uk/2025/08/27/using-ai-for-simulation-and-scenario-planning-in-strategy/>
 
-[^79]: <https://github.com/nikmcfly/MiroFish-Offline/blob/main/.env.example>
+[^79]: <https://github.com/nikmcfly/ScenarioLab-Offline/blob/main/.env.example>
 
 [^80]: <https://www.4strat.com/scenario-management/>
 
-[^81]: <https://github.com/666ghj/MiroFish/issues>
+[^81]: <https://github.com/666ghj/ScenarioLab/issues>
 
 [^82]: <https://github.com/rainmana/awesome-rainmana>
 
@@ -227,7 +227,7 @@ For your **30-day MVP**, prioritize in this order: (1) local deployment with Oll
 
 [^87]: <https://github.com/topics/financial-forecasting>
 
-[^88]: <https://github.com/666ghj/MiroFish/pulls>
+[^88]: <https://github.com/666ghj/ScenarioLab/pulls>
 
 [^89]: <https://github.com/maguowei/awesome-stars/blob/master/topics.md>
 
@@ -235,7 +235,7 @@ For your **30-day MVP**, prioritize in this order: (1) local deployment with Oll
 
 [^91]: <https://github.com/huzhifeng/weekly/blob/main/channels/GitHub> Trending Weekly.md
 
-[^92]: <https://github.com/el09xccxy-stack/agentvc-index/blob/main/cases/2026-03-23_mirofish.md>
+[^92]: <https://github.com/el09xccxy-stack/agentvc-index/blob/main/cases/2026-03-23_scenariolab.md>
 
 [^93]: <https://www.mtlc.co/revising-porters-five-forces-analysis-in-the-age-of-ai/>
 
@@ -263,7 +263,7 @@ For your **30-day MVP**, prioritize in this order: (1) local deployment with Oll
 
 [^105]: <https://community.miro.com/ask-the-community-45/how-to-show-specific-frame-only-17035>
 
-[^106]: <https://github.com/666ghj/MiroFish/blob/main/README.md>
+[^106]: <https://github.com/666ghj/ScenarioLab/blob/main/README.md>
 
 [^107]: <https://www.moneycontrol.com/news/trends/scarily-accurate-open-source-ai-engine-predicts-markets-and-public-opinion-using-thousands-of-digital-agents-13858961.html>
 

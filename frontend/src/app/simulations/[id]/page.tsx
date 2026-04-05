@@ -86,7 +86,7 @@ export default function SimulationMonitorPage() {
   const pollDelayMsRef = useRef(POLL_BASE_MS);
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const elapsedStorageKey = `mirofish-sim-elapsed-${simulationId}`;
+  const elapsedStorageKey = `scenariolab-sim-elapsed-${simulationId}`;
   const elapsedSeconds = useElapsedTimer(currentSimulation, elapsedStorageKey);
 
   // Fetch simulation state + messages (reusable for initial load and polling)

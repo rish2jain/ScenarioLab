@@ -1,4 +1,4 @@
-"""Report Generation module for MiroFish.
+"""Report Generation module for ScenarioLab.
 
 This module provides consulting-grade report generation from simulation
 results, including executive summaries, risk registers, scenario matrices,

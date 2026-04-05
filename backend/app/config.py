@@ -52,7 +52,7 @@ class Settings(BaseSettings):
 
     # Autoresearch
     tavily_api_key: str = ""
-    sec_user_agent: str = "MiroFish/1.0 (research@mirofish.ai)"
+    sec_user_agent: str = "ScenarioLab/1.0 (research@scenariolab.ai)"
 
     # Optional Zep Cloud (upstream-style graph)
     zep_api_key: str = ""

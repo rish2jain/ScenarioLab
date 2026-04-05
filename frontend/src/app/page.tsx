@@ -142,7 +142,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-200 to-slate-400">Dashboard</h1>
           <p className="text-foreground-muted mt-1 text-sm sm:text-base">
-            Welcome to MiroFish - Your AI war-gaming command center
+            Welcome to ScenarioLab - Your AI war-gaming command center
           </p>
         </div>
         <Link href="/simulations/new" className="w-full sm:w-auto">

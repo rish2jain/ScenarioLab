@@ -30,4 +30,4 @@ npm run test:e2e
 
 ## Staging / CI / custom URL
 
-Set `PLAYWRIGHT_BASE_URL` to match where the frontend is served (see `.env.example` and `CLAUDE.md`). The global setup, `playwright.config.ts` `use.baseURL`, and `e2e/mirofish-e2e.spec.ts` (via `e2e/playwright-base-url.ts`) all resolve the same base URL, including for absolute `page.goto` calls.
+Set `PLAYWRIGHT_BASE_URL` to match where the frontend is served (see `.env.example` and `CLAUDE.md`). The global setup, `playwright.config.ts` `use.baseURL`, and `e2e/scenariolab-e2e.spec.ts` (via `e2e/playwright-base-url.ts`) all resolve the same base URL, including for absolute `page.goto` calls.

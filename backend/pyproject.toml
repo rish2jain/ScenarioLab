@@ -1,7 +1,7 @@
 [project]
-name = "mirofish-backend"
+name = "scenariolab-backend"
 version = "0.1.0"
-description = "MiroFish AI war-gaming platform backend"
+description = "ScenarioLab AI war-gaming platform backend"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.109.0",
@@ -29,7 +29,7 @@ dev = [
 ]
 
 [project.scripts]
-mirofish-sim = "app.cli:main"
+scenariolab-sim = "app.cli:main"
 
 [build-system]
 requires = ["hatchling"]

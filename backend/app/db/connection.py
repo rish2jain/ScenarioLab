@@ -1,4 +1,4 @@
-"""Shared SQLite connection utilities for MiroFish.
+"""Shared SQLite connection utilities for ScenarioLab.
 
 Single source of truth for:
 - DB file path resolution
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # Path — single definition used by all DB layers
 # ---------------------------------------------------------------------------
 _DB_DIR = Path(__file__).resolve().parent.parent.parent / "data"
-DB_PATH = _DB_DIR / "mirofish.db"
+DB_PATH = _DB_DIR / "scenariolab.db"
 
 # ---------------------------------------------------------------------------
 # Persistent connection (used by the main app lifecycle)

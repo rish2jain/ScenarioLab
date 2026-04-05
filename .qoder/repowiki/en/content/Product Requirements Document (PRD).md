@@ -1,9 +1,9 @@
-# MiroFish Product Requirements Document (PRD)
+# ScenarioLab Product Requirements Document (PRD)
 
 <cite>
 **Referenced Files in This Document**
 - [PRD.md](file://PRD.md)
-- [Enhancing MiroFish for Strategy Consultants.md](file://Research/Enhancing MiroFish for Strategy Consultants.md)
+- [Enhancing ScenarioLab for Strategy Consultants.md](file://Research/Enhancing ScenarioLab for Strategy Consultants.md)
 </cite>
 
 ## Table of Contents
@@ -19,10 +19,10 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-MiroFish is an AI-powered strategic simulation and war-gaming platform designed for strategy consultants and enterprise decision-makers. It functions as an AI decision lab for scenario rehearsal and strategic stress-testing, constructing high-fidelity parallel digital worlds where intelligent agents—modeled after real-world stakeholders—interact in strategy-native environments (boardrooms, negotiations, war games) to help consultants test decisions before real-world implementation. The platform emphasizes consulting-grade deliverables, including scenario matrices, risk registers, stakeholder heatmaps, and executive summaries, and positions itself as a transformation from traditional $50K–$200K war-gaming engagements into on-demand, repeatable capabilities.
+ScenarioLab is an AI-powered strategic simulation and war-gaming platform designed for strategy consultants and enterprise decision-makers. It functions as an AI decision lab for scenario rehearsal and strategic stress-testing, constructing high-fidelity parallel digital worlds where intelligent agents—modeled after real-world stakeholders—interact in strategy-native environments (boardrooms, negotiations, war games) to help consultants test decisions before real-world implementation. The platform emphasizes consulting-grade deliverables, including scenario matrices, risk registers, stakeholder heatmaps, and executive summaries, and positions itself as a transformation from traditional $50K–$200K war-gaming engagements into on-demand, repeatable capabilities.
 
 ## Project Structure
-This PRD consolidates product vision, feature specifications, technical architecture, and operational requirements for MiroFish. It includes:
+This PRD consolidates product vision, feature specifications, technical architecture, and operational requirements for ScenarioLab. It includes:
 - Executive summary and product vision
 - Core features with priorities and detailed specifications
 - Technical architecture and technology stack
@@ -38,7 +38,7 @@ A["PRD.md<br/>Product Requirements Document"] --> B["Core Features<br/>P0–P2 P
 A --> C["Technical Architecture<br/>Frontend/Backend/Layered Services"]
 A --> D["Deployment & Operations<br/>Env Vars, Docker, MCP"]
 A --> E["Roadmap & Metrics<br/>Phases 1–4"]
-F["Enhancing MiroFish for Strategy Consultants.md<br/>Synthesis of Model Agreements"] --> B
+F["Enhancing ScenarioLab for Strategy Consultants.md<br/>Synthesis of Model Agreements"] --> B
 F --> C
 F --> D
 F --> E
@@ -46,14 +46,14 @@ F --> E
 
 **Diagram sources**
 - [PRD.md](file://PRD.md)
-- [Enhancing MiroFish for Strategy Consultants.md](file://Research/Enhancing MiroFish for Strategy Consultants.md)
+- [Enhancing ScenarioLab for Strategy Consultants.md](file://Research/Enhancing ScenarioLab for Strategy Consultants.md)
 
 **Section sources**
 - [PRD.md:1-396](file://PRD.md#L1-L396)
-- [Enhancing MiroFish for Strategy Consultants.md:1-273](file://Research/Enhancing MiroFish for Strategy Consultants.md#L1-L273)
+- [Enhancing ScenarioLab for Strategy Consultants.md:1-273](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L1-L273)
 
 ## Core Components
-MiroFish’s core features are organized by priority and aligned to strategy consulting workflows. Below are the P0 features with user stories, requirements, acceptance criteria, and technical implementation details.
+ScenarioLab’s core features are organized by priority and aligned to strategy consulting workflows. Below are the P0 features with user stories, requirements, acceptance criteria, and technical implementation details.
 
 - Graph Building Engine (P0)
   - User story: As a user, I want to upload seed materials so the system can extract entities and relationships for simulation.
@@ -109,7 +109,7 @@ MiroFish’s core features are organized by priority and aligned to strategy con
     - Population distribution aligns with client org structure for structurally faithful simulations
 
 - Air-Gapped Local Deployment (P0)
-  - User story: As a user, I want to deploy MiroFish locally to meet confidentiality requirements.
+  - User story: As a user, I want to deploy ScenarioLab locally to meet confidentiality requirements.
   - Requirements:
     - Replace Zep Cloud + Chinese LLM APIs with local Ollama + Neo4j/Graphiti
     - Single change to point LLM_BASE_URL to local inference endpoint
@@ -120,7 +120,7 @@ MiroFish’s core features are organized by priority and aligned to strategy con
 - MCP Server Integration (P0)
   - User story: As a user, I want to invoke simulations directly from Claude Desktop, Cursor, or CLI pipelines.
   - Requirements:
-    - FastAPI-based MCP wrapper exposing MiroFish as MCP tools
+    - FastAPI-based MCP wrapper exposing ScenarioLab as MCP tools
     - Seamless integration with agentic workflows
   - Acceptance criteria:
     - MCP server enabled via environment variable
@@ -170,12 +170,12 @@ MiroFish’s core features are organized by priority and aligned to strategy con
 **Section sources**
 - [PRD.md:39-128](file://PRD.md#L39-L128)
 - [PRD.md:397-422](file://PRD.md#L397-L422)
-- [Enhancing MiroFish for Strategy Consultants.md:11-16](file://Research/Enhancing MiroFish for Strategy Consultants.md#L11-L16)
-- [Enhancing MiroFish for Strategy Consultants.md:43-44](file://Research/Enhancing MiroFish for Strategy Consultants.md#L43-L44)
-- [Enhancing MiroFish for Strategy Consultants.md:41](file://Research/Enhancing MiroFish for Strategy Consultants.md#L41)
+- [Enhancing ScenarioLab for Strategy Consultants.md:11-16](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L11-L16)
+- [Enhancing ScenarioLab for Strategy Consultants.md:43-44](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L43-L44)
+- [Enhancing ScenarioLab for Strategy Consultants.md:41](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L41)
 
 ## Architecture Overview
-MiroFish follows a layered architecture with a Next.js frontend, a Python backend (FastAPI/Flask), and integrated services for LLMs, memory, and graph databases. The MCP server wraps the backend for CLI/agentic workflows. The architecture supports both cloud and local deployments, with air-gapped local stacks replacing Zep Cloud and external LLM APIs.
+ScenarioLab follows a layered architecture with a Next.js frontend, a Python backend (FastAPI/Flask), and integrated services for LLMs, memory, and graph databases. The MCP server wraps the backend for CLI/agentic workflows. The architecture supports both cloud and local deployments, with air-gapped local stacks replacing Zep Cloud and external LLM APIs.
 
 ```mermaid
 graph TB
@@ -286,8 +286,8 @@ FE-->>User : View simulation outputs
 
 **Section sources**
 - [PRD.md:75-93](file://PRD.md#L75-L93)
-- [Enhancing MiroFish for Strategy Consultants.md:41](file://Research/Enhancing MiroFish for Strategy Consultants.md#L41)
-- [Enhancing MiroFish for Strategy Consultants.md:43-44](file://Research/Enhancing MiroFish for Strategy Consultants.md#L43-L44)
+- [Enhancing ScenarioLab for Strategy Consultants.md:41](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L41)
+- [Enhancing ScenarioLab for Strategy Consultants.md:43-44](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L43-L44)
 
 ### Report Generation
 - Purpose: Produce consulting-grade deliverables with reasoning chains and export capabilities.
@@ -346,12 +346,12 @@ PersonaLibrary --> Agent : "assign roles & personalities"
 **Diagram sources**
 - [PRD.md:48](file://PRD.md#L48)
 - [PRD.md:80](file://PRD.md#L80)
-- [Enhancing MiroFish for Strategy Consultants.md:43-44](file://Research/Enhancing MiroFish for Strategy Consultants.md#L43-L44)
+- [Enhancing ScenarioLab for Strategy Consultants.md:43-44](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L43-L44)
 
 **Section sources**
 - [PRD.md:48](file://PRD.md#L48)
 - [PRD.md:80](file://PRD.md#L80)
-- [Enhancing MiroFish for Strategy Consultants.md:43-44](file://Research/Enhancing MiroFish for Strategy Consultants.md#L43-L44)
+- [Enhancing ScenarioLab for Strategy Consultants.md:43-44](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L43-L44)
 
 ### Air-Gapped Local Deployment
 - Purpose: Enable enterprise-ready on-premise deployment with Ollama + Neo4j to meet confidentiality requirements.
@@ -374,15 +374,15 @@ Validate --> End(["Air-Gapped Ready"])
 **Diagram sources**
 - [PRD.md:49](file://PRD.md#L49)
 - [PRD.md:176-186](file://PRD.md#L176-L186)
-- [Enhancing MiroFish for Strategy Consultants.md:39-40](file://Research/Enhancing MiroFish for Strategy Consultants.md#L39-L40)
+- [Enhancing ScenarioLab for Strategy Consultants.md:39-40](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L39-L40)
 
 **Section sources**
 - [PRD.md:49](file://PRD.md#L49)
 - [PRD.md:176-186](file://PRD.md#L176-L186)
-- [Enhancing MiroFish for Strategy Consultants.md:39-40](file://Research/Enhancing MiroFish for Strategy Consultants.md#L39-L40)
+- [Enhancing ScenarioLab for Strategy Consultants.md:39-40](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L39-L40)
 
 ### MCP Server Integration
-- Purpose: Expose MiroFish as MCP tools for CLI/agentic workflow integration.
+- Purpose: Expose ScenarioLab as MCP tools for CLI/agentic workflow integration.
 - Implementation details:
   - FastAPI-based MCP wrapper around the backend.
   - Enables invoking simulations from Claude Desktop, Cursor, or existing CLI pipelines.
@@ -491,11 +491,11 @@ Export --> End(["Client-Ready Board Pack"])
 
 **Diagram sources**
 - [PRD.md:53](file://PRD.md#L53)
-- [Enhancing MiroFish for Strategy Consultants.md:45](file://Research/Enhancing MiroFish for Strategy Consultants.md#L45)
+- [Enhancing ScenarioLab for Strategy Consultants.md:45](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L45)
 
 **Section sources**
 - [PRD.md:53](file://PRD.md#L53)
-- [Enhancing MiroFish for Strategy Consultants.md:45](file://Research/Enhancing MiroFish for Strategy Consultants.md#L45)
+- [Enhancing ScenarioLab for Strategy Consultants.md:45](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L45)
 
 ### AnalyticsAgent
 - Purpose: Silently monitor swarm state changes to extract quantitative metrics.
@@ -523,7 +523,7 @@ Store --> End(["Insights for Stakeholders"])
 - [PRD.md:316](file://PRD.md#L316)
 
 ## Dependency Analysis
-MiroFish integrates several technologies and services:
+ScenarioLab integrates several technologies and services:
 - Frontend: Next.js + React
 - Backend: Python (FastAPI/Flask)
 - LLM: OpenAI-compatible (local Ollama or Qwen-plus)
@@ -575,7 +575,7 @@ Common operational concerns and mitigations:
 - [PRD.md:289-290](file://PRD.md#L289-L290)
 
 ## Conclusion
-MiroFish is positioned to transform strategic decision-making by enabling zero-risk scenario rehearsal in strategy-native environments. The PRD outlines a clear set of P0 features—Graph Building Engine, Multi-Agent Simulation, Report Generation, Consulting Persona Library, Air-Gapped Local Deployment, and MCP Server Integration—alongside P1 enhancements like Interactive Chat, Multi-Scenario Batch Execution, Miro Board Auto-Generation, and AnalyticsAgent. Together, these features deliver consulting-grade deliverables and integrate seamlessly into analyst and consultant workflows, while meeting enterprise confidentiality and performance requirements.
+ScenarioLab is positioned to transform strategic decision-making by enabling zero-risk scenario rehearsal in strategy-native environments. The PRD outlines a clear set of P0 features—Graph Building Engine, Multi-Agent Simulation, Report Generation, Consulting Persona Library, Air-Gapped Local Deployment, and MCP Server Integration—alongside P1 enhancements like Interactive Chat, Multi-Scenario Batch Execution, Miro Board Auto-Generation, and AnalyticsAgent. Together, these features deliver consulting-grade deliverables and integrate seamlessly into analyst and consultant workflows, while meeting enterprise confidentiality and performance requirements.
 
 ## Appendices
 

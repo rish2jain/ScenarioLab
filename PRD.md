@@ -1,21 +1,21 @@
-# MiroFish Product Requirements Document (PRD)
+# ScenarioLab Product Requirements Document (PRD)
 
 ## 1. Executive Summary
 
-**MiroFish** is an AI-powered strategic simulation and war-gaming platform designed for strategy consultants and enterprise decision-makers. Unlike traditional prediction engines, MiroFish functions as an **AI decision lab** for scenario rehearsal and strategic stress-testing. It constructs high-fidelity parallel digital worlds where intelligent agents—modeled after real-world stakeholders—interact in strategy-native environments (boardrooms, negotiations, war games) to help consultants rehearse decisions before real-world implementation.
+**ScenarioLab** is an AI-powered strategic simulation and war-gaming platform designed for strategy consultants and enterprise decision-makers. Unlike traditional prediction engines, ScenarioLab functions as an **AI decision lab** for scenario rehearsal and strategic stress-testing. It constructs high-fidelity parallel digital worlds where intelligent agents—modeled after real-world stakeholders—interact in strategy-native environments (boardrooms, negotiations, war games) to help consultants rehearse decisions before real-world implementation.
 
 **Tagline:** *AI-Powered War Gaming and Scenario Simulation Platform for Strategic Decision-Making.*
 
-**Key Differentiator:** MiroFish transforms the traditional $50K-$200K war-gaming engagement into an on-demand, repeatable capability, delivering consulting-grade deliverables including scenario matrices, risk registers, stakeholder heatmaps, and executive summaries. Supports flexible LLM backends—from cloud APIs to local models—so you can use whatever works best for your use case.
+**Key Differentiator:** ScenarioLab transforms the traditional $50K-$200K war-gaming engagement into an on-demand, repeatable capability, delivering consulting-grade deliverables including scenario matrices, risk registers, stakeholder heatmaps, and executive summaries. Supports flexible LLM backends—from cloud APIs to local models—so you can use whatever works best for your use case.
 
 ---
 
 ## 2. Product Vision
 
 ### 2.1 Vision Statement
-Create an AI-powered strategic simulation platform that enables consultants and enterprise leaders to rehearse high-stakes decisions in a zero-risk digital environment. By modeling real-world stakeholder dynamics with high-fidelity agent archetypes and strategy-native simulation environments, MiroFish bridges the gap between qualitative scenario analysis and quantitative decision support—positioning it as an essential tool for modern strategic advisory.
+Create an AI-powered strategic simulation platform that enables consultants and enterprise leaders to rehearse high-stakes decisions in a zero-risk digital environment. By modeling real-world stakeholder dynamics with high-fidelity agent archetypes and strategy-native simulation environments, ScenarioLab bridges the gap between qualitative scenario analysis and quantitative decision support—positioning it as an essential tool for modern strategic advisory.
 
-**Positioning Note:** MiroFish is a scenario rehearsal platform, not a prediction engine. Accuracy benchmarks will be established via backtesting against historical events in Phase 3. All outputs should be framed as structured scenario analysis and stress-testing results rather than predictions of future outcomes.
+**Positioning Note:** ScenarioLab is a scenario rehearsal platform, not a prediction engine. Accuracy benchmarks will be established via backtesting against historical events in Phase 3. All outputs should be framed as structured scenario analysis and stress-testing results rather than predictions of future outcomes.
 
 ### 2.2 Target Users
 
@@ -232,7 +232,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 **User Story:** As a consultant, I want to invoke simulations from Claude Desktop or Cursor without context-switching.
 
 **Requirements:**
-- CLI interface: `mirofish-sim --playbook <name> --seed <file.md> --output <format>`
+- CLI interface: `scenariolab-sim --playbook <name> --seed <file.md> --output <format>`
 - MCP protocol compliance for agentic workflow integration
 - Integration support for:
   - Claude Desktop
@@ -517,7 +517,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 - Generate "client counterpart agent" from client briefs
 - Executives practice presentations against AI counterpart
 - Counterpart generates objections, pushback, and challenging questions calibrated to specific stakeholder
-- Bridges MiroFish from analysis tool to executive coaching tool
+- Bridges ScenarioLab from analysis tool to executive coaching tool
 - Multiple rehearsal modes: friendly, challenging, hostile
 
 **Acceptance Criteria:**
@@ -909,7 +909,7 @@ The following playbook-specific roles reuse or specialize core archetypes:
 
 ```
 # From terminal or IDE integrated terminal
-$ mirofish-sim --playbook mna-culture --seed ./deal-materials.md --output miro
+$ scenariolab-sim --playbook mna-culture --seed ./deal-materials.md --output miro
 
 # Or via MCP from Claude Desktop/Cursor
 > Run M&A culture clash simulation with the uploaded deal materials and export to Miro
@@ -923,15 +923,15 @@ $ mirofish-sim --playbook mna-culture --seed ./deal-materials.md --output miro
 5. **Export** - Delivers outputs to specified destination (Miro board, local files, JSON API)
 
 **MCP Protocol Support:**
-- `mirofish/simulate`: Initiate simulation with parameters
-- `mirofish/status`: Check simulation progress
-- `mirofish/results`: Retrieve completed simulation results
-- `mirofish/export`: Export to specified format (miro, pdf, json)
-- `mirofish/playbooks/list`: List available consulting playbooks
+- `scenariolab/simulate`: Initiate simulation with parameters
+- `scenariolab/status`: Check simulation progress
+- `scenariolab/results`: Retrieve completed simulation results
+- `scenariolab/export`: Export to specified format (miro, pdf, json)
+- `scenariolab/playbooks/list`: List available consulting playbooks
 
 **IDE Integration Examples:**
 - **Claude Desktop:** Natural language simulation requests with context awareness
-- **Cursor:** `/mirofish` command palette for quick simulation invocation
+- **Cursor:** `/scenariolab` command palette for quick simulation invocation
 - **VS Code:** Extension with sidebar for playbook selection and result viewing
 
 ### 5.3 Design Principles
@@ -1053,7 +1053,7 @@ docker compose up -d
 
 ## 8. Roadmap
 
-**Phase Prioritization Rationale:** Phases are prioritized based on (1) client unblockers — features required for first paid engagements, (2) consulting workflow integration — tools that fit existing consultant habits, and (3) credibility building — capabilities that establish MiroFish as a serious consulting tool rather than a demo.
+**Phase Prioritization Rationale:** Phases are prioritized based on (1) client unblockers — features required for first paid engagements, (2) consulting workflow integration — tools that fit existing consultant habits, and (3) credibility building — capabilities that establish ScenarioLab as a serious consulting tool rather than a demo.
 
 ### Phase 1: MVP (30-Day Sprint)
 *Priority: Unblock first client engagements*
@@ -1194,8 +1194,8 @@ docker compose up -d
 - Strategic support from Shanda Group
 
 ### 10.3 Community
-- GitHub: https://github.com/666ghj/MiroFish
-- Contact: mirofish@shanda.com
+- GitHub: https://github.com/666ghj/ScenarioLab
+- Contact: scenariolab@shanda.com
 
 ---
 
@@ -1219,9 +1219,9 @@ docker compose up -d
 | **Consulting Playbook** | Pre-configured simulation template for specific consulting scenarios (M&A culture clash, regulatory shock test, competitive response war game, boardroom decision rehearsal) with defined agent rosters, environment configurations, and expected deliverables. |
 | **Client Counterpart Agent** | Specialized agent type that simulates client executive behavior for rehearsing presentations and anticipating objections before SteerCo meetings. |
 | **Monte Carlo Confidence Interval** | Statistical method running 20-50 simulation iterations per scenario to establish probability ranges and confidence bounds for outcomes. |
-| **LLM Provider** | The backend language model service used for agent inference. MiroFish supports multiple providers including cloud APIs (OpenAI, Anthropic, Google, Alibaba/Qwen) and local CLI-based models (Ollama, llama.cpp). |
+| **LLM Provider** | The backend language model service used for agent inference. ScenarioLab supports multiple providers including cloud APIs (OpenAI, Anthropic, Google, Alibaba/Qwen) and local CLI-based models (Ollama, llama.cpp). |
 | **BATNA** | Best Alternative To a Negotiated Agreement - fallback option triggered in negotiation scenarios when impasse persists. |
-| **Scenario Rehearsal** | MiroFish's core positioning: stress-testing strategic decisions in simulated environments rather than predicting future outcomes. |
+| **Scenario Rehearsal** | ScenarioLab's core positioning: stress-testing strategic decisions in simulated environments rather than predicting future outcomes. |
 | **Scenario Matrix** | Deliverable format showing 3-5 scenarios × 4-6 outcomes with probability ranges and confidence intervals. |
 | **Risk Register** | Structured deliverable documenting risks with fields: risk_id, description, probability, impact, owner, mitigation, trigger. |
 | **Stakeholder Heatmap** | Visual deliverable mapping stakeholders by position, influence, support_level, and key_concerns. |
@@ -1329,11 +1329,11 @@ The AI-powered strategic simulation and war-gaming market is experiencing rapid 
 - **Market Position:** Strategy visualization and framework tools
 - **Strategic Gap:** No agent-based simulation capabilities; static framework tools rather than dynamic behavioral simulation
 
-### 13.3 MiroFish Positioning
+### 13.3 ScenarioLab Positioning
 
 **Unique Value Proposition:** Open-source, consultant-native, LLM-flexible, MCP-integrated war-gaming platform.
 
-| Dimension | MiroFish Advantage |
+| Dimension | ScenarioLab Advantage |
 |-----------|-------------------|
 | **Open Source** | Community-driven development; transparent methodology; no vendor lock-in |
 | **Consultant-Native** | Built by consultants for consultants; playbook templates match actual engagement types |
@@ -1358,7 +1358,7 @@ The competitive landscape reveals a significant gap: **no standalone, open-sourc
 - Are closed-source and expensive (Principle, Palantir)
 - Require cloud dependencies that block confidential engagements
 
-MiroFish fills this gap by combining open-source accessibility with consulting-grade methodology and enterprise-ready deployment options.
+ScenarioLab fills this gap by combining open-source accessibility with consulting-grade methodology and enterprise-ready deployment options.
 
 ---
 

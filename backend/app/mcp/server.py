@@ -1,4 +1,4 @@
-"""MCP (Model Context Protocol) server implementation for MiroFish."""
+"""MCP (Model Context Protocol) server implementation for ScenarioLab."""
 
 import logging
 from datetime import datetime
@@ -36,7 +36,7 @@ class MCPToolResult(BaseModel):
 
 
 class MirofishMCPServer:
-    """MCP server exposing MiroFish simulation tools."""
+    """MCP server exposing ScenarioLab simulation tools."""
 
     def __init__(self, engine: SimulationEngine | None = None):
         self.simulation_engine = engine or simulation_engine
@@ -45,8 +45,8 @@ class MirofishMCPServer:
     def _register_tools(self) -> dict[str, MCPToolDefinition]:
         """Register all MCP tools."""
         return {
-            "mirofish/simulate": MCPToolDefinition(
-                name="mirofish/simulate",
+            "scenariolab/simulate": MCPToolDefinition(
+                name="scenariolab/simulate",
                 description="Run a strategic simulation. Specify a playbook template and seed material to simulate boardroom dynamics, war games, negotiations, or integration planning.",
                 parameters={
                     "type": "object",
@@ -77,8 +77,8 @@ class MirofishMCPServer:
                     "required": ["playbook", "name"],
                 },
             ),
-            "mirofish/status": MCPToolDefinition(
-                name="mirofish/status",
+            "scenariolab/status": MCPToolDefinition(
+                name="scenariolab/status",
                 description="Check the status of a running or completed simulation.",
                 parameters={
                     "type": "object",
@@ -91,8 +91,8 @@ class MirofishMCPServer:
                     "required": ["simulation_id"],
                 },
             ),
-            "mirofish/results": MCPToolDefinition(
-                name="mirofish/results",
+            "scenariolab/results": MCPToolDefinition(
+                name="scenariolab/results",
                 description="Retrieve the results and report of a completed simulation.",
                 parameters={
                     "type": "object",
@@ -110,8 +110,8 @@ class MirofishMCPServer:
                     "required": ["simulation_id"],
                 },
             ),
-            "mirofish/export": MCPToolDefinition(
-                name="mirofish/export",
+            "scenariolab/export": MCPToolDefinition(
+                name="scenariolab/export",
                 description="Export simulation results to a specific format.",
                 parameters={
                     "type": "object",
@@ -129,8 +129,8 @@ class MirofishMCPServer:
                     "required": ["simulation_id"],
                 },
             ),
-            "mirofish/playbooks/list": MCPToolDefinition(
-                name="mirofish/playbooks/list",
+            "scenariolab/playbooks/list": MCPToolDefinition(
+                name="scenariolab/playbooks/list",
                 description="List available consulting playbook templates for simulation.",
                 parameters={"type": "object", "properties": {}},
             ),
@@ -152,15 +152,15 @@ class MirofishMCPServer:
             )
 
         try:
-            if tool_name == "mirofish/simulate":
+            if tool_name == "scenariolab/simulate":
                 return await self._handle_simulate(arguments)
-            elif tool_name == "mirofish/status":
+            elif tool_name == "scenariolab/status":
                 return await self._handle_status(arguments)
-            elif tool_name == "mirofish/results":
+            elif tool_name == "scenariolab/results":
                 return await self._handle_results(arguments)
-            elif tool_name == "mirofish/export":
+            elif tool_name == "scenariolab/export":
                 return await self._handle_export(arguments)
-            elif tool_name == "mirofish/playbooks/list":
+            elif tool_name == "scenariolab/playbooks/list":
                 return await self._handle_list_playbooks(arguments)
             else:
                 return MCPToolResult(
@@ -177,7 +177,7 @@ class MirofishMCPServer:
             )
 
     async def _handle_simulate(self, args: dict) -> MCPToolResult:
-        """Handle mirofish/simulate tool call."""
+        """Handle scenariolab/simulate tool call."""
         playbook_id = args.get("playbook")
         name = args.get("name")
         seed_content = args.get("seed_content", "")
@@ -186,7 +186,7 @@ class MirofishMCPServer:
 
         if not playbook_id or not name:
             return MCPToolResult(
-                tool_name="mirofish/simulate",
+                tool_name="scenariolab/simulate",
                 status="error",
                 error="Missing required parameters: playbook and name",
             )
@@ -196,7 +196,7 @@ class MirofishMCPServer:
         if not playbook:
             available = playbook_manager.get_playbook_ids()
             return MCPToolResult(
-                tool_name="mirofish/simulate",
+                tool_name="scenariolab/simulate",
                 status="error",
                 error=f"Playbook not found: {playbook_id}. Available: {available}",
             )
@@ -246,7 +246,7 @@ class MirofishMCPServer:
         asyncio.create_task(self.simulation_engine.run_simulation(sim_state.config.id))
 
         return MCPToolResult(
-            tool_name="mirofish/simulate",
+            tool_name="scenariolab/simulate",
             status="success",
             result={
                 "simulation_id": sim_state.config.id,
@@ -256,17 +256,17 @@ class MirofishMCPServer:
                 "rounds": rounds,
                 "environment": environment,
                 "agent_count": len(agent_configs),
-                "message": "Simulation started. Use mirofish/status to check progress.",
+                "message": "Simulation started. Use scenariolab/status to check progress.",
             },
         )
 
     async def _handle_status(self, args: dict) -> MCPToolResult:
-        """Handle mirofish/status tool call."""
+        """Handle scenariolab/status tool call."""
         simulation_id = args.get("simulation_id")
 
         if not simulation_id:
             return MCPToolResult(
-                tool_name="mirofish/status",
+                tool_name="scenariolab/status",
                 status="error",
                 error="Missing required parameter: simulation_id",
             )
@@ -274,7 +274,7 @@ class MirofishMCPServer:
         sim_state = await self.simulation_engine.get_simulation(simulation_id)
         if not sim_state:
             return MCPToolResult(
-                tool_name="mirofish/status",
+                tool_name="scenariolab/status",
                 status="error",
                 error=f"Simulation not found: {simulation_id}",
             )
@@ -288,7 +288,7 @@ class MirofishMCPServer:
             )
 
         return MCPToolResult(
-            tool_name="mirofish/status",
+            tool_name="scenariolab/status",
             status="success",
             result={
                 "simulation_id": simulation_id,
@@ -305,13 +305,13 @@ class MirofishMCPServer:
         )
 
     async def _handle_results(self, args: dict) -> MCPToolResult:
-        """Handle mirofish/results tool call."""
+        """Handle scenariolab/results tool call."""
         simulation_id = args.get("simulation_id")
         section = args.get("section", "full")
 
         if not simulation_id:
             return MCPToolResult(
-                tool_name="mirofish/results",
+                tool_name="scenariolab/results",
                 status="error",
                 error="Missing required parameter: simulation_id",
             )
@@ -319,14 +319,14 @@ class MirofishMCPServer:
         sim_state = await self.simulation_engine.get_simulation(simulation_id)
         if not sim_state:
             return MCPToolResult(
-                tool_name="mirofish/results",
+                tool_name="scenariolab/results",
                 status="error",
                 error=f"Simulation not found: {simulation_id}",
             )
 
         if sim_state.status not in [SimulationStatus.COMPLETED, SimulationStatus.PAUSED]:
             return MCPToolResult(
-                tool_name="mirofish/results",
+                tool_name="scenariolab/results",
                 status="error",
                 error=f"Simulation not complete. Current status: {sim_state.status.value}",
             )
@@ -350,19 +350,19 @@ class MirofishMCPServer:
             }
 
         return MCPToolResult(
-            tool_name="mirofish/results",
+            tool_name="scenariolab/results",
             status="success",
             result=result,
         )
 
     async def _handle_export(self, args: dict) -> MCPToolResult:
-        """Handle mirofish/export tool call."""
+        """Handle scenariolab/export tool call."""
         simulation_id = args.get("simulation_id")
         format_type = args.get("format", "markdown")
 
         if not simulation_id:
             return MCPToolResult(
-                tool_name="mirofish/export",
+                tool_name="scenariolab/export",
                 status="error",
                 error="Missing required parameter: simulation_id",
             )
@@ -370,7 +370,7 @@ class MirofishMCPServer:
         sim_state = await self.simulation_engine.get_simulation(simulation_id)
         if not sim_state:
             return MCPToolResult(
-                tool_name="mirofish/export",
+                tool_name="scenariolab/export",
                 status="error",
                 error=f"Simulation not found: {simulation_id}",
             )
@@ -387,28 +387,28 @@ class MirofishMCPServer:
             export_data = {"error": "Miro export not implemented. Use markdown or json."}
         else:
             return MCPToolResult(
-                tool_name="mirofish/export",
+                tool_name="scenariolab/export",
                 status="error",
                 error=f"Unsupported format: {format_type}",
             )
 
         return MCPToolResult(
-            tool_name="mirofish/export",
+            tool_name="scenariolab/export",
             status="success",
             result={
                 "simulation_id": simulation_id,
                 "format": format_type,
                 "export_data": export_data,
-                "filename": f"mirofish_{simulation_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.{format_type}",
+                "filename": f"scenariolab_{simulation_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.{format_type}",
             },
         )
 
     async def _handle_list_playbooks(self, args: dict) -> MCPToolResult:
-        """Handle mirofish/playbooks/list tool call."""
+        """Handle scenariolab/playbooks/list tool call."""
         playbooks = playbook_manager.get_all_playbooks()
 
         return MCPToolResult(
-            tool_name="mirofish/playbooks/list",
+            tool_name="scenariolab/playbooks/list",
             status="success",
             result={
                 "count": len(playbooks),

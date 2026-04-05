@@ -1,5 +1,5 @@
-// mirofish-e2e.spec.ts
-// MiroFish AI War-Gaming Platform — Full E2E UI Test Suite
+// scenariolab-e2e.spec.ts
+// ScenarioLab AI War-Gaming Platform — Full E2E UI Test Suite
 // Organized by priority pass order: P0 → P1 → P2
 
 import { test, expect, Page } from '@playwright/test';
@@ -148,9 +148,9 @@ test.describe('P0: Global Navigation', () => {
     await expect(breadcrumbOrHeader.first()).toBeVisible();
   });
 
-  test('NAV-012: MiroFish logo navigates to dashboard', async ({ page }) => {
+  test('NAV-012: ScenarioLab logo navigates to dashboard', async ({ page }) => {
     await page.goto(`${BASE}/upload`);
-    await page.locator('a:has-text("MiroFish")').first().click();
+    await page.locator('a:has-text("ScenarioLab")').first().click();
     await expect(page).toHaveURL(BASE + '/');
   });
 });
@@ -652,7 +652,7 @@ test.describe('P1: API Keys', () => {
   async function unlockApiKeysPage(page: Page) {
     await page.goto(BASE);
     await page.evaluate(() => {
-      sessionStorage.setItem('mirofish_admin_api_key', 'e2e-mock-admin');
+      sessionStorage.setItem('scenariolab_admin_api_key', 'e2e-mock-admin');
     });
   }
 

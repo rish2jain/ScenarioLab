@@ -3,7 +3,7 @@
 <cite>
 **Referenced Files in This Document**
 - [PRD.md](file://PRD.md)
-- [Enhancing MiroFish for Strategy Consultants.md](file://Research/Enhancing MiroFish for Strategy Consultants.md)
+- [Enhancing ScenarioLab for Strategy Consultants.md](file://Research/Enhancing ScenarioLab for Strategy Consultants.md)
 </cite>
 
 ## Table of Contents
@@ -19,25 +19,25 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This Implementation Roadmap documents MiroFish’s phased development approach from MVP to Enterprise deployment. It aligns strategic goals with tactical delivery, leveraging consulting playbooks, agent archetypes, and SteerCo-ready deliverables. The roadmap defines phase-specific deliverables, success metrics, timelines, and interdependencies to guide product management and development teams.
+This Implementation Roadmap documents ScenarioLab’s phased development approach from MVP to Enterprise deployment. It aligns strategic goals with tactical delivery, leveraging consulting playbooks, agent archetypes, and SteerCo-ready deliverables. The roadmap defines phase-specific deliverables, success metrics, timelines, and interdependencies to guide product management and development teams.
 
 ## Project Structure
-MiroFish is organized around a clear product vision and feature set tailored to strategy consultants and enterprise decision-makers. The PRD outlines the core features, technical architecture, and roadmap, while the research document synthesizes recommendations for air-gapped deployment, MCP integration, and consulting-grade outputs.
+ScenarioLab is organized around a clear product vision and feature set tailored to strategy consultants and enterprise decision-makers. The PRD outlines the core features, technical architecture, and roadmap, while the research document synthesizes recommendations for air-gapped deployment, MCP integration, and consulting-grade outputs.
 
 ```mermaid
 graph TB
 PRD["PRD.md<br/>Vision, Features, Roadmap, Metrics"]
-Research["Research/Enhancing MiroFish for Strategy Consultants.md<br/>Synthesis of UX, validation, and integration recommendations"]
+Research["Research/Enhancing ScenarioLab for Strategy Consultants.md<br/>Synthesis of UX, validation, and integration recommendations"]
 PRD --> Research
 ```
 
 **Diagram sources**
 - [PRD.md:13-35](file://PRD.md#L13-L35)
-- [Enhancing MiroFish for Strategy Consultants.md:37-L55]
+- [Enhancing ScenarioLab for Strategy Consultants.md:37-L55]
 
 **Section sources**
 - [PRD.md:13-35](file://PRD.md#L13-L35)
-- [Enhancing MiroFish for Strategy Consultants.md:37-L55]
+- [Enhancing ScenarioLab for Strategy Consultants.md:37-L55]
 
 ## Core Components
 - Core simulation engine with strategy-native environments and dynamic temporal memory
@@ -53,7 +53,7 @@ PRD --> Research
 - [PRD.md:397-423](file://PRD.md#L397-L423)
 
 ## Architecture Overview
-MiroFish follows a layered architecture: frontend (Next.js), backend API (Python), and integrated services for LLM, memory, and graph DB. The MCP server wraps the backend for CLI integration, and Miro board export integrates with Miro’s REST API for SteerCo-ready deliverables.
+ScenarioLab follows a layered architecture: frontend (Next.js), backend API (Python), and integrated services for LLM, memory, and graph DB. The MCP server wraps the backend for CLI integration, and Miro board export integrates with Miro’s REST API for SteerCo-ready deliverables.
 
 ```mermaid
 graph TB
@@ -141,7 +141,7 @@ Validate --> End(["Phase 1 Complete"])
 - [PRD.md:303-311](file://PRD.md#L303-L311)
 - [PRD.md:397-423](file://PRD.md#L397-L423)
 - [PRD.md:425-434](file://PRD.md#L425-L434)
-- [Enhancing MiroFish for Strategy Consultants.md:51-55](file://Research/Enhancing MiroFish for Strategy Consultants.md#L51-L55)
+- [Enhancing ScenarioLab for Strategy Consultants.md:51-55](file://Research/Enhancing ScenarioLab for Strategy Consultants.md#L51-L55)
 
 ### Phase 2: Enhanced Experience
 Focus: Multi-scenario batch execution, Monte Carlo confidence intervals, AnalyticsAgent, Miro board auto-generation, and improved interactive chat.
@@ -339,7 +339,7 @@ Common issues and mitigation strategies aligned with the roadmap:
 - [PRD.md:292-298](file://PRD.md#L292-L298)
 
 ## Conclusion
-MiroFish’s phased roadmap balances rapid MVP delivery with enterprise-readiness. By prioritizing air-gapped deployment, MCP integration, consulting playbooks, and SteerCo deliverables, the project accelerates adoption among strategy consultants while laying the foundation for advanced analytics, collaboration, and multi-tenancy. Success metrics provide clear targets for user acquisition, simulation volume, session duration, and retention, ensuring measurable progress across phases.
+ScenarioLab’s phased roadmap balances rapid MVP delivery with enterprise-readiness. By prioritizing air-gapped deployment, MCP integration, consulting playbooks, and SteerCo deliverables, the project accelerates adoption among strategy consultants while laying the foundation for advanced analytics, collaboration, and multi-tenancy. Success metrics provide clear targets for user acquisition, simulation volume, session duration, and retention, ensuring measurable progress across phases.
 
 ## Appendices
 

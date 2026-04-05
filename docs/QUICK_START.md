@@ -1,4 +1,4 @@
-# MiroFish Quick Start
+# ScenarioLab Quick Start
 
 Get the platform running in under 5 minutes.
 
@@ -14,7 +14,7 @@ Get the platform running in under 5 minutes.
 ## 1. Clone and Configure
 
 ```bash
-git clone <repo-url> && cd MiroFish
+git clone <repo-url> && cd ScenarioLab
 cp .env.example .env
 ```
 
@@ -67,13 +67,13 @@ LLM_MODEL_NAME=gpt-4         # model name for your chosen provider
 cd backend
 
 # List available playbooks
-uv run mirofish-sim list-playbooks
+uv run scenariolab-sim list-playbooks
 
 # Run a simulation
-uv run mirofish-sim simulate --playbook mna-culture-clash --rounds 5
+uv run scenariolab-sim simulate --playbook mna-culture-clash --rounds 5
 
 # With a seed document
-uv run mirofish-sim simulate --playbook pricing-war --seed ../data/market-report.pdf
+uv run scenariolab-sim simulate --playbook pricing-war --seed ../data/market-report.pdf
 ```
 
 ## Stopping

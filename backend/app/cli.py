@@ -1,11 +1,11 @@
 """
-MiroFish CLI - Strategic Simulation from the Command Line
+ScenarioLab CLI - Strategic Simulation from the Command Line
 
 Usage:
-    mirofish-sim simulate --playbook <name> --seed <file> --output <format>
-    mirofish-sim list-playbooks
-    mirofish-sim status <simulation_id>
-    mirofish-sim results <simulation_id> --output <format>
+    scenariolab-sim simulate --playbook <name> --seed <file> --output <format>
+    scenariolab-sim list-playbooks
+    scenariolab-sim status <simulation_id>
+    scenariolab-sim results <simulation_id> --output <format>
 """
 
 import argparse
@@ -55,7 +55,7 @@ async def simulate_local(args: argparse.Namespace) -> int:
 
     # Execute simulate tool
     result = await mcp_server.execute_tool(
-        "mirofish/simulate",
+        "scenariolab/simulate",
         {
             "playbook": args.playbook,
             "name": args.name or f"CLI Simulation {int(time.time())}",
@@ -83,7 +83,7 @@ async def simulate_local(args: argparse.Namespace) -> int:
         wait_time += 2
 
         status_result = await mcp_server.execute_tool(
-            "mirofish/status",
+            "scenariolab/status",
             {"simulation_id": simulation_id},
         )
 
@@ -106,7 +106,7 @@ async def simulate_local(args: argparse.Namespace) -> int:
 
     # Get results
     results_result = await mcp_server.execute_tool(
-        "mirofish/results",
+        "scenariolab/results",
         {"simulation_id": simulation_id, "section": "full"},
     )
 
@@ -119,7 +119,7 @@ async def simulate_local(args: argparse.Namespace) -> int:
         print_result(results_result.result, "json")
     elif args.output == "markdown":
         export_result = await mcp_server.execute_tool(
-            "mirofish/export",
+            "scenariolab/export",
             {"simulation_id": simulation_id, "format": "markdown"},
         )
         if export_result.status == "success":
@@ -150,7 +150,7 @@ async def simulate_remote(args: argparse.Namespace, api_url: str) -> int:
         response = await client.post(
             f"{api_url}/api/mcp/execute",
             json={
-                "tool_name": "mirofish/simulate",
+                "tool_name": "scenariolab/simulate",
                 "arguments": {
                     "playbook": args.playbook,
                     "name": args.name or f"CLI Simulation {int(time.time())}",
@@ -181,7 +181,7 @@ async def simulate_remote(args: argparse.Namespace, api_url: str) -> int:
             status_response = await client.post(
                 f"{api_url}/api/mcp/execute",
                 json={
-                    "tool_name": "mirofish/status",
+                    "tool_name": "scenariolab/status",
                     "arguments": {"simulation_id": simulation_id},
                 },
             )
@@ -205,7 +205,7 @@ async def simulate_remote(args: argparse.Namespace, api_url: str) -> int:
         results_response = await client.post(
             f"{api_url}/api/mcp/execute",
             json={
-                "tool_name": "mirofish/results",
+                "tool_name": "scenariolab/results",
                 "arguments": {
                     "simulation_id": simulation_id,
                     "section": "full",
@@ -226,7 +226,7 @@ async def simulate_remote(args: argparse.Namespace, api_url: str) -> int:
             export_response = await client.post(
                 f"{api_url}/api/mcp/execute",
                 json={
-                    "tool_name": "mirofish/export",
+                    "tool_name": "scenariolab/export",
                     "arguments": {
                         "simulation_id": simulation_id,
                         "format": "markdown",
@@ -246,7 +246,7 @@ async def simulate_remote(args: argparse.Namespace, api_url: str) -> int:
 
 async def list_playbooks_local(args: argparse.Namespace) -> int:
     """List playbooks in local mode."""
-    result = await mcp_server.execute_tool("mirofish/playbooks/list", {})
+    result = await mcp_server.execute_tool("scenariolab/playbooks/list", {})
 
     if result.status == "error":
         print_progress(f"Error: {result.error}")
@@ -262,7 +262,7 @@ async def list_playbooks_remote(args: argparse.Namespace, api_url: str) -> int:
         response = await client.post(
             f"{api_url}/api/mcp/execute",
             json={
-                "tool_name": "mirofish/playbooks/list",
+                "tool_name": "scenariolab/playbooks/list",
                 "arguments": {},
             },
         )
@@ -279,7 +279,7 @@ async def list_playbooks_remote(args: argparse.Namespace, api_url: str) -> int:
 async def check_status_local(args: argparse.Namespace) -> int:
     """Check simulation status in local mode."""
     result = await mcp_server.execute_tool(
-        "mirofish/status",
+        "scenariolab/status",
         {"simulation_id": args.simulation_id},
     )
 
@@ -297,7 +297,7 @@ async def check_status_remote(args: argparse.Namespace, api_url: str) -> int:
         response = await client.post(
             f"{api_url}/api/mcp/execute",
             json={
-                "tool_name": "mirofish/status",
+                "tool_name": "scenariolab/status",
                 "arguments": {"simulation_id": args.simulation_id},
             },
         )
@@ -314,7 +314,7 @@ async def check_status_remote(args: argparse.Namespace, api_url: str) -> int:
 async def get_results_local(args: argparse.Namespace) -> int:
     """Get simulation results in local mode."""
     result = await mcp_server.execute_tool(
-        "mirofish/results",
+        "scenariolab/results",
         {
             "simulation_id": args.simulation_id,
             "section": args.section,
@@ -329,7 +329,7 @@ async def get_results_local(args: argparse.Namespace) -> int:
         print_result(result.result, "json")
     elif args.output == "markdown":
         export_result = await mcp_server.execute_tool(
-            "mirofish/export",
+            "scenariolab/export",
             {"simulation_id": args.simulation_id, "format": "markdown"},
         )
         if export_result.status == "success":
@@ -349,7 +349,7 @@ async def get_results_remote(args: argparse.Namespace, api_url: str) -> int:
             response = await client.post(
                 f"{api_url}/api/mcp/execute",
                 json={
-                    "tool_name": "mirofish/export",
+                    "tool_name": "scenariolab/export",
                     "arguments": {
                         "simulation_id": args.simulation_id,
                         "format": "markdown",
@@ -360,7 +360,7 @@ async def get_results_remote(args: argparse.Namespace, api_url: str) -> int:
             response = await client.post(
                 f"{api_url}/api/mcp/execute",
                 json={
-                    "tool_name": "mirofish/results",
+                    "tool_name": "scenariolab/results",
                     "arguments": {
                         "simulation_id": args.simulation_id,
                         "section": args.section,
@@ -385,8 +385,8 @@ async def get_results_remote(args: argparse.Namespace, api_url: str) -> int:
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
-        description="MiroFish - AI-Powered War Gaming and Scenario Simulation",
-        prog="mirofish-sim",
+        description="ScenarioLab - AI-Powered War Gaming and Scenario Simulation",
+        prog="scenariolab-sim",
     )
 
     parser.add_argument(

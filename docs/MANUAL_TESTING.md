@@ -1,4 +1,4 @@
-# MiroFish End-to-End Manual Testing Guide
+# ScenarioLab End-to-End Manual Testing Guide
 
 This guide walks through every major feature for manual verification. Use it after deployment, after major changes, or as a QA checklist.
 
@@ -267,11 +267,11 @@ cd backend
 
 | Step | Command | Expected Result |
 |------|---------|-----------------|
-| 13.1 | `uv run mirofish-sim list-playbooks` | Playbook list printed to stdout |
-| 13.2 | `uv run mirofish-sim simulate --playbook mna-culture-clash --rounds 3` | Simulation runs; progress to stderr; results to stdout |
-| 13.3 | `uv run mirofish-sim status <id>` (from 13.2 output) | Status JSON printed |
-| 13.4 | `uv run mirofish-sim results <id> --output json` | Full results in JSON |
-| 13.5 | `uv run mirofish-sim results <id> --section executive_summary` | Summary section only |
+| 13.1 | `uv run scenariolab-sim list-playbooks` | Playbook list printed to stdout |
+| 13.2 | `uv run scenariolab-sim simulate --playbook mna-culture-clash --rounds 3` | Simulation runs; progress to stderr; results to stdout |
+| 13.3 | `uv run scenariolab-sim status <id>` (from 13.2 output) | Status JSON printed |
+| 13.4 | `uv run scenariolab-sim results <id> --output json` | Full results in JSON |
+| 13.5 | `uv run scenariolab-sim results <id> --section executive_summary` | Summary section only |
 
 ---
 
@@ -297,7 +297,7 @@ cd backend
 
 | Step | Action | Expected Result |
 |------|--------|-----------------|
-| 15.1 | Stop Neo4j container (`docker stop mirofish-neo4j`) | |
+| 15.1 | Stop Neo4j container (`docker stop scenariolab-neo4j`) | |
 | 15.2 | Restart backend | Starts with warning; no crash |
 | 15.3 | Run a simulation | Completes successfully (SQLite fallback) |
 | 15.4 | Check graph features | Shows "unavailable" or empty state; no errors |
@@ -335,7 +335,7 @@ cd backend
 
 ## Automated E2E Tests
 
-For repeatable testing, MiroFish includes Playwright tests:
+For repeatable testing, ScenarioLab includes Playwright tests:
 
 ```bash
 # Ensure the stack is running first (./start.sh or npm run dev)

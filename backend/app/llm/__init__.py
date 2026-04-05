@@ -1,4 +1,4 @@
-"""LLM module for MiroFish backend.
+"""LLM module for ScenarioLab backend.
 
 Provides a flexible abstraction layer for multiple LLM providers.
 """

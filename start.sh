@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# MiroFish Platform Startup Script
+# ScenarioLab Platform Startup Script
 # Usage: ./start.sh [options]
 # Options:
 #   --skip-install    Skip dependency installation
@@ -42,7 +42,7 @@ for arg in "$@"; do
             shift
             ;;
         --help|-h)
-            echo -e "${CYAN}MiroFish Platform Startup Script${NC}"
+            echo -e "${CYAN}ScenarioLab Platform Startup Script${NC}"
             echo ""
             echo "Usage: ./start.sh [options]"
             echo ""
@@ -59,7 +59,7 @@ done
 # Print banner
 echo -e "${CYAN}"
 echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║                    MiroFish Platform                         ║"
+echo "║                    ScenarioLab Platform                         ║"
 echo "║          AI-Powered War-Gaming for Consultants              ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
@@ -245,16 +245,16 @@ start_neo4j() {
     print_info "Starting Neo4j..."
     
     # Check if Neo4j container is already running
-    if docker ps --format "{{.Names}}" | grep -q "^mirofish-neo4j$"; then
+    if docker ps --format "{{.Names}}" | grep -q "^scenariolab-neo4j$"; then
         print_success "Neo4j container already running"
         wait_for_neo4j
         return 0
     fi
     
     # Check if Neo4j container exists but is stopped
-    if docker ps -a --format "{{.Names}}" | grep -q "^mirofish-neo4j$"; then
+    if docker ps -a --format "{{.Names}}" | grep -q "^scenariolab-neo4j$"; then
         print_info "Starting existing Neo4j container..."
-        docker start mirofish-neo4j >/dev/null 2>&1
+        docker start scenariolab-neo4j >/dev/null 2>&1
     else
         print_info "Creating and starting Neo4j container..."
         docker compose up -d neo4j
@@ -325,7 +325,7 @@ check_ports() {
 
 # Start services locally
 start_local() {
-    print_info "Starting MiroFish services locally..."
+    print_info "Starting ScenarioLab services locally..."
     
     # Check ports before starting
     check_ports
@@ -359,7 +359,7 @@ cleanup() {
             read -p "Stop Neo4j container? (y/N) " -n 1 -r
             echo
             if [[ $REPLY =~ ^[Yy]$ ]]; then
-                docker stop mirofish-neo4j >/dev/null 2>&1 || true
+                docker stop scenariolab-neo4j >/dev/null 2>&1 || true
                 print_success "Neo4j stopped"
             fi
         fi
@@ -410,7 +410,7 @@ cleanup() {
     # Print status
     echo ""
     echo -e "${GREEN}══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}  MiroFish Platform is running!${NC}"
+    echo -e "${GREEN}  ScenarioLab Platform is running!${NC}"
     echo -e "${GREEN}══════════════════════════════════════════════════════════════${NC}"
     echo ""
     echo -e "  ${CYAN}Frontend:${NC}    http://localhost:3000"
@@ -429,7 +429,7 @@ cleanup() {
 
 # Start with Docker Compose
 start_docker() {
-    print_info "Starting MiroFish with Docker Compose..."
+    print_info "Starting ScenarioLab with Docker Compose..."
     
     if [ "$DOCKER_AVAILABLE" = false ]; then
         print_error "Docker is not available. Cannot use --docker mode."
@@ -451,7 +451,7 @@ start_docker() {
     # Print status
     echo ""
     echo -e "${GREEN}══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}  MiroFish Platform is running with Docker!${NC}"
+    echo -e "${GREEN}  ScenarioLab Platform is running with Docker!${NC}"
     echo -e "${GREEN}══════════════════════════════════════════════════════════════${NC}"
     echo ""
     echo -e "  ${CYAN}Frontend:${NC}    http://localhost:3000"

@@ -102,7 +102,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
             <Fish className="w-5 h-5 text-white" />
           </div>
           <span className="text-lg font-bold text-foreground group-hover:text-accent transition-colors">
-            MiroFish
+            ScenarioLab
           </span>
         </Link>
         {/* Close button for mobile */}
@@ -452,7 +452,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
       {/* Footer */}
       <div className="p-4 border-t border-border">
         <div className="text-xs text-foreground-subtle">
-          <p>MiroFish v0.1.0</p>
+          <p>ScenarioLab v0.1.0</p>
           <p className="mt-1">AI War-Gaming Platform</p>
         </div>
       </div>

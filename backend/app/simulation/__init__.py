@@ -1,4 +1,4 @@
-"""Multi-Agent Simulation Engine for MiroFish."""
+"""Multi-Agent Simulation Engine for ScenarioLab."""
 
 from app.simulation.agent import SimulationAgent
 from app.simulation.engine import SimulationEngine, simulation_engine

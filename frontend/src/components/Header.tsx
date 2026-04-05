@@ -85,7 +85,7 @@ export function Header({
         >
           <Menu className="w-5 h-5" />
         </button>
-        <span className="text-foreground-muted hidden sm:inline flex-shrink-0">MiroFish</span>
+        <span className="text-foreground-muted hidden sm:inline flex-shrink-0">ScenarioLab</span>
         <ChevronRight className="w-4 h-4 text-foreground-subtle hidden sm:block flex-shrink-0" />
         <span aria-current="page" className="text-foreground font-medium truncate" title={pageTitle}>
           {pageTitle}

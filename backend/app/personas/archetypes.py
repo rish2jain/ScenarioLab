@@ -1,4 +1,4 @@
-"""Consulting persona archetypes for MiroFish war-gaming simulations."""
+"""Consulting persona archetypes for ScenarioLab war-gaming simulations."""
 
 from enum import Enum
 

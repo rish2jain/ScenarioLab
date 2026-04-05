@@ -1,4 +1,4 @@
-# MiroFish UI/UX Review — End-to-End Findings
+# ScenarioLab UI/UX Review — End-to-End Findings
 
 **Date:** 2026-04-03
 **Scope:** Full frontend audit across all pages, components, and layouts

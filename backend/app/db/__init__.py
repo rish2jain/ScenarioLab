@@ -1,4 +1,4 @@
-"""Database connection package for MiroFish backend.
+"""Database connection package for ScenarioLab backend.
 
 Exposes only the connection utilities. Repository classes are imported
 directly from their submodules to avoid loading heavy dependencies eagerly.

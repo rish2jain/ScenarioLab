@@ -11,7 +11,7 @@
 
 ## 1. Problem
 
-MiroFish simulations are LLM-call-intensive. A 6-agent boardroom simulation generates ~12 LLM calls per round across response generation, voting, and stance updates. With 10 rounds, that is ~120 calls per simulation. Monte Carlo batches of 25 multiply this to ~3,000 calls. All calls currently route to a single cloud provider with a concurrency cap of 4, creating both a speed bottleneck and significant API cost.
+ScenarioLab simulations are LLM-call-intensive. A 6-agent boardroom simulation generates ~12 LLM calls per round across response generation, voting, and stance updates. With 10 rounds, that is ~120 calls per simulation. Monte Carlo batches of 25 multiply this to ~3,000 calls. All calls currently route to a single cloud provider with a concurrency cap of 4, creating both a speed bottleneck and significant API cost.
 
 The user's hardware (MacBook Pro M5 Max, 128GB unified memory) can run capable local models (Qwen 3 14B-70B) at competitive token throughput, but local models produce lower-quality output than frontier cloud models on complex strategic reasoning. The challenge is leveraging local hardware for speed without degrading simulation quality.
 

@@ -20,7 +20,7 @@ class InteractiveDeckExporter:
         self,
         logo_url: str | None = None,
         primary_color: str = "#3B82F6",
-        company_name: str = "MiroFish",
+        company_name: str = "ScenarioLab",
     ):
         self.logo_url = logo_url
         self.primary_color = primary_color
@@ -765,7 +765,7 @@ async def export_interactive_deck(
     simulation_state: SimulationState | None = None,
     logo_url: str | None = None,
     primary_color: str = "#3B82F6",
-    company_name: str = "MiroFish",
+    company_name: str = "ScenarioLab",
 ) -> str:
     """Export report as interactive HTML deck.
 

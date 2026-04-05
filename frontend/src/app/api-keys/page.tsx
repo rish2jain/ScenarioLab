@@ -14,7 +14,7 @@ import {
 } from '@/lib/adminApiKey';
 
 /** Persisted after key creation so webhook list can use GET /webhooks (requires X-API-Key). */
-const INTEGRATION_KEY_STORAGE = 'mirofish_integration_api_key';
+const INTEGRATION_KEY_STORAGE = 'scenariolab_integration_api_key';
 
 interface StoredIntegrationKey {
   keyId: string;
@@ -583,7 +583,7 @@ export default function ApiKeysPage() {
                     value={newWebhook.url}
                     onChange={(e) => setNewWebhook({ ...newWebhook, url: e.target.value })}
                     className="flex-1 px-3 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-slate-200 focus:outline-none focus:border-accent"
-                    placeholder="https://api.example.com/webhooks/mirofish"
+                    placeholder="https://api.example.com/webhooks/scenariolab"
                   />
                 </div>
               </div>

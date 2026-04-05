@@ -1,6 +1,6 @@
-# MiroFish User Guide
+# ScenarioLab User Guide
 
-MiroFish is an AI-powered war-gaming and simulation platform for strategy consultants. It lets you model competitive scenarios with AI agents representing stakeholders (competitors, regulators, customers) and generates analytical reports from the outcomes.
+ScenarioLab is an AI-powered war-gaming and simulation platform for strategy consultants. It lets you model competitive scenarios with AI agents representing stakeholders (competitors, regulators, customers) and generates analytical reports from the outcomes.
 
 ---
 
@@ -34,7 +34,7 @@ Playbooks are reusable simulation templates that define the scenario, agent role
 
 ### Built-in Playbooks
 
-MiroFish ships with templates for common strategy scenarios:
+ScenarioLab ships with templates for common strategy scenarios:
 - M&A culture clash
 - Pricing war
 - Regulatory response
@@ -201,7 +201,7 @@ The seed system supports documents in multiple languages. Content is processed a
 
 ### Auto-Generated Reports
 
-When "Post-Run Report" is enabled in simulation parameters, MiroFish automatically generates a narrative report after simulation completion.
+When "Post-Run Report" is enabled in simulation parameters, ScenarioLab automatically generates a narrative report after simulation completion.
 
 ### Report Sections
 
@@ -269,7 +269,7 @@ The autoresearch module provides AI-powered background research for simulations.
 
 **Path**: `/api-keys`
 
-Manage integration API keys for external access to MiroFish.
+Manage integration API keys for external access to ScenarioLab.
 
 ### Setup
 
@@ -282,7 +282,7 @@ Manage integration API keys for external access to MiroFish.
 
 ## CLI Usage
 
-MiroFish includes a headless CLI for scripted simulation runs.
+ScenarioLab includes a headless CLI for scripted simulation runs.
 
 ### Commands
 
@@ -290,27 +290,27 @@ MiroFish includes a headless CLI for scripted simulation runs.
 cd backend
 
 # List available playbooks
-uv run mirofish-sim list-playbooks
+uv run scenariolab-sim list-playbooks
 
 # Run a simulation
-uv run mirofish-sim simulate \
+uv run scenariolab-sim simulate \
   --playbook mna-culture-clash \
   --rounds 10 \
   --environment boardroom \
   --output markdown
 
 # With seed document
-uv run mirofish-sim simulate \
+uv run scenariolab-sim simulate \
   --playbook pricing-war \
   --seed ../data/market-report.pdf \
   --name "Q4 Pricing Analysis"
 
 # Check simulation status
-uv run mirofish-sim status <simulation-id>
+uv run scenariolab-sim status <simulation-id>
 
 # Get results
-uv run mirofish-sim results <simulation-id> --output json
-uv run mirofish-sim results <simulation-id> --section executive_summary
+uv run scenariolab-sim results <simulation-id> --output json
+uv run scenariolab-sim results <simulation-id> --section executive_summary
 ```
 
 ### Output Sections
@@ -324,10 +324,10 @@ The `results` command supports `--section` filtering:
 
 ### Remote Mode
 
-Connect the CLI to a running MiroFish backend instead of running locally:
+Connect the CLI to a running ScenarioLab backend instead of running locally:
 
 ```bash
-uv run mirofish-sim simulate --playbook pricing-war --api-url http://mirofish.example.com:5001
+uv run scenariolab-sim simulate --playbook pricing-war --api-url http://scenariolab.example.com:5001
 ```
 
 ---

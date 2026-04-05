@@ -1,4 +1,4 @@
-"""SQLite persistence layer for MiroFish backend — backwards-compat wrapper.
+"""SQLite persistence layer for ScenarioLab backend — backwards-compat wrapper.
 
 All repository classes have been extracted into focused modules under
 ``app/db/``. This file re-exports everything so existing importers continue

@@ -118,7 +118,7 @@ class MiroBoardExporter:
         }
 
         # 1. Create a new board
-        board_name = f"MiroFish Report: {report.simulation_name}"
+        board_name = f"ScenarioLab Report: {report.simulation_name}"
         board_id = await self._create_board(
             name=board_name,
             description=f"Simulation report for {report.simulation_name}",
@@ -710,7 +710,7 @@ class MiroBoardExporter:
         mock_board = {
             "mock_mode": True,
             "note": ("Miro API token not configured. " "This is a mock representation."),
-            "board_name": f"MiroFish Report: {report.simulation_name}",
+            "board_name": f"ScenarioLab Report: {report.simulation_name}",
             "board_url": None,
             "frames": [],
             "stats": {

@@ -1,4 +1,4 @@
-"""MCP (Model Context Protocol) server integration for MiroFish."""
+"""MCP (Model Context Protocol) server integration for ScenarioLab."""
 
 from app.mcp.server import MCPToolDefinition, MCPToolResult, MirofishMCPServer
 

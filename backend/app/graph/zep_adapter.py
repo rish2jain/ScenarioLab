@@ -45,7 +45,7 @@ class ZepGraphAdapter:
         }
 
     def create_graph_placeholder(self, name: str) -> str:
-        """Reserved for full GraphBuilder port from upstream MiroFish."""
+        """Reserved for full GraphBuilder port from upstream ScenarioLab."""
         _ = self._ensure_client()
         logger.info("Zep graph creation requested: %s (stub)", name)
         raise NotImplementedError(

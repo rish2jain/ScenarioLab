@@ -1,4 +1,4 @@
-# Hybrid Local + Cloud LLM Architecture for MiroFish Simulations
+# Hybrid Local + Cloud LLM Architecture for ScenarioLab Simulations
 
 **Date**: 2026-04-04
 **Query**: How to leverage local hardware + cloud LLMs to increase simulation speed without significantly reducing quality
@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-MiroFish simulations are LLM-call-intensive: a 6-agent boardroom simulation generates **~12 LLM calls per round** across response generation, voting, and stance updates. With 10 rounds and Monte Carlo batches of 25, a single simulation can require **3,000+ LLM calls**. Currently, all calls go to a single cloud provider at 4 concurrent requests max.
+ScenarioLab simulations are LLM-call-intensive: a 6-agent boardroom simulation generates **~12 LLM calls per round** across response generation, voting, and stance updates. With 10 rounds and Monte Carlo batches of 25, a single simulation can require **3,000+ LLM calls**. Currently, all calls go to a single cloud provider at 4 concurrent requests max.
 
 A hybrid architecture can **reduce cloud spend by 60-80%** and **cut simulation wall-clock time by 40-60%** by:
 1. Running routine agent tasks locally (stance updates, votes, simple responses)
@@ -72,7 +72,7 @@ A hybrid architecture can **reduce cloud spend by 60-80%** and **cut simulation 
 
 **What**: Intercept all LLM requests, check for semantically similar prior queries.
 
-**Why it matters for MiroFish**: Monte Carlo runs repeat simulations with slight variations. Agent stance updates and votes often produce near-identical prompts across runs. A semantic cache can eliminate **30-60% of all LLM calls**.
+**Why it matters for ScenarioLab**: Monte Carlo runs repeat simulations with slight variations. Agent stance updates and votes often produce near-identical prompts across runs. A semantic cache can eliminate **30-60% of all LLM calls**.
 
 **Implementation**:
 - **Bifrost** (Go, 11us overhead, 5K req/s) or **LiteLLM** (Python, ~8ms, 100+ providers)
@@ -88,7 +88,7 @@ A hybrid architecture can **reduce cloud spend by 60-80%** and **cut simulation 
 
 **Why**: RouteLLM (ICLR 2025) achieves **95% of GPT-4 quality using only 26% GPT-4 calls** (48% cheaper). With data augmentation: 95% quality with only **14% strong model calls** (75% cost reduction).
 
-**Routing Rules for MiroFish**:
+**Routing Rules for ScenarioLab**:
 
 | Task | Route | Rationale |
 |------|-------|-----------|
@@ -123,11 +123,11 @@ A hybrid architecture can **reduce cloud spend by 60-80%** and **cut simulation 
 **Why vllm-mlx over Ollama**:
 - Ollama: 41 tok/s peak, collapses at 128 concurrent connections
 - vllm-mlx: Up to 525 tok/s on M4 Max, continuous batching, handles concurrent agents gracefully
-- **Zero code changes**: vllm-mlx exposes OpenAI-compatible API -- MiroFish's existing `OllamaProvider` works as-is, just change `LLM_BASE_URL`
+- **Zero code changes**: vllm-mlx exposes OpenAI-compatible API -- ScenarioLab's existing `OllamaProvider` works as-is, just change `LLM_BASE_URL`
 - Continuous batching handles variable-length agent outputs efficiently
 - Structured output support (JSON schema) for vote parsing
 
-**Quality on MiroFish tasks**:
+**Quality on ScenarioLab tasks**:
 
 | Task | Local 14B Quality vs Cloud | Acceptable? |
 |------|---------------------------|-------------|

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MiroFish is an AI-powered war-gaming/simulation platform for strategy consultants. It enables users to create competitive simulations with AI-driven agents representing different stakeholders (competitors, regulators, customers, etc.) and generates analytical reports from simulation outcomes.
+ScenarioLab is an AI-powered war-gaming/simulation platform for strategy consultants. It enables users to create competitive simulations with AI-driven agents representing different stakeholders (competitors, regulators, customers, etc.) and generates analytical reports from simulation outcomes.
 
 ## Architecture
 
@@ -32,7 +32,7 @@ The frontend proxies `/api/*` requests to the backend via Next.js rewrites (`nex
 | `research/` | Autoresearch service: web search (Tavily), SEC EDGAR, EUR-Lex, LLM synthesis |
 | `mcp/` | MCP (Model Context Protocol) server for tool-use integration |
 | `seed/` | Multilanguage seed data support; uploaded documents injected into agent prompts |
-| `cli.py` | CLI entry point (`mirofish-sim`) for headless simulation runs |
+| `cli.py` | CLI entry point (`scenariolab-sim`) for headless simulation runs |
 | `cost_estimator.py` | LLM token cost estimation |
 
 ### Database Layer (`backend/app/db/`)
@@ -135,8 +135,8 @@ cd backend && uv run uvicorn app.main:app --reload --port 5001
 cd frontend && npm run dev
 
 # CLI simulation (headless)
-cd backend && uv run mirofish-sim simulate --playbook <name> --seed <file>
-cd backend && uv run mirofish-sim list-playbooks
+cd backend && uv run scenariolab-sim simulate --playbook <name> --seed <file>
+cd backend && uv run scenariolab-sim list-playbooks
 
 # Backend tests (pytest + pytest-asyncio)
 cd backend && uv run pytest                          # all tests

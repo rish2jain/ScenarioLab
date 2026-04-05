@@ -3,7 +3,7 @@
 <cite>
 **Referenced Files in This Document**
 - [PRD.md](file://PRD.md)
-- [Enhancing MiroFish for Strategy Consultants.md](file://Research/Enhancing MiroFish for Strategy Consultants.md)
+- [Enhancing ScenarioLab for Strategy Consultants.md](file://Research/Enhancing ScenarioLab for Strategy Consultants.md)
 </cite>
 
 ## Table of Contents
@@ -19,7 +19,7 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document describes the technical architecture of MiroFish, an AI-powered strategic simulation and war-gaming platform for strategy consultants. The system integrates a Next.js frontend, a Python backend API, and AI services including an LLM (Qwen), memory services (Zep Cloud/Graphiti), and a graph database (Neo4j). It explains how data flows from seed materials through graph building to multi-agent simulation and report generation, and documents technical decisions such as microservices architecture, event-driven processing, and layered architecture patterns. Infrastructure requirements, scalability considerations, and deployment topology options are included, along with cross-cutting concerns like security, monitoring, and disaster recovery.
+This document describes the technical architecture of ScenarioLab, an AI-powered strategic simulation and war-gaming platform for strategy consultants. The system integrates a Next.js frontend, a Python backend API, and AI services including an LLM (Qwen), memory services (Zep Cloud/Graphiti), and a graph database (Neo4j). It explains how data flows from seed materials through graph building to multi-agent simulation and report generation, and documents technical decisions such as microservices architecture, event-driven processing, and layered architecture patterns. Infrastructure requirements, scalability considerations, and deployment topology options are included, along with cross-cutting concerns like security, monitoring, and disaster recovery.
 
 ## Project Structure
 The repository provides a product requirements and architecture document that outlines the system’s high-level design, technology stack, and deployment options. The document defines the frontend, backend, and AI service boundaries, and specifies environment variables and operational requirements.
@@ -63,7 +63,7 @@ API --> GRAPH
 - [PRD.md:161-173](file://PRD.md#L161-L173)
 
 ## Architecture Overview
-MiroFish follows a layered architecture with clear separation of concerns:
+ScenarioLab follows a layered architecture with clear separation of concerns:
 - Presentation Layer: Next.js frontend.
 - Application Layer: Python backend API.
 - Integration Layer: LLM, memory, and graph services.
@@ -217,7 +217,7 @@ API --> DB["Graph DB (Neo4j)"]
 - [PRD.md:292-298](file://PRD.md#L292-L298)
 
 ## Conclusion
-MiroFish’s architecture balances modularity, scalability, and confidentiality. The layered design with microservices and event-driven processing supports robust simulation workflows, while the integration of Qwen, Zep/Graphiti, and Neo4j enables high-fidelity strategic scenario planning. Containerized deployment and air-gapped options address enterprise requirements, and MCP and Miro integrations streamline consultant workflows.
+ScenarioLab’s architecture balances modularity, scalability, and confidentiality. The layered design with microservices and event-driven processing supports robust simulation workflows, while the integration of Qwen, Zep/Graphiti, and Neo4j enables high-fidelity strategic scenario planning. Containerized deployment and air-gapped options address enterprise requirements, and MCP and Miro integrations streamline consultant workflows.
 
 ## Appendices
 
