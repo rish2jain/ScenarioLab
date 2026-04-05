@@ -37,9 +37,7 @@ class MarketIntelligenceService:
             except Exception as e:
                 logger.warning(f"Failed to init LLM tables: {e}")
 
-    async def fetch_stock_data(
-        self, symbols: list[str], period: str = "1d"
-    ) -> dict[str, Any]:
+    async def fetch_stock_data(self, symbols: list[str], period: str = "1d") -> dict[str, Any]:
         """Fetch stock data from Alpha Vantage API.
 
         Args:
@@ -116,9 +114,7 @@ class MarketIntelligenceService:
             }
         return results
 
-    async def fetch_news(
-        self, query: str, days_back: int = 7
-    ) -> list[dict[str, Any]]:
+    async def fetch_news(self, query: str, days_back: int = 7) -> list[dict[str, Any]]:
         """Fetch news articles from NewsAPI.
 
         Args:
@@ -133,9 +129,7 @@ class MarketIntelligenceService:
             return self._get_mock_news(query)
 
         try:
-            from_date = (
-                datetime.now(timezone.utc) - timedelta(days=days_back)
-            ).strftime("%Y-%m-%d")
+            from_date = (datetime.now(timezone.utc) - timedelta(days=days_back)).strftime("%Y-%m-%d")
 
             response = await self._http_client.get(
                 f"{self.news_api_base}/everything",
@@ -152,14 +146,16 @@ class MarketIntelligenceService:
 
             articles = []
             for article in data.get("articles", []):
-                articles.append({
-                    "title": article.get("title", ""),
-                    "description": article.get("description", ""),
-                    "source": article.get("source", {}).get("name", "Unknown"),
-                    "url": article.get("url", ""),
-                    "published_at": article.get("publishedAt", ""),
-                    "relevance_score": 0.5,  # Default, will be filtered later
-                })
+                articles.append(
+                    {
+                        "title": article.get("title", ""),
+                        "description": article.get("description", ""),
+                        "source": article.get("source", {}).get("name", "Unknown"),
+                        "url": article.get("url", ""),
+                        "published_at": article.get("publishedAt", ""),
+                        "relevance_score": 0.5,  # Default, will be filtered later
+                    }
+                )
 
             return articles
 
@@ -197,9 +193,7 @@ class MarketIntelligenceService:
         ]
         return mock_articles
 
-    async def filter_relevance(
-        self, items: list[dict], scenario_context: str
-    ) -> list[dict]:
+    async def filter_relevance(self, items: list[dict], scenario_context: str) -> list[dict]:
         """Filter items by relevance to the scenario using LLM.
 
         Args:
@@ -234,6 +228,7 @@ Relevance Score:"""
                     score_text = response.strip()
                     # Extract number from response
                     import re
+
                     match = re.search(r"[\d.]+", score_text)
                     score = float(match.group()) if match else 0.5
                     score = max(0.0, min(1.0, score))
@@ -255,9 +250,7 @@ Relevance Score:"""
                 item["relevance_score"] = 0.5
             return items
 
-    async def update_agent_worldview(
-        self, simulation_id: str, market_data: dict
-    ) -> dict[str, Any]:
+    async def update_agent_worldview(self, simulation_id: str, market_data: dict) -> dict[str, Any]:
         """Inject market intelligence into agent context.
 
         Args:
@@ -289,9 +282,7 @@ Relevance Score:"""
         # Persist to DB
         try:
             await self._ensure_initialized()
-            await self._repo.save_cache(
-                simulation_id, _market_data_cache[simulation_id]
-            )
+            await self._repo.save_cache(simulation_id, _market_data_cache[simulation_id])
         except Exception as e:
             logger.warning(f"Failed to persist market cache: {e}")
 
@@ -361,9 +352,7 @@ Relevance Score:"""
                 "fetched_at": datetime.now(timezone.utc).isoformat(),
             }
 
-    async def configure_sources(
-        self, simulation_id: str, config: dict
-    ) -> dict[str, Any]:
+    async def configure_sources(self, simulation_id: str, config: dict) -> dict[str, Any]:
         """Configure data sources for a simulation.
 
         Args:
@@ -384,9 +373,7 @@ Relevance Score:"""
         # Persist to DB
         try:
             await self._ensure_initialized()
-            await self._repo.save_config(
-                simulation_id, _market_configs[simulation_id]
-            )
+            await self._repo.save_config(simulation_id, _market_configs[simulation_id])
         except Exception as e:
             logger.warning(f"Failed to persist market config: {e}")
 

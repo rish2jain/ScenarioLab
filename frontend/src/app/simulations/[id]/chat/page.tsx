@@ -1,15 +1,16 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useLayoutEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Send, User, Bot, Clock } from 'lucide-react';
-import { Card } from '@/components/ui/Card';
+import { ChevronLeft, Send, User, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
+import { useToast } from '@/components/ui/Toast';
 import { useChatStore, useSimulationStore } from '@/lib/store';
 import { api } from '@/lib/api';
+import { archetypeColors } from '@/lib/archetypeColors';
 import type { ChatMessage, AgentArchetype } from '@/lib/types';
 
 // Agent type for chat page
@@ -22,51 +23,27 @@ interface ChatAgent {
   traits?: string[];
 }
 
-// Agent colors based on archetype
-const archetypeColors: Record<string, string> = {
-  aggressor: '#14b8a6',
-  defender: '#f59e0b',
-  mediator: '#3b82f6',
-  analyst: '#8b5cf6',
-  influencer: '#ec4899',
-  skeptic: '#6b7280',
-};
+const DEFAULT_CHAT_AGENT_COLOR = '#6b7280';
 
-// Mock agents for fallback
-const mockAgents: ChatAgent[] = [
-  {
-    id: 'agent-1',
-    name: 'Sarah Chen',
-    role: 'Acquiring CEO',
-    archetype: 'aggressor',
-    color: '#14b8a6',
-    traits: ['Decisive', 'Results-oriented', 'Direct'],
-  },
-  {
-    id: 'agent-2',
-    name: 'Michael Torres',
-    role: 'Target CEO',
-    archetype: 'defender',
-    color: '#f59e0b',
-    traits: ['Cautious', 'Empathetic', 'Strategic'],
-  },
-  {
-    id: 'agent-3',
-    name: 'Jennifer Walsh',
-    role: 'Integration Lead',
-    archetype: 'mediator',
-    color: '#3b82f6',
-    traits: ['Diplomatic', 'Organized', 'Patient'],
-  },
-  {
-    id: 'agent-4',
-    name: 'David Park',
-    role: 'HR Director',
-    archetype: 'analyst',
-    color: '#8b5cf6',
-    traits: ['Detail-oriented', 'Empathetic', 'Data-driven'],
-  },
-];
+/** UUID v4 when `randomUUID` is missing (non-secure or legacy browsers). */
+function randomUUIDCompat(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+    bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+  return `fallback-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
+function createChatMessageId(): string {
+  return `msg-${randomUUIDCompat()}`;
+}
 
 export default function ChatPage() {
   const params = useParams();
@@ -75,43 +52,97 @@ export default function ChatPage() {
   
   const { messages, setMessages, selectedAgentId, setSelectedAgentId, addMessage } = useChatStore();
   const { currentSimulation, setCurrentSimulation } = useSimulationStore();
+  const { addToast } = useToast();
 
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [simNotFound, setSimNotFound] = useState(false);
   const [inputMessage, setInputMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [agents, setAgents] = useState<ChatAgent[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Load draft before passive effects: if this were useEffect, the debounced save
+  // below would run first with inputMessage '' and removeItem the key we are about
+  // to hydrate (first-mount regression).
+  useLayoutEffect(() => {
+    if (!simulationId) return;
+    const draft = localStorage.getItem(`chat_draft_${simulationId}`);
+    setInputMessage(draft ?? '');
+  }, [simulationId]);
+
+  // Save draft to local storage (debounced)
+  useEffect(() => {
+    if (!simulationId) return;
+    if (!inputMessage) {
+      localStorage.removeItem(`chat_draft_${simulationId}`);
+      return;
+    }
+    const timer = setTimeout(() => {
+      localStorage.setItem(`chat_draft_${simulationId}`, inputMessage);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [inputMessage, simulationId]);
+
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
-      const [simulationData, messagesData, agentsData] = await Promise.all([
-        api.getSimulation(simulationId),
-        api.getChatMessages(simulationId),
-        api.getSimulationAgents(simulationId),
-      ]);
+      try {
+        if (!simulationId) {
+          return;
+        }
 
-      if (simulationData) {
+        const simulationData = await api.getSimulation(simulationId);
+
+        if (simulationData === null) {
+          setCurrentSimulation(null);
+          setSimNotFound(true);
+          setLoadError(null);
+          setMessages([]);
+          setAgents([]);
+          return;
+        }
+
         setCurrentSimulation(simulationData);
-      }
-      setMessages(messagesData);
+        setSimNotFound(false);
+        setLoadError(null);
 
-      // Use real agents if available, otherwise use mock
-      if (agentsData && agentsData.length > 0) {
-        setAgents(agentsData.map(a => ({
-          id: a.id,
-          name: a.name,
-          role: a.role,
-          archetype: a.archetype as AgentArchetype,
-          color: archetypeColors[a.archetype] || '#6b7280',
-        })));
-      } else {
-        setAgents(mockAgents);
+        const [messagesData, agentsData] = await Promise.all([
+          api.getChatMessages(simulationId),
+          api.getSimulationAgents(simulationId),
+        ]);
+
+        setMessages(messagesData);
+
+        if (agentsData && agentsData.length > 0) {
+          setAgents(
+            agentsData.map((a) => ({
+              id: a.id,
+              name: a.name,
+              role: a.role,
+              archetype: a.archetype as AgentArchetype,
+              color: archetypeColors[a.archetype] || '#6b7280',
+            }))
+          );
+        } else {
+          setAgents([]);
+        }
+      } catch (error) {
+        setCurrentSimulation(null);
+        setSimNotFound(false);
+        setLoadError(
+          error instanceof Error
+            ? error.message
+            : 'Could not load this simulation. Check your connection and that the backend is running.'
+        );
+        setMessages([]);
+        setAgents([]);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
-    loadData();
+    void loadData();
   }, [simulationId, setCurrentSimulation, setMessages]);
 
   useEffect(() => {
@@ -121,18 +152,21 @@ export default function ChatPage() {
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
 
+    const outboundMessage = inputMessage.trim();
+    const previousMessages = messages;
     setIsSending(true);
     
     // Add user message
     const userMessage: ChatMessage = {
-      id: `msg-${Date.now()}`,
+      id: createChatMessageId(),
       simulationId,
-      content: inputMessage,
+      content: outboundMessage,
       timestamp: new Date().toISOString(),
       isUser: true,
     };
     addMessage(userMessage);
     setInputMessage('');
+    localStorage.removeItem(`chat_draft_${simulationId}`);
 
     try {
       // Send to API and get response
@@ -140,32 +174,60 @@ export default function ChatPage() {
         const response = await api.sendAgentChat(
           simulationId,
           selectedAgentId,
-          inputMessage
+          outboundMessage
         );
-        if (response) {
-          const agentMessage: ChatMessage = {
-            id: `msg-${Date.now()}`,
-            simulationId,
-            agentId: response.agent_id,
-            agentName: response.agent_name,
-            agentColor: agents.find(a => a.id === response.agent_id)?.color,
-            content: response.response,
-            timestamp: response.timestamp,
-            isUser: false,
-          };
-          addMessage(agentMessage);
+
+        const content =
+          typeof response?.response === 'string' ? response.response : '';
+        const resolvedAgentId =
+          (typeof response?.agent_id === 'string' && response.agent_id.trim())
+            ? response.agent_id.trim()
+            : selectedAgentId;
+
+        if (!resolvedAgentId || !content.trim()) {
+          console.warn(
+            '[ChatPage] sendAgentChat: missing agent_id or response text; skipping addMessage',
+            { response, selectedAgentId }
+          );
+          addToast('The agent did not return a valid reply.', 'error');
+          return;
         }
+
+        const agentRow = agents.find((a) => a.id === resolvedAgentId);
+        const agentMessage: ChatMessage = {
+          id: createChatMessageId(),
+          simulationId,
+          agentId: resolvedAgentId,
+          agentName:
+            (typeof response?.agent_name === 'string' && response.agent_name.trim())
+              ? response.agent_name.trim()
+              : agentRow?.name ?? 'Agent',
+          agentColor: agentRow?.color ?? DEFAULT_CHAT_AGENT_COLOR,
+          content,
+          timestamp:
+            typeof response?.timestamp === 'string' && response.timestamp.trim()
+              ? response.timestamp
+              : new Date().toISOString(),
+          isUser: false,
+        };
+        addMessage(agentMessage);
       } else {
-        // No agent selected, use mock response
         const response = await api.sendChatMessage(
           simulationId,
-          inputMessage,
+          outboundMessage,
           undefined
         );
         addMessage(response);
       }
     } catch (error) {
       console.error('Failed to send message:', error);
+      setMessages(previousMessages);
+      setInputMessage(outboundMessage);
+      localStorage.setItem(`chat_draft_${simulationId}`, outboundMessage);
+      addToast(
+        error instanceof Error ? error.message : 'Failed to send message.',
+        'error'
+      );
     } finally {
       setIsSending(false);
     }
@@ -184,6 +246,35 @@ export default function ChatPage() {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-slate-400">Loading chat...</div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 gap-4 px-4 text-center">
+        <div className="text-red-400 max-w-md">{loadError}</div>
+        <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>
+          Retry
+        </Button>
+        <Link href={`/simulations/${simulationId}`}>
+          <Button variant="ghost" size="sm" leftIcon={<ChevronLeft className="w-4 h-4" />}>
+            Back to simulation
+          </Button>
+        </Link>
+      </div>
+    );
+  }
+
+  if (simNotFound) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 gap-4 px-4 text-center">
+        <div className="text-slate-400">Simulation not found</div>
+        <Link href="/simulations">
+          <Button variant="secondary" size="sm" leftIcon={<ChevronLeft className="w-4 h-4" />}>
+            Back to simulations
+          </Button>
+        </Link>
       </div>
     );
   }
@@ -373,6 +464,27 @@ export default function ChatPage() {
                 </div>
               </div>
             ))}
+            
+            {isSending && (
+              <div
+                className="flex justify-start"
+                role="status"
+                aria-live="polite"
+              >
+                <span className="sr-only">Agent is typing</span>
+                <div className="flex gap-3" aria-hidden="true">
+                  <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center flex-shrink-0">
+                    <Bot className="w-4 h-4 text-slate-400" />
+                  </div>
+                  <div className="bg-slate-700 rounded-2xl rounded-bl-none px-4 py-3 flex items-center gap-1.5 h-10 mt-auto">
+                    <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <div ref={messagesEndRef} />
           </div>
 

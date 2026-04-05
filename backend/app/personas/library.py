@@ -42,14 +42,9 @@ class PersonaLibrary:
                     persona = ArchetypeDefinition(**persona_data)
                     self._custom_personas[persona.id] = persona
                 self._initialized = True
-                logger.info(
-                    f"Loaded {len(self._custom_personas)} custom personas "
-                    f"from database"
-                )
+                logger.info(f"Loaded {len(self._custom_personas)} custom personas " f"from database")
             except Exception as e:
-                logger.warning(
-                    f"Failed to load custom personas from DB: {e}"
-                )
+                logger.warning(f"Failed to load custom personas from DB: {e}")
 
     def get_all_archetypes(self) -> list[ArchetypeDefinition]:
         """Get all available archetype definitions."""
@@ -59,9 +54,7 @@ class PersonaLibrary:
         """Get a single archetype by ID."""
         return self._archetypes.get(archetype_id)
 
-    def create_custom_persona(
-        self, base_archetype_id: str, overrides: dict[str, Any]
-    ) -> ArchetypeDefinition:
+    def create_custom_persona(self, base_archetype_id: str, overrides: dict[str, Any]) -> ArchetypeDefinition:
         """Create a customized persona from a base archetype.
 
         Args:
@@ -94,13 +87,9 @@ class PersonaLibrary:
         self._custom_personas[custom_id] = custom_persona
 
         # Persist to database (async fire-and-forget)
-        asyncio.create_task(
-            custom_persona_repo.save(custom_id, custom_persona.model_dump())
-        )
+        asyncio.create_task(custom_persona_repo.save(custom_id, custom_persona.model_dump()))
 
-        logger.info(
-            f"Created custom persona: {custom_id} from {base_archetype_id}"
-        )
+        logger.info(f"Created custom persona: {custom_id} from {base_archetype_id}")
         return custom_persona
 
     def get_roster_for_playbook(self, playbook_id: str) -> list[dict[str, Any]]:
@@ -143,8 +132,18 @@ class PersonaLibrary:
                 {"role": "CFO", "archetype_id": "cfo", "count": 1},
             ],
             "boardroom-rehearsal": [
-                {"role": "Board Chair", "archetype_id": "board_member", "count": 1, "customization": {"governance_style": GovernanceStyle.CHAIR}},
-                {"role": "Independent Director", "archetype_id": "board_member", "count": 2, "customization": {"governance_style": GovernanceStyle.INDEPENDENT}},
+                {
+                    "role": "Board Chair",
+                    "archetype_id": "board_member",
+                    "count": 1,
+                    "customization": {"governance_style": GovernanceStyle.CHAIR},
+                },
+                {
+                    "role": "Independent Director",
+                    "archetype_id": "board_member",
+                    "count": 2,
+                    "customization": {"governance_style": GovernanceStyle.INDEPENDENT},
+                },
                 {"role": "Activist Director", "archetype_id": "activist_investor", "count": 1},
                 {"role": "CEO", "archetype_id": "ceo", "count": 1},
                 {"role": "CFO", "archetype_id": "cfo", "count": 1},
@@ -213,6 +212,10 @@ class PersonaLibrary:
         """Get list of all archetype IDs."""
         return list(self._archetypes.keys())
 
+    def remove_custom_persona_from_cache(self, persona_id: str) -> None:
+        """Drop cached custom persona if present (after DB delete or reconcile)."""
+        self._custom_personas.pop(persona_id, None)
+
 
 # Global library instance
 persona_library = PersonaLibrary()
@@ -229,9 +232,7 @@ def get_archetype(archetype_id: str) -> ArchetypeDefinition | None:
     return persona_library.get_archetype(archetype_id)
 
 
-def create_custom_persona(
-    base_archetype_id: str, overrides: dict[str, Any]
-) -> ArchetypeDefinition:
+def create_custom_persona(base_archetype_id: str, overrides: dict[str, Any]) -> ArchetypeDefinition:
     """Create a customized persona from a base archetype."""
     return persona_library.create_custom_persona(base_archetype_id, overrides)
 

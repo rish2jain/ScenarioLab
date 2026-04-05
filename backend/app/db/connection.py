@@ -83,9 +83,7 @@ async def get_db() -> aiosqlite.Connection:
         If ``init_schema()`` has not been called first.
     """
     if _db is None:
-        raise RuntimeError(
-            "Database not initialized. Call init_schema() (or init_database()) first."
-        )
+        raise RuntimeError("Database not initialized. Call init_schema() (or init_database()) first.")
     return _db
 
 

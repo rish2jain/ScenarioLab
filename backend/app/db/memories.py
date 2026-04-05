@@ -3,12 +3,27 @@
 CRUD operations for the ``agent_memories`` table.
 """
 
-import logging
 import uuid
+from typing import Any, Sequence
 
 from app.db.connection import get_db
 
-logger = logging.getLogger(__name__)
+
+def _row_to_memory_dict(row: Sequence[Any]) -> dict[str, Any]:
+    """Convert a DB row from ``agent_memories`` to a plain dict.
+
+    Centralises the field mapping used by both :meth:`get_memories` and
+    :meth:`search_memories` to avoid duplication.
+    """
+    return {
+        "id": row[0],
+        "simulation_id": row[1],
+        "agent_id": row[2],
+        "round_number": row[3],
+        "content": row[4],
+        "memory_type": row[5],
+        "timestamp": row[6],
+    }
 
 
 class AgentMemoryRepository:
@@ -63,18 +78,7 @@ class AgentMemoryRepository:
             (simulation_id, agent_id, limit),
         )
         rows = await cursor.fetchall()
-        return [
-            {
-                "id": row[0],
-                "simulation_id": row[1],
-                "agent_id": row[2],
-                "round_number": row[3],
-                "content": row[4],
-                "memory_type": row[5],
-                "timestamp": row[6],
-            }
-            for row in rows
-        ]
+        return [_row_to_memory_dict(row) for row in rows]
 
     async def search_memories(
         self,
@@ -95,15 +99,4 @@ class AgentMemoryRepository:
             (simulation_id, agent_id, f"%{query}%", limit),
         )
         rows = await cursor.fetchall()
-        return [
-            {
-                "id": row[0],
-                "simulation_id": row[1],
-                "agent_id": row[2],
-                "round_number": row[3],
-                "content": row[4],
-                "memory_type": row[5],
-                "timestamp": row[6],
-            }
-            for row in rows
-        ]
+        return [_row_to_memory_dict(row) for row in rows]

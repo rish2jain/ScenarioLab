@@ -9,10 +9,10 @@ import types
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Stub out neo4j if it is not available in this test environment
 # ---------------------------------------------------------------------------
+
 
 def _make_neo4j_stub() -> types.ModuleType:
     """Return a minimal neo4j stub that satisfies import-time name lookups."""

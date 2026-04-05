@@ -1,82 +1,102 @@
 'use client';
 
-import { useEffect } from 'react';
+import { clsx } from 'clsx';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Activity,
-  TrendingUp,
   BookOpen,
   Play,
   Plus,
   Upload,
   FileText,
   ChevronRight,
-  Clock,
-  Users,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Table, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/Table';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { useToast } from '@/components/ui/Toast';
 import { useSimulationStore } from '@/lib/store';
-import { api } from '@/lib/api';
+import { api, loadSimulationsFromApi, fetchApi } from '@/lib/api';
 import type { Simulation, DashboardStats } from '@/lib/types';
 
-// Mock stats
-const stats: DashboardStats = {
-  totalSimulations: 12,
-  activeSimulations: 2,
-  reportsGenerated: 8,
-  playbooksAvailable: 4,
+function countCreatedInLastDays(sims: Simulation[], days: number): number {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  return sims.filter((s) => {
+    const t = new Date(s.createdAt).getTime();
+    return !Number.isNaN(t) && t >= cutoff;
+  }).length;
+}
+
+const defaultStats: DashboardStats = {
+  totalSimulations: 0,
+  activeSimulations: 0,
+  reportsGenerated: 0,
+  playbooksAvailable: 0,
 };
 
-// Mock recent simulations
-const recentSimulations: Simulation[] = [
-  {
-    id: 'sim-1',
-    name: 'TechCorp Acquisition Analysis',
-    playbookId: 'pb-1',
-    playbookName: 'M&A Culture Clash',
-    status: 'completed',
-    agents: [],
-    config: { rounds: 12, environmentType: 'corporate', modelSelection: 'gpt-4' },
-    currentRound: 12,
-    totalRounds: 12,
-    createdAt: '2024-01-15T10:00:00Z',
-  },
-  {
-    id: 'sim-2',
-    name: 'GDPR Compliance Crisis',
-    playbookId: 'pb-2',
-    playbookName: 'Regulatory Shock Test',
-    status: 'running',
-    agents: [],
-    config: { rounds: 10, environmentType: 'crisis', modelSelection: 'gpt-4' },
-    currentRound: 6,
-    totalRounds: 10,
-    createdAt: '2024-01-16T14:00:00Z',
-  },
-  {
-    id: 'sim-3',
-    name: 'Q1 Competitive Scenario',
-    playbookId: 'pb-3',
-    playbookName: 'Competitive Response',
-    status: 'paused',
-    agents: [],
-    config: { rounds: 15, environmentType: 'market', modelSelection: 'claude-3' },
-    currentRound: 8,
-    totalRounds: 15,
-    createdAt: '2024-01-14T09:00:00Z',
-  },
-];
-
 export default function DashboardPage() {
+  const router = useRouter();
+  const simulations = useSimulationStore((state) => state.simulations);
   const setSimulations = useSimulationStore((state) => state.setSimulations);
+  const [stats, setStats] = useState<DashboardStats>(defaultStats);
+  const [simulationsLoadOk, setSimulationsLoadOk] = useState(true);
+
+  const { addToast } = useToast();
+  const lastPollHealthyRef = useRef<boolean | null>(null);
 
   useEffect(() => {
-    // Load mock data
-    setSimulations(recentSimulations);
-  }, [setSimulations]);
+    let mounted = true;
+
+    const loadDashboard = async () => {
+      try {
+        const [statsRes, simRes] = await Promise.all([
+          fetchApi<DashboardStats>('/api/stats'),
+          loadSimulationsFromApi(),
+        ]);
+        if (!mounted) return;
+        const stats = await api.getDashboardStats({
+          statsRes,
+          simRes,
+        });
+        const healthy = simRes.ok;
+        if (lastPollHealthyRef.current === true && !healthy) {
+          addToast('Could not load simulations. Check that the API is running.', 'error');
+        }
+        if (lastPollHealthyRef.current === false && healthy) {
+          addToast('Dashboard reconnected.', 'success');
+        }
+        lastPollHealthyRef.current = healthy;
+        setSimulationsLoadOk(simRes.ok);
+        const sims = simRes.simulations;
+        setSimulations(sims);
+        setStats(stats);
+      } catch (err) {
+        console.error('[loadDashboard]', err);
+        if (mounted) {
+          if (lastPollHealthyRef.current === true) {
+            addToast('Failed to load dashboard data. Please try again.', 'error');
+          }
+          lastPollHealthyRef.current = false;
+          setSimulationsLoadOk(false);
+        }
+      }
+    };
+
+    loadDashboard();
+
+    // Poll every 10 seconds to keep dashboard live (reduced from 2-15s per UX review)
+    const DASHBOARD_POLL_INTERVAL = 10000;
+    const intervalId = setInterval(loadDashboard, DASHBOARD_POLL_INTERVAL);
+
+    return () => {
+      mounted = false;
+      clearInterval(intervalId);
+    };
+  }, [setSimulations, addToast]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -85,6 +105,35 @@ export default function DashboardPage() {
       year: 'numeric',
     });
   };
+
+  const recentSimulations = useMemo(() => {
+    const t = (s: Simulation) => {
+      const ms = new Date(s.createdAt).getTime();
+      return Number.isNaN(ms) ? 0 : ms;
+    };
+    return [...simulations]
+      .sort((a, b) => t(b) - t(a))
+      .slice(0, 10);
+  }, [simulations]);
+
+  const createdThisWeek = useMemo(
+    () => countCreatedInLastDays(simulations, 7),
+    [simulations]
+  );
+
+  const totalTrend =
+    createdThisWeek > 0
+      ? `+${createdThisWeek} this week`
+      : 'No new this week';
+  const activeTrend =
+    stats.activeSimulations === 0
+      ? 'None running'
+      : `${stats.activeSimulations} running or paused`;
+  const reportsTrend =
+    stats.reportsGenerated === 0
+      ? 'No reports generated yet'
+      : `${stats.reportsGenerated} generated`;
+  const playbooksTrend = `${stats.playbooksAvailable} templates`;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -109,30 +158,30 @@ export default function DashboardPage() {
           title="Total Simulations"
           value={stats.totalSimulations}
           icon={<Activity className="w-5 h-5" />}
-          trend="+3 this week"
-          trendUp={true}
+          trend={totalTrend}
+          trendUp={createdThisWeek > 0}
         />
         <StatCard
           title="Active Simulations"
           value={stats.activeSimulations}
           icon={<Play className="w-5 h-5" />}
-          trend="Currently running"
-          trendUp={true}
+          trend={activeTrend}
+          trendUp={stats.activeSimulations > 0}
           highlight
         />
         <StatCard
-          title="Reports Generated"
+          title="Reports generated"
           value={stats.reportsGenerated}
           icon={<FileText className="w-5 h-5" />}
-          trend="Ready for review"
-          trendUp={true}
+          trend={reportsTrend}
+          trendUp={stats.reportsGenerated > 0}
         />
         <StatCard
           title="Playbooks Available"
           value={stats.playbooksAvailable}
           icon={<BookOpen className="w-5 h-5" />}
-          trend="Templates ready"
-          trendUp={false}
+          trend={playbooksTrend}
+          trendTone="muted"
         />
       </div>
 
@@ -153,67 +202,90 @@ export default function DashboardPage() {
         }
       >
         <div className="overflow-x-auto">
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell isHeader>Name</TableCell>
-              <TableCell isHeader>Playbook</TableCell>
-              <TableCell isHeader>Status</TableCell>
-              <TableCell isHeader>Progress</TableCell>
-              <TableCell isHeader>Created</TableCell>
-              <TableCell isHeader>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {recentSimulations.map((sim) => (
-              <TableRow key={sim.id} hover>
-                <TableCell>
-                  <span className="font-medium text-foreground">{sim.name}</span>
-                </TableCell>
-                <TableCell>
-                  <span className="text-foreground-muted">{sim.playbookName}</span>
-                </TableCell>
-                <TableCell>
-                  <StatusBadge status={sim.status} size="sm" />
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <div className="w-20 h-1.5 bg-background-tertiary rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-accent to-accent-purple rounded-full"
-                        style={{
-                          width: `${(sim.currentRound / sim.totalRounds) * 100}%`,
-                        }}
-                      />
-                    </div>
-                    <span className="text-xs text-foreground-muted">
-                      {sim.currentRound}/{sim.totalRounds}
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <span className="text-foreground-muted">{formatDate(sim.createdAt)}</span>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <Link href={`/simulations/${sim.id}`}>
-                      <Button variant="ghost" size="sm">
-                        View
-                      </Button>
-                    </Link>
-                    {sim.status === 'completed' && (
-                      <Link href={`/simulations/${sim.id}/report`}>
-                        <Button variant="secondary" size="sm">
-                          Report
-                        </Button>
-                      </Link>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+          {recentSimulations.length === 0 ? (
+            <EmptyState
+              title={
+                simulationsLoadOk
+                  ? 'No simulations yet'
+                  : 'Could not load simulations'
+              }
+              description={
+                simulationsLoadOk
+                  ? 'Create your first simulation to start testing and analyzing your AI agents.'
+                  : 'The API did not return a simulation list. Confirm the backend is running, then refresh.'
+              }
+              action={
+                simulationsLoadOk
+                  ? {
+                      label: 'Create Simulation',
+                      onClick: () => router.push('/simulations/new'),
+                    }
+                  : undefined
+              }
+            />
+          ) : (
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell isHeader>Name</TableCell>
+                  <TableCell isHeader>Playbook</TableCell>
+                  <TableCell isHeader>Status</TableCell>
+                  <TableCell isHeader>Progress</TableCell>
+                  <TableCell isHeader>Created</TableCell>
+                  <TableCell isHeader>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {recentSimulations.map((sim) => (
+                  <TableRow key={sim.id} hover>
+                    <TableCell>
+                      <span className="font-medium text-foreground">{sim.name}</span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-foreground-muted">{sim.playbookName}</span>
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={sim.status} size="sm" />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className="w-20 h-1.5 bg-background-tertiary rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-accent to-accent-purple rounded-full"
+                            style={{
+                              width: `${sim.status === 'completed' ? 100 : Math.min((sim.currentRound / Math.max(sim.totalRounds, 1)) * 100, 95)}%`,
+                            }}
+                          />
+                        </div>
+                        <span className="text-xs text-foreground-muted">
+                          {sim.currentRound}/{sim.totalRounds}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-foreground-muted">{formatDate(sim.createdAt)}</span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Link href={`/simulations/${sim.id}`}>
+                          <Button variant="ghost" size="sm">
+                            View
+                          </Button>
+                        </Link>
+                        {sim.status === 'completed' && (
+                          <Link href={`/simulations/${sim.id}/report`}>
+                            <Button variant="secondary" size="sm">
+                              Report
+                            </Button>
+                          </Link>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </div>
       </Card>
 
@@ -263,6 +335,7 @@ function StatCard({
   icon,
   trend,
   trendUp,
+  trendTone = 'auto',
   highlight = false,
 }: {
   title: string;
@@ -270,8 +343,18 @@ function StatCard({
   icon: React.ReactNode;
   trend: string;
   trendUp?: boolean;
+  /** When set, trend is always shown in muted style (ignores trendUp). */
+  trendTone?: 'auto' | 'muted';
   highlight?: boolean;
 }) {
+  const showTrend = trendTone === 'muted' || trendUp !== undefined;
+  const trendClass =
+    trendTone === 'muted'
+      ? 'text-foreground-muted'
+      : trendUp
+        ? 'text-success'
+        : 'text-foreground-muted';
+
   return (
     <Card
       className={highlight ? 'border-accent/30' : ''}
@@ -286,13 +369,8 @@ function StatCard({
         >
           {icon}
         </div>
-        {trendUp !== undefined && (
-          <span
-              className={clsx(
-                'text-xs font-medium',
-                trendUp ? 'text-success' : 'text-foreground-muted'
-              )}
-          >
+        {showTrend && (
+          <span className={clsx('text-xs font-medium', trendClass)}>
             {trend}
           </span>
         )}
@@ -343,5 +421,3 @@ function QuickActionCard({
     </Link>
   );
 }
-
-import { clsx } from 'clsx';

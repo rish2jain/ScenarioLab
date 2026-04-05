@@ -147,10 +147,7 @@ Include specific numbers, dates, and names where available."""
                 messages=[
                     LLMMessage(
                         role="system",
-                        content=(
-                            "You are a research analyst. "
-                            "Write concise factual summaries."
-                        ),
+                        content=("You are a research analyst. " "Write concise factual summaries."),
                     ),
                     LLMMessage(role="user", content=prompt),
                 ],

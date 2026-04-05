@@ -3,106 +3,27 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Star, Download, Users, Share2, TrendingUp } from 'lucide-react';
-import { Card } from '@/components/ui/Card';
+import { ChevronLeft, Star, Download, Share2, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { TimelineSlider } from '@/components/visualization/TimelineSlider';
-import { TimelineEvent } from '@/components/visualization/TimelineEvent';
+import dynamic from 'next/dynamic';
+
+const TimelineSlider = dynamic(
+  () => import('@/components/visualization/TimelineSlider').then(mod => ({ default: mod.TimelineSlider })),
+  { ssr: false, loading: () => <div className="h-16 animate-pulse bg-zinc-800/50 rounded-lg" /> }
+);
+const TimelineEvent = dynamic(
+  () => import('@/components/visualization/TimelineEvent').then(mod => ({ default: mod.TimelineEvent })),
+  { ssr: false }
+);
 import { useSimulationStore } from '@/lib/store';
 import { api } from '@/lib/api';
-import type {
-  Simulation,
-  TimelineEvent as TimelineEventType,
-  TimelineRound,
-  BookmarkData,
-  TimelineEventType as EventType,
-} from '@/lib/types';
+import type { TimelineRound, BookmarkData } from '@/lib/types';
+import {
+  buildTimelineFromMessages,
+  mergeSimulationAgentsFromApi,
+} from '@/lib/simulation-viz';
 
-// Mock data generator
-function generateMockTimelineData(totalRounds: number): TimelineRound[] {
-  const eventTypes: EventType[] = ['decision', 'vote', 'statement', 'coalition', 'conflict', 'agreement'];
-  const agentNames = ['Sarah Chen', 'Michael Torres', 'Jennifer Walsh', 'David Park', 'Emma Wilson', 'James Liu'];
-  const agentRoles = ['Acquiring CEO', 'Target CEO', 'Integration Lead', 'HR Director', 'Board Member', 'Legal Counsel'];
-  const agentColors = ['#14b8a6', '#f59e0b', '#3b82f6', '#8b5cf6', '#ef4444', '#22c55e'];
-  
-  const rounds: TimelineRound[] = [];
-  
-  for (let round = 1; round <= totalRounds; round++) {
-    const eventCount = Math.floor(Math.random() * 3) + 3; // 3-5 events per round
-    const events: TimelineEventType[] = [];
-    
-    for (let i = 0; i < eventCount; i++) {
-      const agentIdx = Math.floor(Math.random() * agentNames.length);
-      events.push({
-        id: `event-${round}-${i}`,
-        round,
-        timestamp: new Date(Date.now() - (totalRounds - round) * 3600000 - i * 60000).toISOString(),
-        agentId: `agent-${agentIdx + 1}`,
-        agentName: agentNames[agentIdx],
-        agentRole: agentRoles[agentIdx],
-        agentColor: agentColors[agentIdx],
-        type: eventTypes[Math.floor(Math.random() * eventTypes.length)],
-        content: getRandomEventContent(eventTypes[Math.floor(Math.random() * eventTypes.length)]),
-        importance: ['low', 'medium', 'high', 'critical'][Math.floor(Math.random() * 4)] as TimelineEventType['importance'],
-        relatedAgents: Math.random() > 0.5 
-          ? [`agent-${(agentIdx + 1) % agentNames.length + 1}`, `agent-${(agentIdx + 2) % agentNames.length + 1}`]
-          : undefined,
-      });
-    }
-    
-    rounds.push({
-      round,
-      events,
-      summary: `Round ${round} focused on key strategic decisions and stakeholder alignment.`,
-      activeCoalitions: ['Pro-Merger', 'Integration Team'],
-      agentStances: {
-        'agent-1': Math.floor(Math.random() * 100) - 50,
-        'agent-2': Math.floor(Math.random() * 100) - 50,
-        'agent-3': Math.floor(Math.random() * 100) - 50,
-      },
-    });
-  }
-  
-  return rounds;
-}
-
-function getRandomEventContent(type: EventType): string {
-  const contents: Record<EventType, string[]> = {
-    decision: [
-      'We have decided to proceed with the phased integration approach.',
-      'The board has approved the retention package for key personnel.',
-      'Leadership has committed to a 90-day timeline for core systems integration.',
-    ],
-    vote: [
-      'Motion to delay the merger announcement passes 5-3.',
-      'The committee voted unanimously to approve the cultural assessment.',
-      'Proposal for immediate cost-cutting measures rejected 4-4.',
-    ],
-    statement: [
-      'I believe we need to carefully consider the employee impact before proceeding.',
-      'Our priority must be maintaining customer confidence during this transition.',
-      'The data suggests we are underestimating the integration complexity.',
-    ],
-    coalition: [
-      'The integration team and HR directors have formed a joint working group.',
-      'Several board members have aligned on a conservative approach to the merger.',
-      'Operations and IT leadership have agreed to collaborate on systems planning.',
-    ],
-    conflict: [
-      'Disagreement emerged regarding the timeline for workforce reductions.',
-      'Tensions rose over allocation of budget between departments.',
-      'Conflicting priorities between speed of integration and cultural preservation.',
-    ],
-    agreement: [
-      'All parties agreed on the need for transparent communication.',
-      'Consensus reached on the phased approach to systems integration.',
-      'Leadership aligned on prioritizing customer retention during transition.',
-    ],
-  };
-  
-  const options = contents[type];
-  return options[Math.floor(Math.random() * options.length)];
-}
+const MAX_DESC_LENGTH = 50;
 
 export default function TimelinePage() {
   const params = useParams();
@@ -112,6 +33,8 @@ export default function TimelinePage() {
   const { currentSimulation, setCurrentSimulation } = useSimulationStore();
   
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
   const [currentRound, setCurrentRound] = useState(1);
   const [timelineData, setTimelineData] = useState<TimelineRound[]>([]);
   const [bookmarks, setBookmarks] = useState<BookmarkData[]>([]);
@@ -119,36 +42,61 @@ export default function TimelinePage() {
   useEffect(() => {
     const loadSimulation = async () => {
       setIsLoading(true);
-      const simulationData = await api.getSimulation(simulationId);
-      
-      if (simulationData) {
-        setCurrentSimulation(simulationData);
-        setCurrentRound(simulationData.currentRound || 1);
-        setTimelineData(generateMockTimelineData(simulationData.totalRounds));
-        
-        // Add some initial bookmarks
-        setBookmarks([
-          {
-            id: 'bookmark-1',
-            round: 3,
-            label: 'Critical Decision Point',
-            note: 'Board approved the integration timeline',
-            createdAt: new Date().toISOString(),
-          },
-          {
-            id: 'bookmark-2',
-            round: 7,
-            label: 'Coalition Formed',
-            note: 'Key stakeholders aligned on approach',
-            createdAt: new Date().toISOString(),
-          },
+      setError(null);
+      try {
+        const [simulationData, messagesData, agentRows] = await Promise.all([
+          api.getSimulation(simulationId),
+          api.getAgentMessages(simulationId),
+          api.getSimulationAgents(simulationId),
         ]);
+
+        if (simulationData === null) {
+          setCurrentSimulation(null);
+          setTimelineData([]);
+          setBookmarks([]);
+          setError('Simulation not found');
+        } else {
+          const messagesOk = Array.isArray(messagesData);
+          const agentsOk = Array.isArray(agentRows);
+          if (!messagesOk || !agentsOk) {
+            setCurrentSimulation(null);
+            setTimelineData([]);
+            setBookmarks([]);
+            setError(
+              !messagesOk && !agentsOk
+                ? 'Could not load simulation messages or agents. Try again later.'
+                : !messagesOk
+                  ? 'Could not load simulation messages. Try again later.'
+                  : 'Could not load simulation agents. Try again later.'
+            );
+          } else {
+            const merged = mergeSimulationAgentsFromApi(simulationData, agentRows);
+            setCurrentSimulation(merged);
+            setCurrentRound(simulationData.currentRound || 1);
+            setTimelineData(buildTimelineFromMessages(merged, messagesData));
+            setBookmarks([]);
+            setError(null);
+          }
+        }
+      } catch (err) {
+        console.error('Timeline load failed', err);
+        setCurrentSimulation(null);
+        setTimelineData([]);
+        setBookmarks([]);
+        setError(
+          err instanceof Error ? err.message : 'Failed to load timeline data.'
+        );
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
     loadSimulation();
-  }, [simulationId, setCurrentSimulation]);
+  }, [simulationId, setCurrentSimulation, retryKey]);
+
+  const handleRetry = () => {
+    setRetryKey((k) => k + 1);
+  };
 
   const currentRoundData = useMemo(() => {
     return timelineData.find((r) => r.round === currentRound);
@@ -161,7 +109,10 @@ export default function TimelinePage() {
         .map((e) => ({
           round: round.round,
           type: e.type,
-          description: e.content.slice(0, 50) + '...',
+          description:
+            e.content.length > MAX_DESC_LENGTH
+              ? `${e.content.slice(0, MAX_DESC_LENGTH)}…`
+              : e.content,
         }))
     );
   }, [timelineData]);
@@ -205,6 +156,24 @@ export default function TimelinePage() {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-slate-400">Loading timeline...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 gap-4 px-4 text-center">
+        <div className="text-red-400 max-w-md">{error}</div>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button variant="secondary" size="sm" type="button" onClick={handleRetry}>
+            Retry
+          </Button>
+          <Link href={`/simulations/${simulationId}`}>
+            <Button variant="ghost" size="sm" leftIcon={<ChevronLeft className="w-4 h-4" />}>
+              Back to simulation
+            </Button>
+          </Link>
+        </div>
       </div>
     );
   }
@@ -256,7 +225,6 @@ export default function TimelinePage() {
           currentRound={currentRound}
           onRoundChange={setCurrentRound}
           bookmarks={bookmarks}
-          onBookmarkToggle={handleBookmarkToggle}
           keyEvents={keyEvents}
         />
       </div>

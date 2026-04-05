@@ -77,9 +77,7 @@ class HallucinationDetector:
         facts = ground_truth_facts or []
         if self.db and simulation_state.config.seed_id:
             try:
-                db_facts = await self._extract_facts_from_graph(
-                    simulation_state.config.seed_id
-                )
+                db_facts = await self._extract_facts_from_graph(simulation_state.config.seed_id)
                 facts.extend(db_facts)
             except Exception as e:
                 logger.error(f"Failed to extract facts from graph: {e}")
@@ -101,9 +99,7 @@ class HallucinationDetector:
                     flags.append(flag)
 
         # Calculate detection rate
-        detection_rate = (
-            len(flags) / total_statements if total_statements > 0 else 0.0
-        )
+        detection_rate = len(flags) / total_statements if total_statements > 0 else 0.0
 
         return HallucinationReport(
             simulation_id=simulation_id,
@@ -128,12 +124,14 @@ class HallucinationDetector:
 
             facts = []
             for record in results:
-                facts.append({
-                    "type": "entity",
-                    "name": record.get("name"),
-                    "description": record.get("description"),
-                    "entity_type": record.get("type"),
-                })
+                facts.append(
+                    {
+                        "type": "entity",
+                        "name": record.get("name"),
+                        "description": record.get("description"),
+                        "entity_type": record.get("type"),
+                    }
+                )
 
             # Query for relationships
             rel_query = """
@@ -141,18 +139,18 @@ class HallucinationDetector:
             RETURN a.name as source, b.name as target,
                    r.relationship_type as rel_type, r.description as description
             """
-            rel_results = await self.db.execute_query(
-                rel_query, {"seed_id": seed_id}
-            )
+            rel_results = await self.db.execute_query(rel_query, {"seed_id": seed_id})
 
             for record in rel_results:
-                facts.append({
-                    "type": "relationship",
-                    "source": record.get("source"),
-                    "target": record.get("target"),
-                    "relationship": record.get("rel_type"),
-                    "description": record.get("description"),
-                })
+                facts.append(
+                    {
+                        "type": "relationship",
+                        "source": record.get("source"),
+                        "target": record.get("target"),
+                        "relationship": record.get("rel_type"),
+                        "description": record.get("description"),
+                    }
+                )
 
             return facts
 
@@ -201,9 +199,7 @@ class HallucinationDetector:
         # Use LLM for semantic fact-checking if available
         if self.llm and len(statement) > 30:
             try:
-                semantic_flag = await self._check_semantic_contradiction(
-                    statement, facts
-                )
+                semantic_flag = await self._check_semantic_contradiction(statement, facts)
                 if semantic_flag:
                     return HallucinationFlag(
                         agent_id=agent_id,
@@ -221,9 +217,7 @@ class HallucinationDetector:
 
         return None
 
-    def _check_numerical_contradiction(
-        self, statement: str, facts: list[dict]
-    ) -> dict | None:
+    def _check_numerical_contradiction(self, statement: str, facts: list[dict]) -> dict | None:
         """Check for numerical contradictions with 10% tolerance."""
         # Extract numbers from statement
         numbers_in_statement = re.findall(r"\d+(?:\.\d+)?", statement)
@@ -249,15 +243,11 @@ class HallucinationDetector:
                             fact_num = float(fact_num_str)
 
                             # Check if numbers refer to same thing (context match)
-                            if self._numbers_refer_to_same_entity(
-                                stmt_num, fact_num, statement, fact_desc
-                            ):
+                            if self._numbers_refer_to_same_entity(stmt_num, fact_num, statement, fact_desc):
                                 # Check 10% tolerance
                                 diff_ratio = abs(stmt_num - fact_num) / fact_num
                                 if diff_ratio > 0.10:
-                                    severity = (
-                                        "major" if diff_ratio > 0.25 else "minor"
-                                    )
+                                    severity = "major" if diff_ratio > 0.25 else "minor"
                                     return {
                                         "ground_truth": f"{fact_num}",
                                         "severity": severity,
@@ -286,9 +276,20 @@ class HallucinationDetector:
 
         # Common quantity keywords
         quantity_keywords = [
-            "revenue", "profit", "cost", "price", "market", "share",
-            "employees", "customers", "users", "growth", "percent",
-            "million", "billion", "thousand",
+            "revenue",
+            "profit",
+            "cost",
+            "price",
+            "market",
+            "share",
+            "employees",
+            "customers",
+            "users",
+            "growth",
+            "percent",
+            "million",
+            "billion",
+            "thousand",
         ]
 
         # Check if any keyword appears near both numbers
@@ -304,15 +305,15 @@ class HallucinationDetector:
 
         return False
 
-    async def _check_semantic_contradiction(
-        self, statement: str, facts: list[dict]
-    ) -> dict | None:
+    async def _check_semantic_contradiction(self, statement: str, facts: list[dict]) -> dict | None:
         """Use LLM to check for semantic contradictions."""
         # Prepare facts context
-        facts_text = "\n".join([
-            f"- {fact.get('name', '')}: {fact.get('description', '')}"
-            for fact in facts[:10]  # Limit to first 10 facts
-        ])
+        facts_text = "\n".join(
+            [
+                f"- {fact.get('name', '')}: {fact.get('description', '')}"
+                for fact in facts[:10]  # Limit to first 10 facts
+            ]
+        )
 
         prompt = f"""Check if the following statement contradicts any of the known facts.
 
@@ -339,8 +340,7 @@ Respond with valid JSON only."""
                 LLMMessage(
                     role="system",
                     content=(
-                        "You check statements for contradictions against known facts. "
-                        "Respond with valid JSON only."
+                        "You check statements for contradictions against known facts. " "Respond with valid JSON only."
                     ),
                 ),
                 LLMMessage(role="user", content=prompt),

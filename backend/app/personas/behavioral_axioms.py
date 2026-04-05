@@ -16,9 +16,7 @@ logger = logging.getLogger(__name__)
 class BehavioralAxiom(BaseModel):
     """A single behavioral axiom extracted from historical data."""
 
-    axiom_id: str = Field(
-        default_factory=lambda: str(uuid.uuid4())
-    )
+    axiom_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     role: str
     axiom_text: str
     confidence: float = Field(..., ge=0.0, le=1.0)
@@ -94,29 +92,20 @@ class AxiomExtractor:
         if not self.llm:
             raise ValueError("LLM provider required for axiom extraction")
 
-        data_type_desc = self.DATA_TYPES.get(
-            data_type, "historical documents"
-        )
+        data_type_desc = self.DATA_TYPES.get(data_type, "historical documents")
 
-        logger.info(
-            f"Extracting axioms from {data_type} "
-            f"({len(historical_data)} chars)"
-        )
+        logger.info(f"Extracting axioms from {data_type} " f"({len(historical_data)} chars)")
 
         # Truncate if too long
         max_chars = 8000
         data_sample = historical_data[:max_chars]
 
         # Use LLM to extract axioms
-        axioms = await self._llm_extract_axioms(
-            data_sample, data_type, data_type_desc
-        )
+        axioms = await self._llm_extract_axioms(data_sample, data_type, data_type_desc)
 
         # Compute overall confidence
         if axioms:
-            overall_confidence = sum(
-                a.confidence for a in axioms
-            ) / len(axioms)
+            overall_confidence = sum(a.confidence for a in axioms) / len(axioms)
         else:
             overall_confidence = 0.0
 
@@ -231,13 +220,15 @@ Respond with valid JSON only."""
                 elif evidence_count == 0:
                     confidence = max(confidence - 0.2, 0.1)
 
-                axioms.append(BehavioralAxiom(
-                    role=role,
-                    axiom_text=axiom_text,
-                    confidence=round(confidence, 2),
-                    evidence_count=evidence_count,
-                    source_references=evidence[:3],
-                ))
+                axioms.append(
+                    BehavioralAxiom(
+                        role=role,
+                        axiom_text=axiom_text,
+                        confidence=round(confidence, 2),
+                        evidence_count=evidence_count,
+                        source_references=evidence[:3],
+                    )
+                )
 
         return axioms
 
@@ -251,41 +242,38 @@ Respond with valid JSON only."""
 
         # Find role mentions
         for role, patterns in self.ROLE_PATTERNS.items():
-            role_count = sum(
-                data_lower.count(p) for p in patterns
-            )
+            role_count = sum(data_lower.count(p) for p in patterns)
 
             if role_count >= 2:
                 # Extract basic patterns
-                sentences = re.split(r'[.!?]+', data)
+                sentences = re.split(r"[.!?]+", data)
 
-                role_sentences = [
-                    s for s in sentences
-                    if any(p in s.lower() for p in patterns)
-                ]
+                role_sentences = [s for s in sentences if any(p in s.lower() for p in patterns)]
 
                 if role_sentences:
                     # Look for decision patterns
                     decision_words = [
-                        "decided", "approved", "rejected",
-                        "voted", "supported", "opposed",
+                        "decided",
+                        "approved",
+                        "rejected",
+                        "voted",
+                        "supported",
+                        "opposed",
                     ]
-                    decision_count = sum(
-                        1 for s in role_sentences
-                        if any(w in s.lower() for w in decision_words)
-                    )
+                    decision_count = sum(1 for s in role_sentences if any(w in s.lower() for w in decision_words))
 
                     if decision_count > 0:
-                        axioms.append(BehavioralAxiom(
-                            role=role,
-                            axiom_text=(
-                                f"Tends to participate in decisions "
-                                f"({decision_count} decisions observed)"
-                            ),
-                            confidence=0.5,
-                            evidence_count=decision_count,
-                            source_references=role_sentences[:2],
-                        ))
+                        axioms.append(
+                            BehavioralAxiom(
+                                role=role,
+                                axiom_text=(
+                                    f"Tends to participate in decisions " f"({decision_count} decisions observed)"
+                                ),
+                                confidence=0.5,
+                                evidence_count=decision_count,
+                                source_references=role_sentences[:2],
+                            )
+                        )
 
         return axioms
 
@@ -318,10 +306,7 @@ Respond with valid JSON only."""
                 validation_details=[],
             )
 
-        logger.info(
-            f"Validating {len(axioms)} axioms against "
-            f"{len(holdout_data)} chars of holdout data"
-        )
+        logger.info(f"Validating {len(axioms)} axioms against " f"{len(holdout_data)} chars of holdout data")
 
         # Truncate holdout data
         max_chars = 6000
@@ -340,9 +325,7 @@ Respond with valid JSON only."""
             role_axioms[axiom.role].append(axiom)
 
         for role, role_axiom_list in role_axioms.items():
-            result = await self._validate_role_axioms(
-                role, role_axiom_list, data_sample
-            )
+            result = await self._validate_role_axioms(role, role_axiom_list, data_sample)
             validation_details.extend(result)
 
             for detail in result:
@@ -401,8 +384,7 @@ Respond with valid JSON only."""
                     LLMMessage(
                         role="system",
                         content=(
-                            "You validate behavioral patterns against "
-                            "text data. Respond with valid JSON only."
+                            "You validate behavioral patterns against " "text data. Respond with valid JSON only."
                         ),
                     ),
                     LLMMessage(role="user", content=prompt),
@@ -446,10 +428,7 @@ Respond with valid JSON only."""
             "roles_identified": len(role_counts),
             "roles": dict(role_counts),
             "average_confidence": result.overall_confidence,
-            "high_confidence_axioms": [
-                a.axiom_text for a in result.axioms
-                if a.confidence >= 0.8
-            ],
+            "high_confidence_axioms": [a.axiom_text for a in result.axioms if a.confidence >= 0.8],
             "data_type": result.data_type,
             "data_points": result.data_points_analyzed,
         }

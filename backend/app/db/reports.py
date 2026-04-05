@@ -53,14 +53,13 @@ class ReportRepository:
         return json.loads(row[0])
 
     async def get_by_simulation(
-        self, simulation_id: str,
+        self,
+        simulation_id: str,
     ) -> dict | None:
         """Load the most recent report for a simulation."""
         db = await get_db()
         cursor = await db.execute(
-            "SELECT report_json FROM reports "
-            "WHERE simulation_id = ? "
-            "ORDER BY updated_at DESC LIMIT 1",
+            "SELECT report_json FROM reports " "WHERE simulation_id = ? " "ORDER BY updated_at DESC LIMIT 1",
             (simulation_id,),
         )
         row = await cursor.fetchone()

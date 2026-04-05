@@ -26,9 +26,7 @@ class AutoTemplater:
     def __init__(self, llm_provider: LLMProvider | None = None):
         self.llm = llm_provider
 
-    async def suggest_playbook(
-        self, scenario_description: str
-    ) -> list[PlaybookSuggestion]:
+    async def suggest_playbook(self, scenario_description: str) -> list[PlaybookSuggestion]:
         """Suggest most relevant playbook based on scenario description.
 
         Uses LLM semantic matching against playbook descriptions.
@@ -52,13 +50,15 @@ class AutoTemplater:
         # Build playbook context for LLM
         playbook_context = []
         for pb in playbooks:
-            playbook_context.append({
-                "id": pb.id,
-                "name": pb.name,
-                "description": pb.description,
-                "category": pb.category,
-                "environment": pb.environment,
-            })
+            playbook_context.append(
+                {
+                    "id": pb.id,
+                    "name": pb.name,
+                    "description": pb.description,
+                    "category": pb.category,
+                    "environment": pb.environment,
+                }
+            )
 
         # Use LLM to rank playbooks
         prompt = f"""Given this scenario description, rank the most relevant playbooks.
@@ -91,10 +91,7 @@ Respond with valid JSON only."""
                 messages=[
                     LLMMessage(
                         role="system",
-                        content=(
-                            "You match scenarios to simulation playbooks. "
-                            "Respond with valid JSON only."
-                        ),
+                        content=("You match scenarios to simulation playbooks. " "Respond with valid JSON only."),
                     ),
                     LLMMessage(role="user", content=prompt),
                 ],
@@ -123,13 +120,15 @@ Respond with valid JSON only."""
                 # Find playbook details
                 pb = next((p for p in playbooks if p.id == pb_id), None)
                 if pb:
-                    suggestions.append(PlaybookSuggestion(
-                        playbook_id=pb_id,
-                        playbook_name=pb.name,
-                        confidence=ranking.get("confidence", 0.5),
-                        reasoning=ranking.get("reasoning", ""),
-                        pre_fill_suggestions=ranking.get("pre_fill_suggestions", {}),
-                    ))
+                    suggestions.append(
+                        PlaybookSuggestion(
+                            playbook_id=pb_id,
+                            playbook_name=pb.name,
+                            confidence=ranking.get("confidence", 0.5),
+                            reasoning=ranking.get("reasoning", ""),
+                            pre_fill_suggestions=ranking.get("pre_fill_suggestions", {}),
+                        )
+                    )
 
             # Sort by confidence descending
             suggestions.sort(key=lambda x: x.confidence, reverse=True)
@@ -151,9 +150,7 @@ Respond with valid JSON only."""
             lines.append(f"Description: {pb['description']}")
         return "\n".join(lines)
 
-    def _keyword_based_suggestion(
-        self, scenario_description: str
-    ) -> list[PlaybookSuggestion]:
+    def _keyword_based_suggestion(self, scenario_description: str) -> list[PlaybookSuggestion]:
         """Fallback keyword-based suggestion without LLM."""
         desc_lower = scenario_description.lower()
 
@@ -187,14 +184,16 @@ Respond with valid JSON only."""
             pb = playbook_manager.get_playbook(pb_id)
             if pb:
                 confidence = min(0.9, 0.5 + score * 0.15)
-                suggestions.append(PlaybookSuggestion(
-                    playbook_id=pb_id,
-                    playbook_name=pb.name,
-                    confidence=confidence,
-                    reasoning=f"Matched keywords related to {pb.category}",
-                    pre_fill_suggestions={
-                        "suggested_rounds": pb.typical_duration_rounds[0],
-                    },
-                ))
+                suggestions.append(
+                    PlaybookSuggestion(
+                        playbook_id=pb_id,
+                        playbook_name=pb.name,
+                        confidence=confidence,
+                        reasoning=f"Matched keywords related to {pb.category}",
+                        pre_fill_suggestions={
+                            "suggested_rounds": pb.typical_duration_rounds[0],
+                        },
+                    )
+                )
 
         return suggestions[:3]

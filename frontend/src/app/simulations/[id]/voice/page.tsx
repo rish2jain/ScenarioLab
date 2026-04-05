@@ -5,8 +5,6 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   Mic,
-  MicOff,
-  Play,
   Square,
   ChevronLeft,
   Users,
@@ -14,8 +12,9 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import { useToast } from "@/components/ui/Toast";
 import { api } from "@/lib/api";
+import { archetypeColors } from "@/lib/archetypeColors";
 import type { Agent } from "@/lib/types";
 
 interface VoiceMessage {
@@ -26,48 +25,13 @@ interface VoiceMessage {
   audioUrl?: string;
 }
 
-// Mock agents for display
-const mockAgents: Agent[] = [
-  {
-    id: "agent-1",
-    name: "Sarah Chen",
-    role: "Acquiring CEO",
-    archetype: "aggressor",
-    description: "Driven executive focused on rapid integration",
-    traits: ["Decisive", "Results-oriented", "Direct"],
-    goals: ["Achieve synergies", "Meet timeline", "Reduce costs"],
-    color: "#14b8a6",
-    isActive: true,
-  },
-  {
-    id: "agent-2",
-    name: "Michael Torres",
-    role: "Target CEO",
-    archetype: "defender",
-    description: "Protective of acquired company culture",
-    traits: ["Cautious", "Empathetic", "Strategic"],
-    goals: ["Preserve culture", "Protect employees", "Maintain autonomy"],
-    color: "#f59e0b",
-    isActive: true,
-  },
-  {
-    id: "agent-3",
-    name: "Jennifer Walsh",
-    role: "Integration Lead",
-    archetype: "mediator",
-    description: "Tasked with merging operations smoothly",
-    traits: ["Diplomatic", "Organized", "Patient"],
-    goals: ["Smooth transition", "Minimize disruption", "Build bridges"],
-    color: "#3b82f6",
-    isActive: true,
-  },
-];
-
 export default function VoiceChatPage() {
   const params = useParams();
   const rawId = params.id;
   const simulationId = Array.isArray(rawId) ? rawId[0] : rawId ?? "";
+  const { addToast } = useToast();
 
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -78,40 +42,28 @@ export default function VoiceChatPage() {
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  const startRecording = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-      });
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: "audio/webm",
-      });
-
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
+  useEffect(() => {
+    const fetchAgents = async () => {
+      try {
+        const agentsData = await api.getSimulationAgents(simulationId);
+        if (agentsData && agentsData.length > 0) {
+          setAgents(agentsData.map(a => ({
+            ...a,
+            color: archetypeColors[a.archetype] || '#6b7280',
+            isActive: true
+          } as Agent)));
+        } else {
+          setAgents([]);
         }
-      };
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, {
-          type: "audio/webm",
-        });
-        stream.getTracks().forEach((track) => track.stop());
-        await processAudio(audioBlob);
-      };
-
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start();
-      setIsRecording(true);
-    } catch (error) {
-      console.error("Failed to start recording:", error);
-      alert("Could not access microphone. Please grant permission.");
-    }
-  }, []);
+      } catch (error) {
+        console.error("Failed to fetch agents:", error);
+        setAgents([]);
+      }
+    };
+    fetchAgents();
+  }, [simulationId]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
@@ -120,9 +72,24 @@ export default function VoiceChatPage() {
     }
   }, [isRecording]);
 
-  const processAudio = async (audioBlob: Blob) => {
+  const playAudio = useCallback((audioUrl: string) => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+    }
+
+    const fullUrl = audioUrl.startsWith("http")
+      ? audioUrl
+      : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001"}${audioUrl}`;
+
+    const audio = new Audio(fullUrl);
+    currentAudioRef.current = audio;
+    setCurrentAudio(audio);
+    audio.play().catch(console.error);
+  }, []);
+
+  const processAudio = useCallback(async (audioBlob: Blob) => {
     if (!selectedAgent) {
-      alert("Please select an agent first");
+      addToast("Please select an agent first", "info");
       return;
     }
 
@@ -159,33 +126,71 @@ export default function VoiceChatPage() {
       }
     } catch (error) {
       console.error("Failed to process audio:", error);
-      alert("Failed to process voice. Please try again.");
+      addToast("Failed to process voice. Please try again.", "error");
     } finally {
       setIsProcessing(false);
     }
-  };
+  }, [addToast, playAudio, selectedAgent, simulationId]);
 
-  const playAudio = (audioUrl: string) => {
-    if (currentAudio) {
-      currentAudio.pause();
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      });
+      let chosenMime = "";
+      if (
+        typeof MediaRecorder !== "undefined" &&
+        typeof MediaRecorder.isTypeSupported === "function"
+      ) {
+        if (MediaRecorder.isTypeSupported("audio/webm")) {
+          chosenMime = "audio/webm";
+        } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+          chosenMime = "audio/mp4";
+        }
+      }
+      const mediaRecorder = chosenMime
+        ? new MediaRecorder(stream, { mimeType: chosenMime })
+        : new MediaRecorder(stream);
+
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const blobType =
+          chosenMime ||
+          (typeof mediaRecorder.mimeType === "string" &&
+          mediaRecorder.mimeType.length > 0
+            ? mediaRecorder.mimeType
+            : undefined);
+        const audioBlob = new Blob(audioChunksRef.current, {
+          ...(blobType ? { type: blobType } : {}),
+        });
+        stream.getTracks().forEach((track) => track.stop());
+        await processAudio(audioBlob);
+      };
+
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error("Failed to start recording:", error);
+      addToast("Could not access microphone. Please grant permission.", "error");
     }
-
-    const fullUrl = audioUrl.startsWith("http")
-      ? audioUrl
-      : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001"}${audioUrl}`;
-
-    const audio = new Audio(fullUrl);
-    setCurrentAudio(audio);
-    audio.play().catch(console.error);
-  };
+  }, [addToast, processAudio]);
 
   useEffect(() => {
     return () => {
-      if (currentAudio) {
-        currentAudio.pause();
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current = null;
       }
     };
-  }, [currentAudio]);
+  }, []);
 
   return (
     <div className="h-full flex flex-col -m-6">
@@ -301,7 +306,7 @@ export default function VoiceChatPage() {
             </div>
           </div>
           <div className="p-4 space-y-3">
-            {mockAgents.map((agent) => (
+            {agents.map((agent) => (
               <button
                 key={agent.id}
                 onClick={() => setSelectedAgent(agent)}

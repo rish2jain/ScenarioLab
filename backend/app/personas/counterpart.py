@@ -90,27 +90,18 @@ class CounterpartAgentManager:
                         id=cp_data["id"],
                         name=cp_data["name"],
                         role=cp_data.get("role", ""),
-                        persona_prompt=cp_data.get("persona_data", {}).get(
-                            "persona_prompt", ""
-                        ),
+                        persona_prompt=cp_data.get("persona_data", {}).get("persona_prompt", ""),
                         mode=cp_data["mode"],
                         stakeholder_type=cp_data["stakeholder_type"],
                         created_from_brief=cp_data.get("brief", ""),
                     )
                     self._counterparts[counterpart.id] = counterpart
-                    self._conversation_histories[counterpart.id] = cp_data.get(
-                        "conversation_history", []
-                    )
+                    self._conversation_histories[counterpart.id] = cp_data.get("conversation_history", [])
                     self._objections_raised[counterpart.id] = []
                 self._initialized = True
-                logger.info(
-                    f"Loaded {len(self._counterparts)} "
-                    f"counterparts from database"
-                )
+                logger.info(f"Loaded {len(self._counterparts)} " f"counterparts from database")
             except Exception as e:
-                logger.warning(
-                    f"Failed to load counterparts from DB: {e}"
-                )
+                logger.warning(f"Failed to load counterparts from DB: {e}")
 
     async def create_counterpart(
         self,
@@ -203,9 +194,7 @@ Respond in JSON format:
             # Save to database
             await self._save_counterpart(counterpart)
 
-            logger.info(
-                f"Created counterpart {counterpart.id}: {counterpart.name}"
-            )
+            logger.info(f"Created counterpart {counterpart.id}: {counterpart.name}")
 
             return {
                 "id": counterpart.id,
@@ -292,9 +281,7 @@ Focus on realistic concerns this stakeholder would have."""
                         content="Generate your objections.",
                     ),
                 ],
-                temperature=REHEARSAL_MODE_TEMPERATURE.get(
-                    counterpart.mode, 0.6
-                ),
+                temperature=REHEARSAL_MODE_TEMPERATURE.get(counterpart.mode, 0.6),
                 max_tokens=2000,
             )
 
@@ -336,17 +323,13 @@ Focus on realistic concerns this stakeholder would have."""
                     text="I have concerns about the timeline.",
                     severity="moderate",
                     category="operational",
-                    suggested_response=(
-                        "Provide a detailed timeline with milestones."
-                    ),
+                    suggested_response=("Provide a detailed timeline with milestones."),
                 ),
                 Objection(
                     text="What's the financial impact?",
                     severity="strong",
                     category="financial",
-                    suggested_response=(
-                        "Present ROI analysis and cost breakdown."
-                    ),
+                    suggested_response=("Present ROI analysis and cost breakdown."),
                 ),
             ]
             return [obj.model_dump() for obj in fallback]
@@ -385,8 +368,7 @@ Focus on realistic concerns this stakeholder would have."""
                 "Help the presenter improve through gentle guidance."
             ),
             "challenging": (
-                "Be direct and push back on weak arguments. "
-                "Ask tough questions. Challenge assumptions."
+                "Be direct and push back on weak arguments. " "Ask tough questions. Challenge assumptions."
             ),
             "hostile": (
                 "Be skeptical and demanding. Push hard on every point. "
@@ -406,9 +388,7 @@ Focus on realistic concerns this stakeholder would have."""
         # Add conversation history
         for msg in history[-10:]:
             role = "user" if msg.get("is_user") else "assistant"
-            messages.append(
-                LLMMessage(role=role, content=msg.get("content", ""))
-            )
+            messages.append(LLMMessage(role=role, content=msg.get("content", "")))
 
         # Add current message
         messages.append(LLMMessage(role="user", content=user_message))
@@ -416,9 +396,7 @@ Focus on realistic concerns this stakeholder would have."""
         try:
             response = await llm.generate(
                 messages=messages,
-                temperature=REHEARSAL_MODE_TEMPERATURE.get(
-                    counterpart.mode, 0.6
-                ),
+                temperature=REHEARSAL_MODE_TEMPERATURE.get(counterpart.mode, 0.6),
                 max_tokens=1000,
             )
 
@@ -430,9 +408,7 @@ Focus on realistic concerns this stakeholder would have."""
             self._conversation_histories[counterpart_id] = history
 
             # Save conversation history to database
-            asyncio.create_task(
-                counterpart_repo.save_conversation(counterpart_id, history)
-            )
+            asyncio.create_task(counterpart_repo.save_conversation(counterpart_id, history))
 
             # Count objections in this response
             objection_keywords = [
@@ -447,16 +423,10 @@ Focus on realistic concerns this stakeholder would have."""
                 "risk",
                 "unclear",
             ]
-            objection_count = sum(
-                1
-                for kw in objection_keywords
-                if kw in content.lower()
-            )
+            objection_count = sum(1 for kw in objection_keywords if kw in content.lower())
 
             # Generate coaching tips
-            coaching_tips = self._generate_coaching_tips(
-                user_message, content, counterpart.mode
-            )
+            coaching_tips = self._generate_coaching_tips(user_message, content, counterpart.mode)
 
             return {
                 "response": content,
@@ -468,8 +438,7 @@ Focus on realistic concerns this stakeholder would have."""
         except Exception as e:
             logger.error(f"Rehearsal failed: {e}")
             return {
-                "response": "I apologize, I'm having trouble responding. "
-                "Please try again.",
+                "response": "I apologize, I'm having trouble responding. " "Please try again.",
                 "tone": counterpart.mode,
                 "objection_count": 0,
                 "coaching_tips": [],
@@ -486,31 +455,22 @@ Focus on realistic concerns this stakeholder would have."""
 
         # Check message length
         if len(user_message) < 50:
-            tips.append(
-                "Consider providing more detail in your responses."
-            )
+            tips.append("Consider providing more detail in your responses.")
 
         # Check for hedging language
         hedge_words = ["maybe", "possibly", "might", "could be", "i think"]
         if any(word in user_message.lower() for word in hedge_words):
-            tips.append(
-                "Try to be more confident. Avoid hedging language."
-            )
+            tips.append("Try to be more confident. Avoid hedging language.")
 
         # Check for data/numbers
         import re
 
         if not re.search(r"\d+", user_message):
-            tips.append(
-                "Support your points with specific data or metrics."
-            )
+            tips.append("Support your points with specific data or metrics.")
 
         # Mode-specific tips
         if mode == "hostile":
-            tips.append(
-                "Stay calm and address concerns directly. "
-                "Don't get defensive."
-            )
+            tips.append("Stay calm and address concerns directly. " "Don't get defensive.")
 
         return tips[:3]  # Return max 3 tips
 
@@ -544,16 +504,12 @@ Focus on realistic concerns this stakeholder would have."""
         # Generate feedback
         llm = get_llm_provider()
 
-        conversation_text = "\n".join([
-            f"{'User' if msg.get('is_user') else 'Counterpart'}: "
-            f"{msg.get('content', '')}"
-            for msg in history
-        ])
+        conversation_text = "\n".join(
+            [f"{'User' if msg.get('is_user') else 'Counterpart'}: " f"{msg.get('content', '')}" for msg in history]
+        )
 
         try:
-            obj_text = chr(10).join(
-                f"- {obj}" for obj in key_objections[:3]
-            ) if key_objections else "None"
+            obj_text = chr(10).join(f"- {obj}" for obj in key_objections[:3]) if key_objections else "None"
             feedback_prompt = f"""Analyze this rehearsal conversation.
 
 CONVERSATION:
@@ -597,9 +553,7 @@ Provide feedback in JSON format:
             return {
                 "overall_rating": round(overall_rating, 1),
                 "strengths": feedback_data.get("strengths", []),
-                "areas_for_improvement": feedback_data.get(
-                    "areas_for_improvement", []
-                ),
+                "areas_for_improvement": feedback_data.get("areas_for_improvement", []),
                 "key_objections_raised": key_objections,
                 "preparation_tips": feedback_data.get("preparation_tips", []),
             }
@@ -614,9 +568,7 @@ Provide feedback in JSON format:
                 "preparation_tips": ["Prepare more thoroughly next time"],
             }
 
-    async def get_counterpart(
-        self, counterpart_id: str
-    ) -> CounterpartConfig | None:
+    async def get_counterpart(self, counterpart_id: str) -> CounterpartConfig | None:
         """Get a counterpart by ID."""
         await self._ensure_loaded()
         return self._counterparts.get(counterpart_id)
@@ -660,9 +612,7 @@ Provide feedback in JSON format:
                     "role": counterpart.role,
                     "persona_prompt": counterpart.persona_prompt,
                 },
-                "conversation_history": self._conversation_histories.get(
-                    counterpart.id, []
-                ),
+                "conversation_history": self._conversation_histories.get(counterpart.id, []),
             }
             await counterpart_repo.save(counterpart_data)
         except Exception as e:

@@ -40,9 +40,7 @@ class AssumptionTracker:
     def __init__(self, llm_provider: LLMProvider | None = None):
         self.llm = llm_provider
 
-    async def extract_assumptions(
-        self, simulation_config, simulation_state
-    ) -> AssumptionRegister:
+    async def extract_assumptions(self, simulation_config, simulation_state) -> AssumptionRegister:
         """Extract all assumptions from simulation config and state.
 
         Args:
@@ -152,14 +150,10 @@ class AssumptionTracker:
 
         # Compute sensitivity for all assumptions
         for assumption in assumptions:
-            assumption.sensitivity_score = await self._estimate_sensitivity(
-                assumption, simulation_config
-            )
+            assumption.sensitivity_score = await self._estimate_sensitivity(assumption, simulation_config)
             assumption.high_sensitivity = assumption.sensitivity_score > 0.7
 
-        high_sensitivity_count = sum(
-            1 for a in assumptions if a.high_sensitivity
-        )
+        high_sensitivity_count = sum(1 for a in assumptions if a.high_sensitivity)
 
         return AssumptionRegister(
             simulation_id=simulation_id,
@@ -167,9 +161,7 @@ class AssumptionTracker:
             high_sensitivity_count=high_sensitivity_count,
         )
 
-    async def _estimate_sensitivity(
-        self, assumption: Assumption, simulation_config
-    ) -> float:
+    async def _estimate_sensitivity(self, assumption: Assumption, simulation_config) -> float:
         """Estimate sensitivity score for an assumption.
 
         Uses heuristic rules based on assumption category and content.
@@ -268,13 +260,9 @@ class AssumptionTracker:
                 "assumption_id": assumption_id,
                 "original_value": assumption.value,
                 "new_value": new_value,
-                "impact": (
-                    "moderate" if assumption.sensitivity_score > 0.5 else "low"
-                ),
+                "impact": ("moderate" if assumption.sensitivity_score > 0.5 else "low"),
                 "affected_agents": [],
-                "scenario_changes": [
-                    f"{assumption.description} would change"
-                ],
+                "scenario_changes": [f"{assumption.description} would change"],
                 "confidence": 0.5,
             }
 

@@ -81,15 +81,11 @@ class SensitivityAnalyzer:
 
         # Agent-level parameters
         for agent in simulation_state.agents:
-            agent_params = await self._analyze_agent_parameters(
-                agent, simulation_state, baseline
-            )
+            agent_params = await self._analyze_agent_parameters(agent, simulation_state, baseline)
             parameters.extend(agent_params)
 
         # Environment-level parameters
-        env_params = await self._analyze_environment_parameters(
-            simulation_state, baseline
-        )
+        env_params = await self._analyze_environment_parameters(simulation_state, baseline)
         parameters.extend(env_params)
 
         # Rank by impact score (descending)
@@ -102,14 +98,10 @@ class SensitivityAnalyzer:
             outcome_metrics=outcome_metrics,
         )
 
-    def _extract_baseline_outcomes(
-        self, simulation_state: SimulationState
-    ) -> dict:
+    def _extract_baseline_outcomes(self, simulation_state: SimulationState) -> dict:
         """Extract baseline outcome metrics from simulation results."""
         # Calculate metrics from simulation data
-        total_messages = sum(
-            len(r.messages) for r in simulation_state.rounds
-        )
+        total_messages = sum(len(r.messages) for r in simulation_state.rounds)
 
         # Time to consensus: rounds until first decision
         time_to_consensus = None
@@ -120,18 +112,13 @@ class SensitivityAnalyzer:
 
         # Policy adoption rate: estimate from decisions
         approved_decisions = sum(
-            1 for r in simulation_state.rounds
+            1
+            for r in simulation_state.rounds
             for d in r.decisions
-            if d.get("evaluation", {}).get("outcome")
-            in ["approved", "accepted", "proposal_accepted"]
+            if d.get("evaluation", {}).get("outcome") in ["approved", "accepted", "proposal_accepted"]
         )
-        total_decisions = sum(
-            len(r.decisions) for r in simulation_state.rounds
-        )
-        policy_adoption_rate = (
-            (approved_decisions / total_decisions * 100)
-            if total_decisions > 0 else 0
-        )
+        total_decisions = sum(len(r.decisions) for r in simulation_state.rounds)
+        policy_adoption_rate = (approved_decisions / total_decisions * 100) if total_decisions > 0 else 0
 
         # Compliance violation rate: estimate from agent behavior
         # (simplified - in production would use AnalyticsAgent)
@@ -139,10 +126,7 @@ class SensitivityAnalyzer:
 
         return {
             "policy_adoption_rate": policy_adoption_rate,
-            "time_to_consensus": (
-                time_to_consensus or
-                simulation_state.config.total_rounds
-            ),
+            "time_to_consensus": (time_to_consensus or simulation_state.config.total_rounds),
             "compliance_violation_rate": compliance_violation_rate,
             "total_messages": total_messages,
             "total_rounds": simulation_state.current_round,
@@ -170,16 +154,13 @@ class SensitivityAnalyzer:
         risk_base = custom_params.get("risk_tolerance", 0.5)
         param = SensitivityParameter(
             name=f"{agent.name} Risk Tolerance",
-            description=f"Risk appetite for {agent.name} "
-                        f"({agent.archetype_id})",
+            description=f"Risk appetite for {agent.name} " f"({agent.archetype_id})",
             base_value=risk_base,
             low_value=max(0.1, risk_base - 0.3),
             high_value=min(1.0, risk_base + 0.3),
             low_outcome=baseline.get("policy_adoption_rate", 50) * 0.85,
             high_outcome=baseline.get("policy_adoption_rate", 50) * 1.15,
-            impact_score=self._estimate_impact(
-                risk_base, "risk_tolerance", agent
-            ),
+            impact_score=self._estimate_impact(risk_base, "risk_tolerance", agent),
         )
         parameters.append(param)
 
@@ -193,18 +174,13 @@ class SensitivityAnalyzer:
             high_value=min(1.0, authority_base + 0.3),
             low_outcome=baseline.get("time_to_consensus", 10) * 1.2,
             high_outcome=baseline.get("time_to_consensus", 10) * 0.8,
-            impact_score=self._estimate_impact(
-                authority_base, "authority", agent
-            ),
+            impact_score=self._estimate_impact(authority_base, "authority", agent),
         )
         parameters.append(param)
 
         # Coalition tendency
         coalition_base = custom_params.get("coalition_tendency", 0.4)
-        coalition_count = (
-            len(agent.coalition_members)
-            if agent.coalition_members else 0
-        )
+        coalition_count = len(agent.coalition_members) if agent.coalition_members else 0
         param = SensitivityParameter(
             name=f"{agent.name} Coalition Tendency",
             description=f"Likelihood to form alliances for {agent.name}",
@@ -213,9 +189,7 @@ class SensitivityAnalyzer:
             high_value=min(1.0, coalition_base + 0.3),
             low_outcome=coalition_count,
             high_outcome=coalition_count + 2,
-            impact_score=self._estimate_impact(
-                coalition_base, "coalition", agent
-            ),
+            impact_score=self._estimate_impact(coalition_base, "coalition", agent),
         )
         parameters.append(param)
 

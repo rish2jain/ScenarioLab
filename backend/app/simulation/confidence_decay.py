@@ -50,9 +50,7 @@ class ConfidenceDecayModel:
     Target: round-20 confidence should be 15-30% lower than round-1.
     """
 
-    def __init__(
-        self, decay_rates: dict[EnvironmentType, float] | None = None
-    ):
+    def __init__(self, decay_rates: dict[EnvironmentType, float] | None = None):
         """Initialize with optional custom decay rates.
 
         Args:
@@ -141,8 +139,7 @@ class ConfidenceDecayModel:
         # Calculate total decay percentage
         if points:
             final_confidence = points[-1].confidence
-            total_decay = ((initial_confidence - final_confidence)
-                           / initial_confidence * 100)
+            total_decay = (initial_confidence - final_confidence) / initial_confidence * 100
         else:
             total_decay = 0.0
 

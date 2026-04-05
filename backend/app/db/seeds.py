@@ -14,7 +14,8 @@ import json
 import logging
 from typing import TYPE_CHECKING
 
-from app.db.connection import get_db, utc_now_iso as _utc_now_iso
+from app.db.connection import get_db
+from app.db.connection import utc_now_iso as _utc_now_iso
 
 if TYPE_CHECKING:
     from app.graph.seed_processor import SeedMaterial
@@ -126,13 +127,28 @@ class SeedRepository:
         return cursor.rowcount > 0
 
     async def update(self, seed_id: str, **updates: object) -> SeedMaterial | None:
-        """Update specific fields on a seed material."""
+        """Update specific fields on a seed material.
+
+        Unknown keys are logged as a warning and ignored rather than silently
+        dropped, making miscoded callers immediately visible in logs.
+        """
         existing = await self.get(seed_id)
         if existing is None:
             return None
 
+        unknown_keys = [k for k in updates if not hasattr(existing, k)]
+        if unknown_keys:
+            logger.warning(
+                "SeedRepository.update: ignoring unknown field(s) %s " "for seed %s",
+                unknown_keys,
+                seed_id,
+            )
+
         for key, value in updates.items():
             if hasattr(existing, key):
+                # SeedMaterial is a Pydantic BaseModel: it uses BaseModel.__setattr__
+                # (validation/coercion). object.__setattr__(existing, key, value) bypasses
+                # that hook so dynamic keys from ``updates`` are applied without it.
                 object.__setattr__(existing, key, value)
 
         await self.save(existing)

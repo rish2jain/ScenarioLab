@@ -10,9 +10,21 @@ logger = logging.getLogger(__name__)
 
 # Keywords indicating decision points
 DECISION_KEYWORDS = [
-    "decide", "decision", "vote", "proposal", "propose",
-    "agree", "consensus", "approve", "reject", "accept",
-    "choose", "option", "alternative", "path", "direction",
+    "decide",
+    "decision",
+    "vote",
+    "proposal",
+    "propose",
+    "agree",
+    "consensus",
+    "approve",
+    "reject",
+    "accept",
+    "choose",
+    "option",
+    "alternative",
+    "path",
+    "direction",
 ]
 
 # Outcome dimension categories
@@ -89,101 +101,99 @@ def construct_scenario_narratives(
 
     if not branches:
         # Create a baseline scenario if no branches found
-        scenarios.append({
-            "name": "Baseline Scenario",
-            "description": "Simulation proceeded without major disruptions "
-            "or significant decision points.",
-            "key_decisions": [],
-            "outcome_path": "neutral",
-        })
+        scenarios.append(
+            {
+                "name": "Baseline Scenario",
+                "description": "Simulation proceeded without major disruptions " "or significant decision points.",
+                "key_decisions": [],
+                "outcome_path": "neutral",
+            }
+        )
         return scenarios
 
     # Scenario 1: Optimistic (favorable decisions)
     optimistic_decisions = _select_favorable_decisions(branches)
-    scenarios.append({
-        "name": "Optimistic Scenario",
-        "description": _build_scenario_description(
-            "optimistic", optimistic_decisions
-        ),
-        "key_decisions": [b["round"] for b in optimistic_decisions],
-        "outcome_path": "positive",
-    })
+    scenarios.append(
+        {
+            "name": "Optimistic Scenario",
+            "description": _build_scenario_description("optimistic", optimistic_decisions),
+            "key_decisions": [b["round"] for b in optimistic_decisions],
+            "outcome_path": "positive",
+        }
+    )
 
     # Scenario 2: Pessimistic (unfavorable decisions)
     pessimistic_decisions = _select_unfavorable_decisions(branches)
-    scenarios.append({
-        "name": "Pessimistic Scenario",
-        "description": _build_scenario_description(
-            "pessimistic", pessimistic_decisions
-        ),
-        "key_decisions": [b["round"] for b in pessimistic_decisions],
-        "outcome_path": "negative",
-    })
+    scenarios.append(
+        {
+            "name": "Pessimistic Scenario",
+            "description": _build_scenario_description("pessimistic", pessimistic_decisions),
+            "key_decisions": [b["round"] for b in pessimistic_decisions],
+            "outcome_path": "negative",
+        }
+    )
 
     # Scenario 3: Most Likely (middle ground)
     likely_decisions = _select_likely_decisions(branches)
-    scenarios.append({
-        "name": "Most Likely Scenario",
-        "description": _build_scenario_description(
-            "likely", likely_decisions
-        ),
-        "key_decisions": [b["round"] for b in likely_decisions],
-        "outcome_path": "neutral",
-    })
+    scenarios.append(
+        {
+            "name": "Most Likely Scenario",
+            "description": _build_scenario_description("likely", likely_decisions),
+            "key_decisions": [b["round"] for b in likely_decisions],
+            "outcome_path": "neutral",
+        }
+    )
 
     # Scenario 4: Delayed/Prolonged (if enough rounds)
     if total_rounds > 5:
-        scenarios.append({
-            "name": "Delayed Resolution Scenario",
-            "description": "Key decisions are postponed or require multiple "
-            "rounds of negotiation, leading to extended timelines "
-            "and increased uncertainty.",
-            "key_decisions": [b["round"] for b in branches[-2:]],
-            "outcome_path": "delayed",
-        })
+        scenarios.append(
+            {
+                "name": "Delayed Resolution Scenario",
+                "description": "Key decisions are postponed or require multiple "
+                "rounds of negotiation, leading to extended timelines "
+                "and increased uncertainty.",
+                "key_decisions": [b["round"] for b in branches[-2:]],
+                "outcome_path": "delayed",
+            }
+        )
 
     # Scenario 5: Coalition Breakdown (if coalition dynamics detected)
     if _detect_coalition_dynamics(branches):
-        scenarios.append({
-            "name": "Coalition Breakdown Scenario",
-            "description": "Existing alliances fracture under pressure, "
-            "leading to fragmented decision-making and "
-            "inconsistent outcomes.",
-            "key_decisions": [b["round"] for b in branches[:2]],
-            "outcome_path": "fragmented",
-        })
+        scenarios.append(
+            {
+                "name": "Coalition Breakdown Scenario",
+                "description": "Existing alliances fracture under pressure, "
+                "leading to fragmented decision-making and "
+                "inconsistent outcomes.",
+                "key_decisions": [b["round"] for b in branches[:2]],
+                "outcome_path": "fragmented",
+            }
+        )
 
     logger.info(f"Constructed {len(scenarios)} scenario narratives")
     return scenarios
 
 
-def _select_favorable_decisions(
-    branches: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
+def _select_favorable_decisions(branches: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Select decisions that would lead to favorable outcomes."""
     favorable = []
     for branch in branches:
         # Look for consensus or agreement indicators
         has_consensus = any(
-            "agree" in m.content.lower() or "consensus" in m.content.lower()
-            for m in branch.get("messages", [])
+            "agree" in m.content.lower() or "consensus" in m.content.lower() for m in branch.get("messages", [])
         )
         if has_consensus:
             favorable.append(branch)
     return favorable or branches[:2]
 
 
-def _select_unfavorable_decisions(
-    branches: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
+def _select_unfavorable_decisions(branches: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Select decisions that would lead to unfavorable outcomes."""
     unfavorable = []
     for branch in branches:
         # Look for rejection or conflict indicators
         has_conflict = any(
-            "reject" in m.content.lower()
-            or "oppose" in m.content.lower()
-            or "disagree" in m.content.lower()
+            "reject" in m.content.lower() or "oppose" in m.content.lower() or "disagree" in m.content.lower()
             for m in branch.get("messages", [])
         )
         if has_conflict:
@@ -191,13 +201,11 @@ def _select_unfavorable_decisions(
     return unfavorable or branches[-2:]
 
 
-def _select_likely_decisions(
-    branches: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
+def _select_likely_decisions(branches: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Select decisions representing the most likely path."""
     # Take middle portion of branches
     mid = len(branches) // 2
-    return branches[mid:mid+2] if len(branches) > 2 else branches
+    return branches[mid : mid + 2] if len(branches) > 2 else branches
 
 
 def _detect_coalition_dynamics(branches: list[dict[str, Any]]) -> bool:
@@ -205,9 +213,7 @@ def _detect_coalition_dynamics(branches: list[dict[str, Any]]) -> bool:
     for branch in branches:
         for msg in branch.get("messages", []):
             content = msg.content.lower()
-            if any(
-                kw in content for kw in ["coalition", "alliance", "faction"]
-            ):
+            if any(kw in content for kw in ["coalition", "alliance", "faction"]):
                 return True
     return False
 

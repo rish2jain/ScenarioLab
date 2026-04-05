@@ -7,36 +7,56 @@ interface StatusBadgeProps {
   className?: string;
 }
 
-export function StatusBadge({ status, size = 'md', className }: StatusBadgeProps) {
-  const config = {
-    pending: {
-      label: 'Pending',
-      className: 'bg-slate-600/20 text-slate-400 border-slate-600/30',
-      dot: 'bg-slate-400',
-    },
-    running: {
-      label: 'Running',
-      className: 'bg-green-500/20 text-green-400 border-green-500/30',
-      dot: 'bg-green-400 animate-pulse',
-    },
-    paused: {
-      label: 'Paused',
-      className: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-      dot: 'bg-amber-400',
-    },
-    completed: {
-      label: 'Completed',
-      className: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-      dot: 'bg-blue-400',
-    },
-    failed: {
-      label: 'Failed',
-      className: 'bg-red-500/20 text-red-400 border-red-500/30',
-      dot: 'bg-red-400',
-    },
-  };
+type BadgeEntry = { label: string; className: string; dot: string };
 
-  const { label, className: badgeClassName, dot } = config[status];
+const defaultBadge: BadgeEntry = {
+  label: 'Unknown',
+  className: 'bg-border/50 text-foreground-muted border-border',
+  dot: 'bg-foreground-muted',
+};
+
+const statusBadgeConfig: Record<SimulationStatus, BadgeEntry> = {
+  pending: {
+    label: 'Pending',
+    className: 'bg-border/50 text-foreground-muted border-border',
+    dot: 'bg-foreground-muted',
+  },
+  running: {
+    label: 'Running',
+    className: 'bg-success/20 text-success border-success/30',
+    dot: 'bg-success animate-pulse',
+  },
+  paused: {
+    label: 'Paused',
+    className: 'bg-warning/20 text-warning border-warning/30',
+    dot: 'bg-warning',
+  },
+  generating_report: {
+    label: 'Generating Report',
+    className: 'bg-accent/20 text-accent border-accent/30',
+    dot: 'bg-accent animate-pulse',
+  },
+  completed: {
+    label: 'Completed',
+    className: 'bg-accent/20 text-accent border-accent/30',
+    dot: 'bg-accent',
+  },
+  failed: {
+    label: 'Failed',
+    className: 'bg-danger/20 text-danger border-danger/30',
+    dot: 'bg-danger',
+  },
+  cancelled: {
+    label: 'Cancelled',
+    className:
+      'bg-foreground-muted/20 text-foreground-muted border-foreground-muted/30',
+    dot: 'bg-foreground-muted',
+  },
+};
+
+export function StatusBadge({ status, size = 'md', className }: StatusBadgeProps) {
+  const entry = statusBadgeConfig[status] ?? defaultBadge;
+  const { label, className: badgeClassName, dot } = entry;
 
   const sizes = {
     sm: 'px-2 py-0.5 text-xs',

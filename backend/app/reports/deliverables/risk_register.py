@@ -15,15 +15,11 @@ RISK_KEYWORDS = {
     "conflict": ["conflict", "dispute", "clash", "disagreement", "tension"],
     "failure": ["fail", "unsuccessful", "rejected", "denied", "blocked"],
     "threat": ["threat", "risk", "danger", "jeopardy", "vulnerable"],
-    "uncertainty": [
-        "uncertain", "unknown", "unclear", "ambiguous", "unpredictable"
-    ],
+    "uncertainty": ["uncertain", "unknown", "unclear", "ambiguous", "unpredictable"],
 }
 
 IMPACT_INDICATORS = {
-    "critical": [
-        "catastrophic", "disaster", "collapse", "fatal", "existential"
-    ],
+    "critical": ["catastrophic", "disaster", "collapse", "fatal", "existential"],
     "high": ["severe", "significant", "major", "serious", "substantial"],
     "medium": ["moderate", "notable", "considerable", "meaningful"],
     "low": ["minor", "small", "limited", "negligible", "trivial"],
@@ -52,46 +48,52 @@ def extract_risk_signals(
         content_lower = msg.content.lower()
 
         # Check for objection signals
-        if msg.message_type == "objection" or any(
-            kw in content_lower for kw in RISK_KEYWORDS["objection"]
-        ):
-            signals.append({
-                "type": "objection",
-                "agent": msg.agent_name,
-                "content": msg.content,
-                "round": msg.round_number,
-                "confidence": 0.8 if msg.message_type == "objection" else 0.5,
-            })
+        if msg.message_type == "objection" or any(kw in content_lower for kw in RISK_KEYWORDS["objection"]):
+            signals.append(
+                {
+                    "type": "objection",
+                    "agent": msg.agent_name,
+                    "content": msg.content,
+                    "round": msg.round_number,
+                    "confidence": 0.8 if msg.message_type == "objection" else 0.5,
+                }
+            )
 
         # Check for conflict signals
         if any(kw in content_lower for kw in RISK_KEYWORDS["conflict"]):
-            signals.append({
-                "type": "conflict",
-                "agent": msg.agent_name,
-                "content": msg.content,
-                "round": msg.round_number,
-                "confidence": 0.7,
-            })
+            signals.append(
+                {
+                    "type": "conflict",
+                    "agent": msg.agent_name,
+                    "content": msg.content,
+                    "round": msg.round_number,
+                    "confidence": 0.7,
+                }
+            )
 
         # Check for failure signals
         if any(kw in content_lower for kw in RISK_KEYWORDS["failure"]):
-            signals.append({
-                "type": "failure",
-                "agent": msg.agent_name,
-                "content": msg.content,
-                "round": msg.round_number,
-                "confidence": 0.6,
-            })
+            signals.append(
+                {
+                    "type": "failure",
+                    "agent": msg.agent_name,
+                    "content": msg.content,
+                    "round": msg.round_number,
+                    "confidence": 0.6,
+                }
+            )
 
         # Check for threat signals
         if any(kw in content_lower for kw in RISK_KEYWORDS["threat"]):
-            signals.append({
-                "type": "threat",
-                "agent": msg.agent_name,
-                "content": msg.content,
-                "round": msg.round_number,
-                "confidence": 0.7,
-            })
+            signals.append(
+                {
+                    "type": "threat",
+                    "agent": msg.agent_name,
+                    "content": msg.content,
+                    "round": msg.round_number,
+                    "confidence": 0.7,
+                }
+            )
 
     # Analyze agent stances for disagreements
     stance_conflicts = _detect_stance_conflicts(agent_states)
@@ -121,18 +123,18 @@ def _detect_stance_conflicts(
             # Check for agents not in same coalition
             for other in agent_states:
                 if other.id != agent.id:
-                    shared_coalitions = set(agent.coalition_members) & set(
-                        other.coalition_members
-                    )
+                    shared_coalitions = set(agent.coalition_members) & set(other.coalition_members)
                     if not shared_coalitions:
-                        conflicts.append({
-                            "type": "coalition_conflict",
-                            "agent": agent.name,
-                            "content": f"Potential conflict: {agent.name} and "
-                            f"{other.name} are in opposing coalitions",
-                            "round": 0,
-                            "confidence": 0.6,
-                        })
+                        conflicts.append(
+                            {
+                                "type": "coalition_conflict",
+                                "agent": agent.name,
+                                "content": f"Potential conflict: {agent.name} and "
+                                f"{other.name} are in opposing coalitions",
+                                "round": 0,
+                                "confidence": 0.6,
+                            }
+                        )
 
     return conflicts
 

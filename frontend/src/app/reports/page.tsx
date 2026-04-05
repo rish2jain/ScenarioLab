@@ -3,33 +3,41 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FileText, Download, ChevronRight, Calendar } from 'lucide-react';
+import { FileText, Calendar } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useToast } from '@/components/ui/Toast';
 import { useReportStore } from '@/lib/store';
 import { api } from '@/lib/api';
 
 export default function ReportsPage() {
   const router = useRouter();
   const { reports, setReports, setLoading, setError } = useReportStore();
+  const { addToast } = useToast();
 
   useEffect(() => {
+    let mounted = true;
     const loadReports = async () => {
       setLoading(true);
       try {
         const data = await api.getReports();
-        setReports(data);
+        if (mounted) setReports(data);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to load reports';
-        setError(message);
+        if (mounted) {
+          setError(message);
+          addToast(message, 'error');
+        }
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
     loadReports();
-  }, [setReports, setLoading, setError]);
+
+    return () => { mounted = false; };
+  }, [setReports, setLoading, setError, addToast]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -43,7 +51,14 @@ export default function ReportsPage() {
     <div className="space-y-4 md:space-y-6 animate-fade-in">
       {/* Header */}
       <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Reports</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-slate-100 flex items-center gap-3">
+          Reports
+          {reports.length > 0 && (
+            <span className="bg-background-secondary/50 text-foreground-muted py-0.5 px-2.5 rounded-full text-base font-medium">
+              {reports.length}
+            </span>
+          )}
+        </h1>
         <p className="text-slate-400 mt-1 text-sm sm:text-base">
           View and export simulation analysis reports
         </p>

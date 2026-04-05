@@ -110,9 +110,7 @@ class InterviewExtractor:
     def __init__(self, llm_provider: LLMProvider | None = None):
         self.llm = llm_provider
 
-    async def extract_from_text(
-        self, interview_responses: str
-    ) -> ExtractedPersona:
+    async def extract_from_text(self, interview_responses: str) -> ExtractedPersona:
         """Extract persona attributes from interview text responses.
 
         Args:
@@ -215,9 +213,7 @@ Respond with valid JSON only."""
                 extraction_confidence=0.0,
             )
 
-    async def extract_from_description(
-        self, stakeholder_description: str
-    ) -> ExtractedPersona:
+    async def extract_from_description(self, stakeholder_description: str) -> ExtractedPersona:
         """Extract persona from a narrative description of a stakeholder.
 
         Args:
@@ -391,9 +387,7 @@ Respond with valid JSON only."""
         return 0.5  # default moderate
 
     @staticmethod
-    def _derive_incentive_structure(
-        role: str, known_priorities: list[str]
-    ) -> list[str]:
+    def _derive_incentive_structure(role: str, known_priorities: list[str]) -> list[str]:
         """Derive incentive structure from role and known priorities."""
         incentives: list[str] = []
         role_lower = role.lower()
@@ -428,9 +422,7 @@ Respond with valid JSON only."""
         return unique if unique else ["operational"]
 
     @staticmethod
-    def _derive_behavioral_axioms(
-        notable_decisions: list[str], public_statements: list[str]
-    ) -> list[str]:
+    def _derive_behavioral_axioms(notable_decisions: list[str], public_statements: list[str]) -> list[str]:
         """Derive behavioral axioms from notable decisions and public statements."""
         axioms: list[str] = []
 
@@ -445,26 +437,32 @@ Respond with valid JSON only."""
         return axioms if axioms else ["Pragmatic decision-maker"]
 
     async def research_persona(
-        self, name: str, company: str = "", role: str = ""
+        self,
+        name: str,
+        company: str = "",
+        role: str = "",
+        *,
+        allow_fallback: bool = True,
     ) -> ExtractedPersona:
         """Extract persona attributes by researching an executive's public profile.
 
         Uses the autoresearch service to gather public data about the executive
         and maps the synthesis to ExtractedPersona fields. Falls back to
-        extract_from_description() if research fails.
+        extract_from_description() if research fails (unless ``allow_fallback`` is False).
 
         Args:
             name: Executive's full name
             company: Company name (optional, improves research accuracy)
             role: Job title / role (optional, used for authority inference)
+            allow_fallback: If False, re-raise when research fails instead of using
+                description-based defaults (used by designer refresh to avoid overwriting
+                stored traits with generic fallbacks).
 
         Returns:
             ExtractedPersona with research-derived attributes
         """
         try:
-            result = await research_service.research_executive(
-                name, company=company, role=role
-            )
+            result = await research_service.research_executive(name, company=company, role=role)
             synthesis = result.get("synthesis", {})
 
             if not synthesis or not isinstance(synthesis, dict):
@@ -479,9 +477,7 @@ Respond with valid JSON only."""
                 information_bias=synthesis.get("information_bias", "balanced"),
                 decision_speed=synthesis.get("decision_speed", "moderate"),
                 authority_level=self._infer_authority_from_role(resolved_role),
-                coalition_tendencies=self._parse_coalition_tendencies(
-                    synthesis.get("coalition_tendencies", "")
-                ),
+                coalition_tendencies=self._parse_coalition_tendencies(synthesis.get("coalition_tendencies", "")),
                 incentive_structure=self._derive_incentive_structure(
                     resolved_role,
                     synthesis.get("known_priorities", []),
@@ -495,6 +491,8 @@ Respond with valid JSON only."""
 
         except Exception as e:
             logger.error(f"Research-based persona extraction failed for {name}: {e}")
+            if not allow_fallback:
+                raise
             # Fall back to description-based extraction
             fallback_description = (
                 f"{name} is a {role or 'professional'}"

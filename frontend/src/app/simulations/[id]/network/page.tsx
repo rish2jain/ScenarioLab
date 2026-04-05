@@ -1,77 +1,25 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Users, Share2, Filter } from 'lucide-react';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { NetworkGraph } from '@/components/visualization/NetworkGraph';
+import dynamic from 'next/dynamic';
+
+const NetworkGraph = dynamic(
+  () => import('@/components/visualization/NetworkGraph').then(mod => ({ default: mod.NetworkGraph })),
+  { ssr: false, loading: () => <div className="h-96 animate-pulse bg-zinc-800/50 rounded-lg" /> }
+);
 import { useSimulationStore } from '@/lib/store';
 import { api } from '@/lib/api';
-import type { Simulation, NetworkNode, NetworkEdge, NetworkGraphData, AgentArchetype } from '@/lib/types';
-
-// Mock data generator for network graph
-function generateMockNetworkData(round: number): NetworkGraphData {
-  const roles = [
-    'Acquiring CEO', 'Target CEO', 'Integration Lead', 'HR Director', 
-    'Employee Rep', 'Board Member', 'Union Leader', 'CFO',
-    'Legal Counsel', 'Communications Lead', 'Operations VP', 'IT Director'
-  ];
-  
-  const archetypes: AgentArchetype[] = ['aggressor', 'defender', 'mediator', 'analyst', 'influencer', 'skeptic'];
-  
-  const colors = [
-    '#14b8a6', '#f59e0b', '#3b82f6', '#8b5cf6', '#ef4444', 
-    '#22c55e', '#ec4899', '#06b6d4', '#f97316', '#84cc16'
-  ];
-
-  const coalitions = ['Pro-Merger', 'Anti-Merger', 'Neutral', 'Undecided'];
-
-  // Generate 25 nodes
-  const nodes: NetworkNode[] = Array.from({ length: 25 }, (_, i) => ({
-    id: `agent-${i + 1}`,
-    name: `Agent ${i + 1}`,
-    role: roles[i % roles.length],
-    archetype: archetypes[i % archetypes.length],
-    color: colors[i % colors.length],
-    authorityLevel: Math.floor(Math.random() * 8) + 2, // 2-10
-    coalition: coalitions[i % coalitions.length],
-  }));
-
-  // Generate ~60 edges with varying sentiment
-  const edges: NetworkEdge[] = [];
-  const edgeSet = new Set<string>();
-  
-  for (let i = 0; i < 60; i++) {
-    const sourceIdx = Math.floor(Math.random() * nodes.length);
-    let targetIdx = Math.floor(Math.random() * nodes.length);
-    while (targetIdx === sourceIdx) {
-      targetIdx = Math.floor(Math.random() * nodes.length);
-    }
-    
-    const edgeKey = [sourceIdx, targetIdx].sort().join('-');
-    if (edgeSet.has(edgeKey)) continue;
-    edgeSet.add(edgeKey);
-
-    const sentimentScore = (Math.random() - 0.5) * 2; // -1 to 1
-    let sentiment: NetworkEdge['sentiment'] = 'neutral';
-    if (sentimentScore > 0.3) sentiment = 'positive';
-    else if (sentimentScore < -0.3) sentiment = 'negative';
-
-    edges.push({
-      id: `edge-${i}`,
-      source: nodes[sourceIdx].id,
-      target: nodes[targetIdx].id,
-      sentiment,
-      sentimentScore,
-      messageCount: Math.floor(Math.random() * 20) + 1,
-    });
-  }
-
-  return { nodes, edges, round };
-}
+import type { NetworkNode, AgentMessage } from '@/lib/types';
+import {
+  buildNetworkGraphData,
+  latestMessageExcerpt,
+  mergeSimulationAgentsFromApi,
+} from '@/lib/simulation-viz';
 
 export default function NetworkGraphPage() {
   const params = useParams();
@@ -79,12 +27,15 @@ export default function NetworkGraphPage() {
   const simulationId = Array.isArray(rawId) ? rawId[0] : rawId ?? '';
   
   const { currentSimulation, setCurrentSimulation } = useSimulationStore();
-  
+
+  const [agentMessages, setAgentMessages] = useState<AgentMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedRound, setSelectedRound] = useState(1);
-  const [networkData, setNetworkData] = useState<NetworkGraphData | null>(null);
   const [selectedNode, setSelectedNode] = useState<NetworkNode | null>(null);
   const [isNodeModalOpen, setIsNodeModalOpen] = useState(false);
+  const graphContainerRef = useRef<HTMLDivElement | null>(null);
+  const [graphSize, setGraphSize] = useState({ width: 960, height: 720 });
   
   // Filter states
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
@@ -94,25 +45,57 @@ export default function NetworkGraphPage() {
   useEffect(() => {
     const loadSimulation = async () => {
       setIsLoading(true);
-      const simulationData = await api.getSimulation(simulationId);
-      
-      if (simulationData) {
-        setCurrentSimulation(simulationData);
-        setSelectedRound(simulationData.currentRound || 1);
-        setNetworkData(generateMockNetworkData(simulationData.currentRound || 1));
+      setLoadError(null);
+      try {
+        const [simulationData, messagesData, agentRows] = await Promise.all([
+          api.getSimulation(simulationId),
+          api.getAgentMessages(simulationId),
+          api.getSimulationAgents(simulationId),
+        ]);
+
+        if (simulationData === undefined) {
+          setCurrentSimulation(null);
+          setLoadError(
+            'Could not load this simulation (API unreachable or server error). Check your connection and that the backend is running.'
+          );
+        } else if (simulationData === null) {
+          setCurrentSimulation(null);
+        } else {
+          const merged = mergeSimulationAgentsFromApi(simulationData, agentRows);
+          setCurrentSimulation(merged);
+          setSelectedRound(simulationData.currentRound || 1);
+        }
+        setAgentMessages(messagesData);
+      } catch (error) {
+        setCurrentSimulation(null);
+        setAgentMessages([]);
+        setLoadError(
+          error instanceof Error ? error.message : 'Failed to load network data.'
+        );
       }
       setIsLoading(false);
     };
 
-    loadSimulation();
+    void loadSimulation();
   }, [simulationId, setCurrentSimulation]);
 
-  // Update network data when round changes
-  useEffect(() => {
-    if (currentSimulation) {
-      setNetworkData(generateMockNetworkData(selectedRound));
-    }
-  }, [selectedRound, currentSimulation]);
+  const networkData = useMemo(() => {
+    if (!currentSimulation) return null;
+    return buildNetworkGraphData(
+      currentSimulation,
+      agentMessages,
+      selectedRound
+    );
+  }, [currentSimulation, agentMessages, selectedRound]);
+
+  const selectedTranscript = useMemo(() => {
+    if (!selectedNode) return null;
+    return latestMessageExcerpt(
+      agentMessages,
+      selectedNode.id,
+      selectedRound
+    );
+  }, [selectedNode, agentMessages, selectedRound]);
 
   // Get unique roles and coalitions for filters
   const availableRoles = useMemo(() => {
@@ -142,10 +125,42 @@ export default function NetworkGraphPage() {
     );
   };
 
+  useEffect(() => {
+    const el = graphContainerRef.current;
+    if (!el) return;
+
+    const updateSize = () => {
+      const nextWidth = Math.max(720, Math.floor(el.clientWidth));
+      const nextHeight = Math.max(560, Math.floor(el.clientHeight || 720));
+      setGraphSize({ width: nextWidth, height: nextHeight });
+    };
+
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-slate-400">Loading network visualization...</div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 gap-4 px-4 text-center">
+        <div className="text-red-400 max-w-md">{loadError}</div>
+        <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>
+          Retry
+        </Button>
+        <Link href={`/simulations/${simulationId}`}>
+          <Button variant="ghost" size="sm" leftIcon={<ChevronLeft className="w-4 h-4" />}>
+            Back to simulation
+          </Button>
+        </Link>
       </div>
     );
   }
@@ -200,24 +215,30 @@ export default function NetworkGraphPage() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         {/* Graph Area */}
-        <div className="flex-1 bg-slate-900/50 overflow-auto">
-          <div className="min-w-[600px] h-full">
-            <NetworkGraph
-              data={networkData}
-              width={1200}
-              height={800}
-              onNodeClick={handleNodeClick}
-              selectedNodeId={selectedNode?.id}
-              filterRoles={selectedRoles}
-              filterCoalitions={selectedCoalitions}
-              sentimentThreshold={sentimentThreshold}
-              className="w-full h-full"
-            />
+        <div ref={graphContainerRef} className="flex-1 bg-slate-900/50 overflow-hidden min-w-0 min-h-[560px]">
+          <div className="h-full">
+            {networkData.nodes.length === 0 ? (
+              <div className="flex items-center justify-center h-96 text-slate-400 text-sm px-4 text-center">
+                No agents to display for this simulation yet.
+              </div>
+            ) : (
+              <NetworkGraph
+                data={networkData}
+                width={graphSize.width}
+                height={graphSize.height}
+                onNodeClick={handleNodeClick}
+                selectedNodeId={selectedNode?.id}
+                filterRoles={selectedRoles}
+                filterCoalitions={selectedCoalitions}
+                sentimentThreshold={sentimentThreshold}
+                className="w-full h-full"
+              />
+            )}
           </div>
         </div>
 
         {/* Sidebar */}
-        <div className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-slate-700 bg-slate-800/30 overflow-y-auto max-h-64 lg:max-h-none flex-shrink-0">
+        <div className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-slate-700 bg-slate-800/30 overflow-y-auto max-h-72 lg:max-h-none flex-shrink-0">
           {/* Filters */}
           <div className="p-4 border-b border-slate-700">
             <div className="flex items-center gap-2 mb-4">
@@ -249,29 +270,31 @@ export default function NetworkGraphPage() {
               </div>
             </div>
 
-            {/* Coalition Filter */}
-            <div className="mb-4">
-              <h4 className="text-sm font-medium text-slate-400 mb-2 flex items-center gap-2">
-                <Share2 className="w-3 h-3" />
-                Coalitions
-              </h4>
-              <div className="space-y-1">
-                {availableCoalitions.map((coalition) => (
-                  <label
-                    key={coalition}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-700/50 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedCoalitions.includes(coalition || '')}
-                      onChange={() => toggleCoalition(coalition || '')}
-                      className="rounded border-slate-600 bg-slate-700 text-accent focus:ring-accent/50"
-                    />
-                    <span className="text-sm text-slate-300">{coalition}</span>
-                  </label>
-                ))}
+            {/* Coalition Filter — only when simulation supplies coalition labels */}
+            {availableCoalitions.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-sm font-medium text-slate-400 mb-2 flex items-center gap-2">
+                  <Share2 className="w-3 h-3" />
+                  Coalitions
+                </h4>
+                <div className="space-y-1">
+                  {availableCoalitions.map((coalition) => (
+                    <label
+                      key={coalition}
+                      className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-700/50 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedCoalitions.includes(coalition || '')}
+                        onChange={() => toggleCoalition(coalition || '')}
+                        className="rounded border-slate-600 bg-slate-700 text-accent focus:ring-accent/50"
+                      />
+                      <span className="text-sm text-slate-300">{coalition}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Sentiment Threshold */}
             <div>
@@ -427,9 +450,14 @@ export default function NetworkGraphPage() {
 
             <div>
               <h4 className="text-sm font-medium text-slate-400 mb-2">Recent Transcript</h4>
-              <div className="p-3 bg-slate-700/30 rounded-lg text-sm text-slate-300 italic">
-                &ldquo;I believe we need to carefully consider the implications of this approach 
-                before moving forward with any definitive action...&rdquo;
+              <div className="p-3 bg-slate-700/30 rounded-lg text-sm text-slate-300">
+                {selectedTranscript ? (
+                  <span className="italic">&ldquo;{selectedTranscript}&rdquo;</span>
+                ) : (
+                  <span className="text-slate-500">
+                    No messages from this agent through round {selectedRound} yet.
+                  </span>
+                )}
               </div>
             </div>
 

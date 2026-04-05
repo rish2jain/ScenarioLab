@@ -1,7 +1,6 @@
 """Audit trail management with hash chain verification."""
 
 import csv
-import hashlib
 import io
 import json
 import logging
@@ -13,6 +12,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.database import AuditTrailRepository
+from app.db.audit import compute_audit_event_hash
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +41,7 @@ class AuditEvent(BaseModel):
     event_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     simulation_id: str
     event_type: AuditEventType
-    timestamp: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     actor: str
     details: dict[str, Any] = Field(default_factory=dict)
     previous_hash: str = GENESIS_HASH
@@ -55,19 +53,14 @@ class AuditEvent(BaseModel):
             self.hash = self._compute_hash()
 
     def _compute_hash(self) -> str:
-        """Compute SHA-256 hash for this event.
-
-        Hash = SHA256(previous_hash + event_id + event_type + timestamp
-                      + json(details))
-        """
-        data = (
-            self.previous_hash
-            + self.event_id
-            + self.event_type.value
-            + self.timestamp
-            + json.dumps(self.details, sort_keys=True)
+        """Compute SHA-256 hash (same algorithm as ``compute_audit_event_hash``)."""
+        return compute_audit_event_hash(
+            previous_hash=self.previous_hash,
+            event_id=self.event_id,
+            event_type=self.event_type.value,
+            timestamp=self.timestamp,
+            details=self.details,
         )
-        return hashlib.sha256(data.encode()).hexdigest()
 
 
 class AuditTrail(BaseModel):
@@ -121,9 +114,7 @@ class AuditTrailManager:
                 if db_events:
                     previous_hash = db_events[-1]["hash"]
                     # Cache in memory
-                    self._trails[simulation_id] = [
-                        AuditEvent(**e) for e in db_events
-                    ]
+                    self._trails[simulation_id] = [AuditEvent(**e) for e in db_events]
                 else:
                     previous_hash = GENESIS_HASH
             except Exception as e:
@@ -150,10 +141,7 @@ class AuditTrailManager:
         except Exception as e:
             logger.warning(f"Failed to save audit event to DB: {e}")
 
-        logger.info(
-            f"Logged audit event: {event_type.value} for simulation "
-            f"{simulation_id} by {actor}"
-        )
+        logger.info(f"Logged audit event: {event_type.value} for simulation " f"{simulation_id} by {actor}")
         return event
 
     async def get_trail(self, simulation_id: str) -> AuditTrail:
@@ -198,9 +186,7 @@ class AuditTrailManager:
         """
         # Load from DB for verification
         try:
-            is_valid, message = await self._repo.verify_integrity(
-                simulation_id
-            )
+            is_valid, message = await self._repo.verify_integrity(simulation_id)
             return is_valid, message
         except Exception as e:
             logger.warning(f"DB integrity check failed, using in-memory: {e}")
@@ -234,9 +220,7 @@ class AuditTrailManager:
 
             return True, f"Verified {len(trail)} events successfully"
 
-    async def export_trail(
-        self, simulation_id: str, format: str = "json"
-    ) -> str | bytes:
+    async def export_trail(self, simulation_id: str, format: str = "json") -> str | bytes:
         """Export audit trail in the specified format.
 
         Args:
@@ -259,29 +243,33 @@ class AuditTrailManager:
             writer = csv.writer(output)
 
             # Write header
-            writer.writerow([
-                "event_id",
-                "simulation_id",
-                "event_type",
-                "timestamp",
-                "actor",
-                "details",
-                "previous_hash",
-                "hash",
-            ])
+            writer.writerow(
+                [
+                    "event_id",
+                    "simulation_id",
+                    "event_type",
+                    "timestamp",
+                    "actor",
+                    "details",
+                    "previous_hash",
+                    "hash",
+                ]
+            )
 
             # Write events
             for event in trail.events:
-                writer.writerow([
-                    event.event_id,
-                    event.simulation_id,
-                    event.event_type.value,
-                    event.timestamp,
-                    event.actor,
-                    json.dumps(event.details),
-                    event.previous_hash,
-                    event.hash,
-                ])
+                writer.writerow(
+                    [
+                        event.event_id,
+                        event.simulation_id,
+                        event.event_type.value,
+                        event.timestamp,
+                        event.actor,
+                        json.dumps(event.details),
+                        event.previous_hash,
+                        event.hash,
+                    ]
+                )
 
             return output.getvalue()
 

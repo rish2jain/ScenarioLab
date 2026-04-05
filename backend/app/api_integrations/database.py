@@ -3,10 +3,25 @@
 Connection management and path resolution are delegated to
 ``app.db.connection``.  This module uses the per-request ``get_fresh_db``
 pattern (open/close per operation) that was already established here.
+
+Module-level singletons
+-----------------------
+The following repository instances are created at import time and share the
+module-level ``_initialized`` flag:
+
+    api_key_repo, webhook_repo, custom_persona_repo,
+    counterpart_repo, cross_simulation_repo, gamification_repo
+
+Because they share ``_initialized``, integration tables are only created
+once per process.  In tests that need fresh table state, call
+``init_integration_tables()`` directly after resetting ``_initialized = False``,
+or use a dedicated in-memory DB fixture.
 """
 
+import asyncio
 import json
 import logging
+import threading
 from typing import Any
 
 import aiosqlite
@@ -16,8 +31,28 @@ from app.db.connection import utc_now_iso as _utc_now_iso
 
 logger = logging.getLogger(__name__)
 
-# Lazy-initialization guard (same semantics as before)
+# Lazy-initialization guard
 _initialized = False
+# Lock that serialises concurrent calls to init_integration_tables().
+# Initialized lazily to avoid binding to the import-time event loop.
+_init_lock: asyncio.Lock | None = None
+# Serialises creation of ``_init_lock`` across threads (asyncio.Lock creation is not thread-safe).
+_init_lock_guard = threading.Lock()
+
+
+def _get_init_lock() -> asyncio.Lock:
+    """Return the module-level init lock, creating it on first call.
+
+    Creating the Lock inside a running coroutine ensures it is bound to
+    the active event loop rather than whichever loop (if any) happened to
+    exist at import time.
+    """
+    global _init_lock  # noqa: PLW0603
+    if _init_lock is None:
+        with _init_lock_guard:
+            if _init_lock is None:
+                _init_lock = asyncio.Lock()
+    return _init_lock
 
 
 async def get_db():
@@ -26,21 +61,31 @@ async def get_db():
 
 
 async def init_integration_tables() -> None:
-    """Initialize the integration tables."""
+    """Initialize the integration tables.
+
+    Concurrent callers are serialised via ``_init_lock``; only the first
+    caller performs the DDL work.
+    """
     global _initialized  # noqa: PLW0603
 
+    # Fast path — avoid acquiring the lock on the hot path once initialised.
     if _initialized:
         return
 
-    logger.info("Initializing integration tables")
-    db = await get_db()
-    try:
-        await db.executescript(INTEGRATION_DDL)
-        await db.commit()
-        _initialized = True
-        logger.info("Integration tables initialized")
-    finally:
-        await db.close()
+    async with _get_init_lock():
+        # Re-check inside the lock to handle concurrent first-callers.
+        if _initialized:
+            return
+
+        logger.info("Initializing integration tables")
+        db = await get_db()
+        try:
+            await db.executescript(INTEGRATION_DDL)
+            await db.commit()
+            _initialized = True
+            logger.info("Integration tables initialized")
+        finally:
+            await db.close()
 
 
 async def ensure_tables() -> None:
@@ -92,9 +137,7 @@ class APIKeyRepository:
         await ensure_tables()
         db = await get_db()
         try:
-            cursor = await db.execute(
-                "SELECT * FROM api_keys WHERE key_id = ?", (key_id,)
-            )
+            cursor = await db.execute("SELECT * FROM api_keys WHERE key_id = ?", (key_id,))
             row = await cursor.fetchone()
             if row is None:
                 return None
@@ -110,9 +153,7 @@ class APIKeyRepository:
         await ensure_tables()
         db = await get_db()
         try:
-            cursor = await db.execute(
-                "SELECT * FROM api_keys WHERE key_value = ?", (key_value,)
-            )
+            cursor = await db.execute("SELECT * FROM api_keys WHERE key_value = ?", (key_value,))
             row = await cursor.fetchone()
             if row is None:
                 return None
@@ -172,9 +213,7 @@ class APIKeyRepository:
         await ensure_tables()
         db = await get_db()
         try:
-            cursor = await db.execute(
-                "DELETE FROM api_keys WHERE key_id = ?", (key_id,)
-            )
+            cursor = await db.execute("DELETE FROM api_keys WHERE key_id = ?", (key_id,))
             await db.commit()
             return cursor.rowcount > 0
         except Exception as e:
@@ -188,9 +227,7 @@ class APIKeyRepository:
             "key_id": row["key_id"],
             "key": row["key_value"],
             "name": row["name"],
-            "permissions": (
-                json.loads(row["permissions"]) if row["permissions"] else []
-            ),
+            "permissions": (json.loads(row["permissions"]) if row["permissions"] else []),
             "created_at": row["created_at"],
             "last_used_at": row["last_used_at"],
             "active": bool(row["active"]),
@@ -243,9 +280,7 @@ class WebhookRepository:
         await ensure_tables()
         db = await get_db()
         try:
-            cursor = await db.execute(
-                "SELECT * FROM webhooks WHERE webhook_id = ?", (webhook_id,)
-            )
+            cursor = await db.execute("SELECT * FROM webhooks WHERE webhook_id = ?", (webhook_id,))
             row = await cursor.fetchone()
             if row is None:
                 return None
@@ -256,9 +291,7 @@ class WebhookRepository:
         finally:
             await db.close()
 
-    async def list_all(
-        self, api_key_id: str | None = None
-    ) -> list[dict[str, Any]]:
+    async def list_all(self, api_key_id: str | None = None) -> list[dict[str, Any]]:
         """List all webhooks, optionally filtered by API key."""
         await ensure_tables()
         db = await get_db()
@@ -283,9 +316,7 @@ class WebhookRepository:
         await ensure_tables()
         db = await get_db()
         try:
-            cursor = await db.execute(
-                "DELETE FROM webhooks WHERE webhook_id = ?", (webhook_id,)
-            )
+            cursor = await db.execute("DELETE FROM webhooks WHERE webhook_id = ?", (webhook_id,))
             await db.commit()
             return cursor.rowcount > 0
         except Exception as e:
@@ -328,9 +359,7 @@ class WebhookRepository:
         finally:
             await db.close()
 
-    async def list_deliveries(
-        self, webhook_id: str | None = None, limit: int = 100
-    ) -> list[dict[str, Any]]:
+    async def list_deliveries(self, webhook_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
         """List delivery records."""
         await ensure_tables()
         db = await get_db()
@@ -360,9 +389,7 @@ class WebhookRepository:
         finally:
             await db.close()
 
-    async def _cap_deliveries(
-        self, db: aiosqlite.Connection, webhook_id: str, max_count: int = 1000
-    ) -> None:
+    async def _cap_deliveries(self, db: aiosqlite.Connection, webhook_id: str, max_count: int = 1000) -> None:
         """Cap deliveries at max_count per webhook."""
         cursor = await db.execute(
             """
@@ -453,9 +480,7 @@ class WebhookRepository:
 class CustomPersonaRepository:
     """CRUD operations for custom persona persistence."""
 
-    async def save(
-        self, persona_id: str, persona_data: dict[str, Any]
-    ) -> None:
+    async def save(self, persona_id: str, persona_data: dict[str, Any]) -> None:
         """Save a custom persona to the database."""
         await ensure_tables()
         db = await get_db()
@@ -475,26 +500,30 @@ class CustomPersonaRepository:
             await db.commit()
         except Exception as e:
             logger.warning(f"Failed to save custom persona to DB: {e}")
+            raise
         finally:
             await db.close()
 
     async def get(self, persona_id: str) -> dict[str, Any] | None:
-        """Get a custom persona by ID."""
+        """Get a custom persona by ID.
+
+        Returns ``None`` only when no row exists for ``persona_id``. Database
+        errors and invalid JSON in ``persona_data`` propagate so callers can
+        tell missing rows apart from failures (e.g. :meth:`PersonaDesigner.get_custom_persona`
+        reads from memory after load; direct use of this repository must not treat
+        exceptions as "not found").
+        """
         await ensure_tables()
         db = await get_db()
         try:
             cursor = await db.execute(
-                "SELECT persona_data FROM custom_personas "
-                "WHERE persona_id = ?",
+                "SELECT persona_data FROM custom_personas " "WHERE persona_id = ?",
                 (persona_id,),
             )
             row = await cursor.fetchone()
             if row is None:
                 return None
             return json.loads(row["persona_data"])
-        except Exception as e:
-            logger.warning(f"Failed to get custom persona from DB: {e}")
-            return None
         finally:
             await db.close()
 
@@ -503,9 +532,7 @@ class CustomPersonaRepository:
         await ensure_tables()
         db = await get_db()
         try:
-            cursor = await db.execute(
-                "SELECT persona_data FROM custom_personas"
-            )
+            cursor = await db.execute("SELECT persona_data FROM custom_personas")
             rows = await cursor.fetchall()
             return [json.loads(row["persona_data"]) for row in rows]
         except Exception as e:
@@ -515,7 +542,11 @@ class CustomPersonaRepository:
             await db.close()
 
     async def delete(self, persona_id: str) -> bool:
-        """Delete a custom persona."""
+        """Delete a custom persona.
+
+        Returns True if a row was removed, False if no row matched.
+        Raises on database errors (same as :meth:`save`).
+        """
         await ensure_tables()
         db = await get_db()
         try:
@@ -526,8 +557,12 @@ class CustomPersonaRepository:
             await db.commit()
             return cursor.rowcount > 0
         except Exception as e:
-            logger.warning(f"Failed to delete custom persona: {e}")
-            return False
+            logger.warning(
+                "Failed to delete custom persona persona_id=%r: %s",
+                persona_id,
+                e,
+            )
+            raise
         finally:
             await db.close()
 
@@ -561,9 +596,7 @@ class CounterpartRepository:
                     counterpart_data["stakeholder_type"],
                     counterpart_data["mode"],
                     json.dumps(counterpart_data.get("persona_data", {})),
-                    json.dumps(
-                        counterpart_data.get("conversation_history", [])
-                    ),
+                    json.dumps(counterpart_data.get("conversation_history", [])),
                     counterpart_data.get("created_at", _utc_now_iso()),
                 ),
             )
@@ -606,9 +639,7 @@ class CounterpartRepository:
         finally:
             await db.close()
 
-    async def save_conversation(
-        self, counterpart_id: str, conversation_history: list[dict]
-    ) -> None:
+    async def save_conversation(self, counterpart_id: str, conversation_history: list[dict]) -> None:
         """Save conversation history for a counterpart."""
         await ensure_tables()
         db = await get_db()
@@ -650,13 +681,8 @@ class CounterpartRepository:
             "brief": row["brief"],
             "stakeholder_type": row["stakeholder_type"],
             "mode": row["rehearsal_mode"],
-            "persona_data": (
-                json.loads(row["persona_data"]) if row["persona_data"] else {}
-            ),
-            "conversation_history": (
-                json.loads(row["conversation_history"])
-                if row["conversation_history"] else []
-            ),
+            "persona_data": (json.loads(row["persona_data"]) if row["persona_data"] else {}),
+            "conversation_history": (json.loads(row["conversation_history"]) if row["conversation_history"] else []),
             "created_at": row["created_at"],
         }
 
@@ -693,8 +719,7 @@ class CrossSimulationRepository:
         db = await get_db()
         try:
             cursor = await db.execute(
-                "SELECT opted_in FROM cross_simulation_data "
-                "WHERE simulation_id = ?",
+                "SELECT opted_in FROM cross_simulation_data " "WHERE simulation_id = ?",
                 (simulation_id,),
             )
             row = await cursor.fetchone()
@@ -745,21 +770,15 @@ class CrossSimulationRepository:
         db = await get_db()
         try:
             cursor = await db.execute(
-                "SELECT patterns, simulation_data, updated_at "
-                "FROM cross_simulation_data WHERE simulation_id = ?",
+                "SELECT patterns, simulation_data, updated_at " "FROM cross_simulation_data WHERE simulation_id = ?",
                 (simulation_id,),
             )
             row = await cursor.fetchone()
             if row is None:
                 return None
             return {
-                "patterns": (
-                    json.loads(row["patterns"]) if row["patterns"] else []
-                ),
-                "simulation_data": (
-                    json.loads(row["simulation_data"])
-                    if row["simulation_data"] else None
-                ),
+                "patterns": (json.loads(row["patterns"]) if row["patterns"] else []),
+                "simulation_data": (json.loads(row["simulation_data"]) if row["simulation_data"] else None),
                 "updated_at": row["updated_at"],
             }
         except Exception as e:
@@ -773,10 +792,7 @@ class CrossSimulationRepository:
         await ensure_tables()
         db = await get_db()
         try:
-            cursor = await db.execute(
-                "SELECT simulation_id FROM cross_simulation_data "
-                "WHERE opted_in = 1"
-            )
+            cursor = await db.execute("SELECT simulation_id FROM cross_simulation_data " "WHERE opted_in = 1")
             rows = await cursor.fetchall()
             return [row["simulation_id"] for row in rows]
         except Exception as e:
@@ -797,9 +813,7 @@ class CrossSimulationRepository:
             rows = await cursor.fetchall()
             results = []
             for row in rows:
-                patterns = (
-                    json.loads(row["patterns"]) if row["patterns"] else []
-                )
+                patterns = json.loads(row["patterns"]) if row["patterns"] else []
                 for pattern in patterns:
                     pattern["simulation_id"] = row["simulation_id"]
                     results.append(pattern)
@@ -814,9 +828,7 @@ class CrossSimulationRepository:
 class GamificationRepository:
     """CRUD operations for gamification data persistence."""
 
-    async def save_config(
-        self, simulation_id: str, config: dict[str, Any]
-    ) -> None:
+    async def save_config(self, simulation_id: str, config: dict[str, Any]) -> None:
         """Save gamification config for a simulation."""
         await ensure_tables()
         db = await get_db()
@@ -845,8 +857,7 @@ class GamificationRepository:
         db = await get_db()
         try:
             cursor = await db.execute(
-                "SELECT config FROM gamification_configs "
-                "WHERE simulation_id = ?",
+                "SELECT config FROM gamification_configs " "WHERE simulation_id = ?",
                 (simulation_id,),
             )
             row = await cursor.fetchone()
@@ -899,8 +910,7 @@ class GamificationRepository:
         db = await get_db()
         try:
             cursor = await db.execute(
-                "SELECT scores FROM gamification_configs "
-                "WHERE simulation_id = ?",
+                "SELECT scores FROM gamification_configs " "WHERE simulation_id = ?",
                 (simulation_id,),
             )
             row = await cursor.fetchone()
@@ -913,16 +923,13 @@ class GamificationRepository:
         finally:
             await db.close()
 
-    async def get_leaderboard(
-        self, simulation_id: str
-    ) -> dict[str, Any] | None:
+    async def get_leaderboard(self, simulation_id: str) -> dict[str, Any] | None:
         """Get leaderboard for a simulation."""
         await ensure_tables()
         db = await get_db()
         try:
             cursor = await db.execute(
-                "SELECT leaderboard FROM gamification_configs "
-                "WHERE simulation_id = ?",
+                "SELECT leaderboard FROM gamification_configs " "WHERE simulation_id = ?",
                 (simulation_id,),
             )
             row = await cursor.fetchone()

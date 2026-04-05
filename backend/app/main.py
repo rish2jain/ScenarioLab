@@ -11,8 +11,15 @@ from app.analytics.router import router as analytics_router
 from app.api_integrations.router import router as api_v1_router
 from app.config import settings
 from app.database import close_database, init_database
-from app.graph.neo4j_client import Neo4jClient
-from app.graph.router import router as graph_router
+from app.graph.neo4j_client import Neo4jClient, register_application_neo4j_client
+from app.graph.router import (
+    reset_graphrag_cache,
+    start_seed_extraction_lock_cleanup_task,
+    stop_seed_extraction_lock_cleanup_task,
+)
+from app.graph.router import (
+    router as graph_router,
+)
 from app.llm.database import init_llm_tables
 from app.llm.router import router as llm_router
 from app.mcp.router import router as mcp_router
@@ -57,7 +64,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to initialize LLM tables: {e}")
 
-    # Initialize Neo4j connection
+    # Initialize Neo4j connection (shared with graph router via register_application_neo4j_client)
     try:
         neo4j_client = Neo4jClient(
             uri=settings.neo4j_uri,
@@ -71,14 +78,21 @@ async def lifespan(app: FastAPI):
         logger.warning("Continuing without Neo4j - graph features unavailable")
         neo4j_client = None
 
+    register_application_neo4j_client(neo4j_client)
+
+    start_seed_extraction_lock_cleanup_task()
+
     yield
 
     # Shutdown
     logger.info("MiroFish backend shutting down...")
+    await stop_seed_extraction_lock_cleanup_task()
     await close_database()
+    reset_graphrag_cache()
     if neo4j_client:
         await neo4j_client.close()
         logger.info("Neo4j connection closed")
+    register_application_neo4j_client(None)
 
 
 app = FastAPI(
@@ -105,9 +119,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = (
-            "camera=(), microphone=(), geolocation=()"
-        )
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         return response
 
 

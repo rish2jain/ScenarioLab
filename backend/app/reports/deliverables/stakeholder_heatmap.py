@@ -9,15 +9,9 @@ logger = logging.getLogger(__name__)
 
 
 # Keywords indicating support/opposition
-SUPPORT_KEYWORDS = [
-    "support", "agree", "favor", "endorse", "back", "approve"
-]
-OPPOSITION_KEYWORDS = [
-    "oppose", "against", "disagree", "reject", "block", "resist"
-]
-STRONG_MODIFIERS = [
-    "strongly", "firmly", "absolutely", "completely", "totally"
-]
+SUPPORT_KEYWORDS = ["support", "agree", "favor", "endorse", "back", "approve"]
+OPPOSITION_KEYWORDS = ["oppose", "against", "disagree", "reject", "block", "resist"]
+STRONG_MODIFIERS = ["strongly", "firmly", "absolutely", "completely", "totally"]
 
 
 def compute_support_levels(
@@ -160,8 +154,15 @@ def identify_key_concerns(
 
     # Concern keywords
     concern_indicators = [
-        "concern", "worry", "risk", "issue", "problem",
-        "challenge", "threat", "afraid", "uncertain",
+        "concern",
+        "worry",
+        "risk",
+        "issue",
+        "problem",
+        "challenge",
+        "threat",
+        "afraid",
+        "uncertain",
     ]
 
     concerns = []
@@ -214,9 +215,7 @@ def analyze_stance_changes(
     prev_stance = None
 
     for round_state in rounds:
-        round_msgs = [
-            m for m in round_state.messages if m.agent_id == agent.id
-        ]
+        round_msgs = [m for m in round_state.messages if m.agent_id == agent.id]
 
         if not round_msgs:
             continue
@@ -240,11 +239,13 @@ def analyze_stance_changes(
             current_stance = "neutral"
 
         if prev_stance and prev_stance != current_stance:
-            changes.append({
-                "round": round_state.round_number,
-                "from": prev_stance,
-                "to": current_stance,
-            })
+            changes.append(
+                {
+                    "round": round_state.round_number,
+                    "from": prev_stance,
+                    "to": current_stance,
+                }
+            )
 
         prev_stance = current_stance
 

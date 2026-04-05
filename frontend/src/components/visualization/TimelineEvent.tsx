@@ -119,7 +119,7 @@ export function TimelineEvent({
       }}
     >
       {/* Header */}
-      <div className="flex items-start justify-between mb-3">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-3">
         {/* Agent Info */}
         <div className="flex items-center gap-3">
           <div
@@ -135,15 +135,15 @@ export function TimelineEvent({
               {event.agentName.charAt(0)}
             </span>
           </div>
-          <div>
-            <div className="font-medium text-slate-200">{event.agentName}</div>
-            <div className="text-sm text-slate-400">{event.agentRole}</div>
+          <div className="min-w-0">
+            <div className="font-medium text-slate-200 truncate">{event.agentName}</div>
+            <div className="text-sm text-slate-400 truncate">{event.agentRole}</div>
           </div>
         </div>
 
         {/* Event Type Badge */}
         <div
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium self-start shrink-0"
           style={{
             backgroundColor: config.bgColor,
             color: config.color,
@@ -160,12 +160,12 @@ export function TimelineEvent({
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between text-xs">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex flex-wrap items-center gap-4">
           {/* Timestamp */}
           <div className="flex items-center gap-1.5 text-slate-500">
             <Clock className="w-3 h-3" />
-            <span>{formatTime(event.timestamp)}</span>
+            <time dateTime={event.timestamp}>{formatTime(event.timestamp)}</time>
           </div>
 
           {/* Round */}

@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from app.api_integrations.auth import (
     APIKey,
     api_key_manager,
+    require_admin_api_key,
     require_permission,
     verify_api_key,
 )
@@ -49,15 +50,13 @@ class RegisterWebhookRequest(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
-# API Key Management Endpoints (no auth required for initial setup)
+# API key management: ADMIN_API_KEY + Authorization: Bearer (require_admin_api_key).
+_api_key_admin_deps = [Depends(require_admin_api_key)]
 
 
-@router.post("/api-keys", response_model=dict)
+@router.post("/api-keys", response_model=dict, dependencies=_api_key_admin_deps)
 async def create_api_key(request: CreateAPIKeyRequest):
-    """Generate a new API key.
-
-    Note: In production, this endpoint should be protected.
-    """
+    """Generate a new API key."""
     api_key = api_key_manager.generate_key(
         name=request.name,
         permissions=request.permissions,
@@ -72,13 +71,13 @@ async def create_api_key(request: CreateAPIKeyRequest):
     }
 
 
-@router.get("/api-keys")
+@router.get("/api-keys", dependencies=_api_key_admin_deps)
 async def list_api_keys():
     """List all API keys (masked)."""
-    return api_key_manager.list_keys()
+    return await api_key_manager.list_keys()
 
 
-@router.delete("/api-keys/{key_id}")
+@router.delete("/api-keys/{key_id}", dependencies=_api_key_admin_deps)
 async def revoke_api_key(key_id: str):
     """Revoke an API key."""
     success = api_key_manager.revoke_key(key_id)
@@ -162,6 +161,7 @@ async def create_simulation(
             agents=request.agents,
             total_rounds=request.total_rounds,
             seed_id=request.seed_id,
+            seed_ids=request.seed_ids,
             parameters=request.parameters,
         )
 

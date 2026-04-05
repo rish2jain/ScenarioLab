@@ -3,22 +3,24 @@
 import logging
 
 from fastapi import APIRouter, HTTPException, Path
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from app.analytics.analytics_agent import AnalyticsAgent
 from app.analytics.cross_simulation import cross_simulation_learner
 from app.analytics.fairness import FairnessAuditor, FairnessReport
 from app.analytics.metrics_export import MetricsExporter
 from app.analytics.shapley import AttributionResult, ShapleyAnalyzer
+from app.config import settings as _settings
 from app.cost_estimator import CostEstimate, CostEstimator
 from app.llm.factory import get_llm_provider
+from app.llm.wizard_models import cost_estimator_provider_key
 from app.simulation.batch import BatchConfig, BatchRunner
 from app.simulation.engine import simulation_engine
 from app.simulation.monte_carlo import MonteCarloConfig, MonteCarloRunner
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api", tags=["analytics"])
+router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
 # Initialize components
 analytics_agent = AnalyticsAgent()
@@ -29,33 +31,80 @@ batch_runner = BatchRunner(simulation_engine)
 
 
 class CostEstimateRequest(BaseModel):
-    """Request for cost estimation."""
+    """Request for cost estimation (wizard + analytics)."""
+
     agent_count: int
     rounds: int
     monte_carlo_iterations: int = 1
-    provider: str = "openai"
+    provider: str | None = Field(
+        default=None,
+        description="Deprecated: ignored. Pricing uses the server's configured LLM provider.",
+    )
+    include_post_run_report: bool = True
+    include_post_run_analytics: bool = True
+    extended_seed_context: bool = False
+
+    @field_validator("provider", mode="after")
+    @classmethod
+    def warn_deprecated_provider(cls, v: str | None) -> str | None:
+        if v is not None:
+            logger.warning(
+                "CostEstimateRequest.provider is deprecated and ignored; "
+                "use the server-configured LLM provider for pricing."
+            )
+        return v
 
 
 class BatchCostEstimateRequest(BaseModel):
     """Request for batch cost estimation."""
+
     scenario_count: int
     agent_count: int
     rounds: int
-    monte_carlo_iterations: int = 0
-    provider: str = "openai"
+    monte_carlo_iterations: int = Field(
+        default=0,
+        description=(
+            "Matches batch simulation: 0 means one run per scenario (no MC sweep). "
+            "Cost math treats 0 like 1 for agent/report scaling."
+        ),
+    )
+    provider: str | None = Field(
+        default=None,
+        description=("Deprecated: ignored. Pricing uses the server's configured LLM provider."),
+    )
+    parallelism_factor: float = Field(
+        default=1.0,
+        gt=0,
+        description=(
+            "Wall-clock duration scales as scenario_count / parallelism_factor; "
+            "1 means serial execution (worst-case wall time)."
+        ),
+    )
+
+    @field_validator("provider", mode="after")
+    @classmethod
+    def warn_deprecated_provider(cls, v: str | None) -> str | None:
+        if v is not None:
+            logger.warning(
+                "BatchCostEstimateRequest.provider is deprecated and ignored; "
+                "use the server-configured LLM provider for pricing."
+            )
+        return v
 
 
 class AttributionRequest(BaseModel):
     """Request for outcome attribution."""
+
     outcome_metric: str = "overall_outcome"
 
 
 class FairnessAuditRequest(BaseModel):
     """Request for fairness audit."""
+
     perturbation_type: str = "gender"
 
 
-@router.get("/simulations/{simulation_id}/analytics")
+@router.get("/simulations/{simulation_id}")
 async def get_simulation_analytics(simulation_id: str):
     """Get analytics for a completed simulation."""
     logger.info(f"Getting analytics for simulation: {simulation_id}")
@@ -63,18 +112,12 @@ async def get_simulation_analytics(simulation_id: str):
     # Get simulation state
     sim_state = await simulation_engine.get_simulation(simulation_id)
     if not sim_state:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Simulation not found: {simulation_id}"
-        )
+        raise HTTPException(status_code=404, detail=f"Simulation not found: {simulation_id}")
 
     # Check if simulation is completed
     if sim_state.status.value not in ["completed", "failed"]:
         status = sim_state.status.value
-        raise HTTPException(
-            status_code=400,
-            detail=f"Simulation not completed yet. Status: {status}"
-        )
+        raise HTTPException(status_code=400, detail=f"Simulation not completed yet. Status: {status}")
 
     try:
         # Run analytics
@@ -82,13 +125,10 @@ async def get_simulation_analytics(simulation_id: str):
         return metrics.model_dump()
     except Exception as e:
         logger.error(f"Failed to analyze simulation: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to analyze simulation: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to analyze simulation: {str(e)}")
 
 
-@router.get("/simulations/{simulation_id}/analytics/export/{format}")
+@router.get("/simulations/{simulation_id}/export/{format}")
 async def export_analytics(
     simulation_id: str,
     format: str = Path(..., pattern="^(json|csv)$"),
@@ -99,18 +139,12 @@ async def export_analytics(
     # Get simulation state
     sim_state = await simulation_engine.get_simulation(simulation_id)
     if not sim_state:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Simulation not found: {simulation_id}"
-        )
+        raise HTTPException(status_code=404, detail=f"Simulation not found: {simulation_id}")
 
     # Check if simulation is completed
     if sim_state.status.value not in ["completed", "failed"]:
         status = sim_state.status.value
-        raise HTTPException(
-            status_code=400,
-            detail=f"Simulation not completed yet. Status: {status}"
-        )
+        raise HTTPException(status_code=400, detail=f"Simulation not completed yet. Status: {status}")
 
     try:
         # Run analytics
@@ -132,35 +166,24 @@ async def export_analytics(
                 "filename": f"{simulation_id}_analytics.csv",
             }
         else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unsupported format: {format}"
-            )
+            raise HTTPException(status_code=400, detail=f"Unsupported format: {format}")
 
     except Exception as e:
         logger.error(f"Failed to export analytics: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to export analytics: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to export analytics: {str(e)}")
 
 
 @router.post("/simulations/monte-carlo")
 async def run_monte_carlo(config: MonteCarloConfig):
     """Start a Monte Carlo simulation run."""
-    logger.info(
-        f"Starting Monte Carlo run with {config.iterations} iterations"
-    )
+    logger.info(f"Starting Monte Carlo run with {config.iterations} iterations")
 
     try:
         result = await monte_carlo_runner.run(config)
         return result.model_dump()
     except Exception as e:
         logger.error(f"Monte Carlo run failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Monte Carlo run failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Monte Carlo run failed: {str(e)}")
 
 
 @router.post("/simulations/batch")
@@ -173,10 +196,7 @@ async def run_batch(config: BatchConfig):
         return result.model_dump()
     except Exception as e:
         logger.error(f"Batch run failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Batch run failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Batch run failed: {str(e)}")
 
 
 @router.post("/cost-estimate", response_model=CostEstimate)
@@ -185,19 +205,21 @@ async def get_cost_estimate(request: CostEstimateRequest):
     logger.info("Calculating cost estimate")
 
     try:
+        prov = cost_estimator_provider_key()
         estimate = cost_estimator.estimate(
-            agent_count=request.agent_count,
-            rounds=request.rounds,
-            monte_carlo_iterations=request.monte_carlo_iterations,
-            provider=request.provider,
+            request.agent_count,
+            request.rounds,
+            request.monte_carlo_iterations,
+            prov,
+            model_name=getattr(_settings, "llm_model_name", None),
+            include_report=request.include_post_run_report,
+            include_analytics=request.include_post_run_analytics,
+            extended_seed_context=request.extended_seed_context,
         )
         return estimate
     except Exception as e:
         logger.error(f"Cost estimation failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Cost estimation failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Cost estimation failed: {str(e)}")
 
 
 @router.post("/cost-estimate/batch", response_model=CostEstimate)
@@ -211,15 +233,13 @@ async def get_batch_cost_estimate(request: BatchCostEstimateRequest):
             agent_count=request.agent_count,
             rounds=request.rounds,
             monte_carlo_iterations=request.monte_carlo_iterations,
-            provider=request.provider,
+            provider=cost_estimator_provider_key(),
+            parallelism_factor=request.parallelism_factor,
         )
         return estimate
     except Exception as e:
         logger.error(f"Batch cost estimation failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Batch cost estimation failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Batch cost estimation failed: {str(e)}")
 
 
 # Shapley Attribution Endpoints
@@ -236,34 +256,21 @@ async def compute_attribution(
 
     sim_state = await simulation_engine.get_simulation(simulation_id)
     if not sim_state:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Simulation not found: {simulation_id}"
-        )
+        raise HTTPException(status_code=404, detail=f"Simulation not found: {simulation_id}")
 
     if sim_state.status.value not in ["completed", "failed"]:
-        raise HTTPException(
-            status_code=400,
-            detail="Simulation must be completed for attribution analysis"
-        )
+        raise HTTPException(status_code=400, detail="Simulation must be completed for attribution analysis")
 
     try:
         llm = get_llm_provider()
         analyzer = ShapleyAnalyzer(llm_provider=llm)
 
-        outcome_metric = (
-            request.outcome_metric if request else "overall_outcome"
-        )
-        result = await analyzer.compute_attribution(
-            sim_state, outcome_metric
-        )
+        outcome_metric = request.outcome_metric if request else "overall_outcome"
+        result = await analyzer.compute_attribution(sim_state, outcome_metric)
         return result
     except Exception as e:
         logger.error(f"Attribution computation failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Attribution computation failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Attribution computation failed: {str(e)}")
 
 
 # Fairness Audit Endpoints
@@ -280,34 +287,21 @@ async def audit_fairness(
 
     sim_state = await simulation_engine.get_simulation(simulation_id)
     if not sim_state:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Simulation not found: {simulation_id}"
-        )
+        raise HTTPException(status_code=404, detail=f"Simulation not found: {simulation_id}")
 
     if sim_state.status.value not in ["completed", "failed"]:
-        raise HTTPException(
-            status_code=400,
-            detail="Simulation must be completed for fairness audit"
-        )
+        raise HTTPException(status_code=400, detail="Simulation must be completed for fairness audit")
 
     try:
         llm = get_llm_provider()
         auditor = FairnessAuditor(llm_provider=llm)
 
-        perturbation_type = (
-            request.perturbation_type if request else "gender"
-        )
-        result = await auditor.audit_simulation(
-            sim_state, perturbation_type
-        )
+        perturbation_type = request.perturbation_type if request else "gender"
+        result = await auditor.audit_simulation(sim_state, perturbation_type)
         return result
     except Exception as e:
         logger.error(f"Fairness audit failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Fairness audit failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Fairness audit failed: {str(e)}")
 
 
 # Cross-Simulation Learning Endpoints
@@ -323,25 +317,18 @@ async def cross_simulation_opt_in(request: CrossSimulationOptInRequest):
         return {"simulation_id": request.simulation_id, "opted_in": result}
     except Exception as e:
         logger.error(f"Cross-simulation opt-in failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Cross-simulation opt-in failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Cross-simulation opt-in failed: {str(e)}")
 
 
 @router.get("/cross-simulation/patterns")
 async def get_cross_simulation_patterns(min_simulations: int = 10):
     logger.info("Getting cross-simulation aggregate patterns")
     try:
-        patterns = cross_simulation_learner.get_aggregate_patterns(
-            min_simulations
-        )
+        patterns = cross_simulation_learner.get_aggregate_patterns(min_simulations)
         return patterns
     except Exception as e:
         logger.error(f"Failed to get patterns: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get patterns: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to get patterns: {str(e)}")
 
 
 @router.get("/cross-simulation/privacy-report/{simulation_id}")
@@ -352,9 +339,7 @@ async def get_cross_simulation_privacy_report(simulation_id: str):
         return report
     except Exception as e:
         logger.error(f"Failed to get privacy report: {e}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get privacy report: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to get privacy report: {str(e)}")
 
 
 @router.post("/cross-simulation/improve-archetypes")
@@ -366,7 +351,4 @@ async def get_archetype_improvements():
         return {"suggestions": suggestions, "patterns_used": patterns}
     except Exception as e:
         logger.error(f"Failed to get archetype improvements: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get archetype improvements: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to get archetype improvements: {str(e)}")

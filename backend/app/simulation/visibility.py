@@ -96,9 +96,7 @@ class VisibilityManager:
 
         return True
 
-    def _is_coalition_member(
-        self, agent: AgentState, other_agent_id: str
-    ) -> bool:
+    def _is_coalition_member(self, agent: AgentState, other_agent_id: str) -> bool:
         """Check if another agent is in the same coalition."""
         return other_agent_id in agent.coalition_members
 
@@ -117,8 +115,7 @@ class VisibilityManager:
                 return True
             # CFO sees all financial messages
             if viewer_role == "cfo":
-                if ("budget" in message.content.lower()
-                        or "cost" in message.content.lower()):
+                if "budget" in message.content.lower() or "cost" in message.content.lower():
                     return True
 
         if self.env_type == EnvironmentType.NEGOTIATION:
@@ -132,9 +129,7 @@ class VisibilityManager:
         """Default visibility rules per environment type."""
         rules = {
             EnvironmentType.BOARDROOM: {
-                "description": (
-                    "All see same materials, private caucuses between rounds"
-                ),
+                "description": ("All see same materials, private caucuses between rounds"),
                 "public_by_default": True,
                 "private_allowed": True,
                 "coalition_allowed": True,
@@ -144,9 +139,7 @@ class VisibilityManager:
                 },
             },
             EnvironmentType.WAR_ROOM: {
-                "description": (
-                    "Role-based access (CRO sees full risk, BU heads see ops)"
-                ),
+                "description": ("Role-based access (CRO sees full risk, BU heads see ops)"),
                 "public_by_default": False,
                 "private_allowed": True,
                 "coalition_allowed": True,
@@ -166,9 +159,7 @@ class VisibilityManager:
                 },
             },
             EnvironmentType.INTEGRATION: {
-                "description": (
-                    "Workstream leads see detail, execs see summary"
-                ),
+                "description": ("Workstream leads see detail, execs see summary"),
                 "public_by_default": False,
                 "private_allowed": True,
                 "coalition_allowed": True,
@@ -202,9 +193,6 @@ class VisibilityManager:
             elif msg.visibility == "coalition":
                 visibility_indicator = " [coalition]"
 
-            context_parts.append(
-                f"{msg.agent_name} ({msg.agent_role}){visibility_indicator}: "
-                f"{msg.content}"
-            )
+            context_parts.append(f"{msg.agent_name} ({msg.agent_role}){visibility_indicator}: " f"{msg.content}")
 
         return "\n\n".join(context_parts)

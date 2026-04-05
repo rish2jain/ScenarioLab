@@ -11,6 +11,11 @@ const outfit = Outfit({
 export const metadata: Metadata = {
   title: "MiroFish - AI War-Gaming Platform",
   description: "Strategic war-gaming platform for consultants",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon-180.png",
+  },
 };
 
 export default function RootLayout({

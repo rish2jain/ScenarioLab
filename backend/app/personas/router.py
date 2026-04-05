@@ -1,11 +1,14 @@
 """FastAPI router for persona management endpoints."""
 
 import logging
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from app.config import settings
+from app.llm.factory import get_llm_provider
 from app.personas.archetypes import ArchetypeDefinition
 from app.personas.behavioral_axioms import (
     AxiomExtractionResult,
@@ -14,8 +17,14 @@ from app.personas.behavioral_axioms import (
     BehavioralAxiom,
 )
 from app.personas.counterpart import counterpart_manager
-from app.personas.designer import persona_designer
-from app.llm.factory import get_llm_provider
+from app.personas.designer import (
+    Citation,
+    CustomPersonaConfig,
+    CustomPersonaDeleteOutcome,
+    ResearchRefreshError,
+    persona_designer,
+)
+from app.personas.interview_extractor import ExtractedPersona, InterviewExtractor
 from app.personas.library import (
     create_custom_persona,
     get_all_archetypes,
@@ -28,26 +37,61 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/personas", tags=["personas"])
 
 
+def _retry_after_header_from_exception_chain(exc: BaseException | None) -> str | None:
+    """Best-effort ``Retry-After`` header value (delay-seconds or HTTP-date).
+
+    Walks ``__cause__`` so hints on ``ResearchRefreshError`` and upstream errors
+    (e.g. httpx ``HTTPStatusError`` response headers) are both considered.
+    """
+    seen: set[int] = set()
+    while exc is not None and id(exc) not in seen:
+        seen.add(id(exc))
+        ra = getattr(exc, "retry_after", None)
+        if isinstance(ra, str) and ra.strip():
+            return ra.strip()
+        secs = getattr(exc, "retry_after_seconds", None)
+        if isinstance(secs, (int, float)) and not isinstance(secs, bool) and secs >= 0:
+            return str(int(secs))
+        upstream = getattr(exc, "upstream_headers", None)
+        if isinstance(upstream, dict):
+            for key in ("Retry-After", "retry-after"):
+                if key in upstream and str(upstream[key]).strip():
+                    return str(upstream[key]).strip()
+        resp = getattr(exc, "response", None)
+        if resp is not None:
+            headers = getattr(resp, "headers", None)
+            if headers is not None:
+                h = headers.get("Retry-After") or headers.get("retry-after")
+                if h:
+                    return str(h).strip()
+        exc = exc.__cause__
+    return None
+
+
 class CustomPersonaRequest(BaseModel):
     """Request to create a custom persona."""
+
     base_archetype_id: str
     overrides: dict[str, Any]
 
 
 class CustomPersonaResponse(BaseModel):
     """Response containing the created custom persona."""
+
     persona: ArchetypeDefinition
     message: str
 
 
 class ArchetypeListResponse(BaseModel):
     """Response containing list of archetypes."""
+
     archetypes: list[ArchetypeDefinition]
     count: int
 
 
 class RosterResponse(BaseModel):
     """Response containing playbook roster."""
+
     playbook_id: str
     roster: list[dict[str, Any]]
 
@@ -60,35 +104,14 @@ async def list_archetypes() -> ArchetypeListResponse:
         List of all consulting archetype definitions
     """
     archetypes = get_all_archetypes()
-    return ArchetypeListResponse(
-        archetypes=archetypes,
-        count=len(archetypes)
-    )
+    return ArchetypeListResponse(archetypes=archetypes, count=len(archetypes))
 
 
-@router.get("/{archetype_id}", response_model=ArchetypeDefinition)
-async def get_single_archetype(archetype_id: str) -> ArchetypeDefinition:
-    """Get a single archetype by ID.
-
-    Args:
-        archetype_id: The archetype identifier
-
-    Returns:
-        The archetype definition
-
-    Raises:
-        HTTPException: If archetype not found
-    """
-    archetype = get_archetype(archetype_id)
-    if not archetype:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Archetype not found: {archetype_id}"
-        )
-    return archetype
-
-
-@router.post("/custom", response_model=CustomPersonaResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/custom",
+    response_model=CustomPersonaResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_persona(request: CustomPersonaRequest) -> CustomPersonaResponse:
     """Create a custom persona from a base archetype.
 
@@ -102,19 +125,13 @@ async def create_persona(request: CustomPersonaRequest) -> CustomPersonaResponse
         HTTPException: If base archetype not found
     """
     try:
-        custom_persona = create_custom_persona(
-            request.base_archetype_id,
-            request.overrides
-        )
+        custom_persona = create_custom_persona(request.base_archetype_id, request.overrides)
         return CustomPersonaResponse(
             persona=custom_persona,
-            message=f"Created custom persona from {request.base_archetype_id}"
+            message=f"Created custom persona from {request.base_archetype_id}",
         )
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/roster/{playbook_id}", response_model=RosterResponse)
@@ -128,10 +145,7 @@ async def get_playbook_roster(playbook_id: str) -> RosterResponse:
         Recommended roster for the playbook
     """
     roster = get_roster_for_playbook(playbook_id)
-    return RosterResponse(
-        playbook_id=playbook_id,
-        roster=roster
-    )
+    return RosterResponse(playbook_id=playbook_id, roster=roster)
 
 
 # ========== Counterpart Agent Endpoints ==========
@@ -324,6 +338,10 @@ class CreatePersonaConfigRequest(BaseModel):
     coalition_tendencies: float = 0.5
     incentive_structure: list[str] = []
     behavioral_axioms: list[str] = []
+    evidence_summary: str = ""
+    citations: list[Citation] = Field(default_factory=list)
+    last_researched_at: datetime | None = None
+    evidence_pack_id: str = ""
 
 
 class UpdatePersonaConfigRequest(BaseModel):
@@ -339,12 +357,53 @@ class UpdatePersonaConfigRequest(BaseModel):
     coalition_tendencies: float | None = None
     incentive_structure: list[str] | None = None
     behavioral_axioms: list[str] | None = None
+    evidence_summary: str | None = None
+    citations: list[Citation] | None = None
+    last_researched_at: datetime | None = None
+    evidence_pack_id: str | None = None
+
+
+class ResearchPersonaRequest(BaseModel):
+    """Ground a persona from public executive research."""
+
+    name: str
+    company: str = ""
+    role: str = ""
 
 
 class ValidateCoherenceRequest(BaseModel):
     """Request to validate persona coherence."""
 
     config: dict[str, Any]
+
+
+@router.post(
+    "/research-persona",
+    response_model=ExtractedPersona,
+    status_code=status.HTTP_200_OK,
+)
+async def research_persona_http(
+    request: ResearchPersonaRequest,
+) -> ExtractedPersona:
+    """Research-backed persona (InterviewExtractor.research_persona)."""
+    llm = get_llm_provider()
+    extractor = InterviewExtractor(llm_provider=llm)
+    try:
+        return await extractor.research_persona(request.name, company=request.company, role=request.role)
+    except Exception as e:
+        logger.exception(
+            "research_persona failed (name=%r company=%r role=%r)",
+            request.name,
+            request.company,
+            request.role,
+        )
+        detail = "Internal server error while researching persona"
+        if settings.debug:
+            detail = f"{detail}: {e!s}"
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=detail,
+        ) from e
 
 
 @router.post(
@@ -363,9 +422,7 @@ async def create_designer_persona(
         Created persona with generated system prompt
     """
     try:
-        return persona_designer.create_custom_persona(
-            request.model_dump()
-        )
+        return await persona_designer.create_custom_persona(request.model_dump())
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -376,19 +433,44 @@ async def create_designer_persona(
 @router.get("/designer")
 async def list_designer_personas() -> list[dict[str, Any]]:
     """List all custom personas created with the designer."""
-    return persona_designer.list_custom_personas()
+    return await persona_designer.list_custom_personas()
 
 
 @router.get("/designer/{persona_id}")
 async def get_designer_persona(persona_id: str) -> dict[str, Any]:
     """Get a custom persona by ID."""
-    persona = persona_designer.get_custom_persona(persona_id)
+    persona = await persona_designer.get_custom_persona(persona_id)
     if not persona:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Persona not found: {persona_id}",
         )
     return persona
+
+
+@router.post(
+    "/designer/{persona_id}/refresh-research",
+    response_model=CustomPersonaConfig,
+)
+async def refresh_designer_persona_research(persona_id: str) -> CustomPersonaConfig:
+    """Re-fetch web evidence and merge into designer persona."""
+    try:
+        updated = await persona_designer.refresh_research_for_persona(persona_id)
+    except ResearchRefreshError as e:
+        retry_after = _retry_after_header_from_exception_chain(e)
+        kwargs: dict[str, Any] = {
+            "status_code": status.HTTP_503_SERVICE_UNAVAILABLE,
+            "detail": str(e),
+        }
+        if retry_after is not None:
+            kwargs["headers"] = {"Retry-After": retry_after}
+        raise HTTPException(**kwargs) from e
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Persona not found: {persona_id}",
+        )
+    return CustomPersonaConfig.model_validate(updated)
 
 
 @router.put("/designer/{persona_id}")
@@ -406,7 +488,7 @@ async def update_designer_persona(
         Updated persona
     """
     updates = {k: v for k, v in request.model_dump().items() if v is not None}
-    persona = persona_designer.update_custom_persona(persona_id, updates)
+    persona = await persona_designer.update_custom_persona(persona_id, updates)
     if not persona:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -418,7 +500,8 @@ async def update_designer_persona(
 @router.delete("/designer/{persona_id}")
 async def delete_designer_persona(persona_id: str) -> dict[str, str]:
     """Delete a custom persona."""
-    if persona_designer.delete_custom_persona(persona_id):
+    outcome = await persona_designer.delete_custom_persona(persona_id)
+    if outcome is CustomPersonaDeleteOutcome.DELETED:
         return {"status": "deleted"}
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
@@ -475,10 +558,7 @@ async def extract_behavioral_axioms(
     Returns:
         Extracted behavioral axioms
     """
-    logger.info(
-        f"Extracting axioms from {request.data_type} "
-        f"({len(request.historical_data)} chars)"
-    )
+    logger.info(f"Extracting axioms from {request.data_type} " f"({len(request.historical_data)} chars)")
 
     try:
         llm = get_llm_provider()
@@ -513,10 +593,7 @@ async def validate_behavioral_axioms(
     Returns:
         Validation results with accuracy scores
     """
-    logger.info(
-        f"Validating {len(request.axioms)} axioms "
-        f"against {len(request.holdout_data)} chars"
-    )
+    logger.info(f"Validating {len(request.axioms)} axioms " f"against {len(request.holdout_data)} chars")
 
     try:
         llm = get_llm_provider()
@@ -533,3 +610,26 @@ async def validate_behavioral_axioms(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Axiom validation failed: {str(e)}",
         )
+
+
+# Registered last: a path like ``/designer`` must not be captured as ``{archetype_id}``.
+@router.get("/{archetype_id}", response_model=ArchetypeDefinition)
+async def get_single_archetype(archetype_id: str) -> ArchetypeDefinition:
+    """Get a single archetype by ID.
+
+    Args:
+        archetype_id: The archetype identifier
+
+    Returns:
+        The archetype definition
+
+    Raises:
+        HTTPException: If archetype not found
+    """
+    archetype = get_archetype(archetype_id)
+    if not archetype:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Archetype not found: {archetype_id}",
+        )
+    return archetype

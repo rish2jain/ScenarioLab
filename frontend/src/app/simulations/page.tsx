@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus, Search, Filter, ChevronRight, Clock } from 'lucide-react';
+import { Plus, Search, Filter, Clock, Trash2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -17,28 +17,64 @@ import {
   TableCell,
 } from '@/components/ui/Table';
 import { useSimulationStore } from '@/lib/store';
-import { api } from '@/lib/api';
+import { loadSimulationsFromApi, simulationApi } from '@/lib/api';
+import { useToast } from '@/components/ui/Toast';
 
 export default function SimulationsPage() {
   const router = useRouter();
-  const { simulations, setSimulations, isLoading, setLoading, setError } = useSimulationStore();
+  const { addToast } = useToast();
+  const {
+    simulations,
+    setSimulations,
+    removeSimulation,
+    isLoading,
+    setLoading,
+    setError,
+    error: loadError,
+  } = useSimulationStore();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = useCallback(
+    async (id: string, name: string) => {
+      if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
+      setDeletingId(id);
+      try {
+        await simulationApi.deleteSimulation(id);
+        removeSimulation(id);
+        addToast(`Deleted "${name}"`, 'success');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Delete failed';
+        addToast(msg, 'error');
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [removeSimulation, addToast]
+  );
 
   useEffect(() => {
     const loadSimulations = async () => {
       setLoading(true);
       try {
-        const data = await api.getSimulations();
-        setSimulations(data);
+        const r = await loadSimulationsFromApi();
+        if (!r.ok) {
+          addToast('Could not load simulations. Check that the API is running.', 'error');
+          setError('Failed to load simulations');
+        } else {
+          setSimulations(r.simulations);
+          setError(null);
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to load simulations';
         setError(message);
+        addToast(message, 'error');
       } finally {
         setLoading(false);
       }
     };
 
     loadSimulations();
-  }, [setSimulations, setLoading, setError]);
+  }, [setSimulations, setLoading, setError, addToast]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -154,6 +190,15 @@ export default function SimulationsPage() {
                           </Button>
                         </Link>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={deletingId === sim.id}
+                        onClick={() => handleDelete(sim.id, sim.name)}
+                        className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -164,7 +209,13 @@ export default function SimulationsPage() {
         ) : (
           <EmptyState
             title="No simulations yet"
-            description="Create your first war-gaming simulation to get started"
+            description={
+              isLoading
+                ? 'Loading…'
+                : loadError
+                  ? 'Could not load simulations from the server. Check that the backend is running.'
+                  : 'Create your first war-gaming simulation to get started'
+            }
             action={{
               label: 'Create Simulation',
               onClick: () => router.push('/simulations/new'),

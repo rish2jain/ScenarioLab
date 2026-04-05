@@ -41,13 +41,15 @@ export function Button({
     <button
       className={clsx(
         'inline-flex items-center justify-center gap-2 font-medium rounded-lg border transition-all duration-200',
-        'focus:outline-none focus:ring-2 focus:ring-accent/50 focus:ring-offset-2 focus:ring-offset-slate-900',
-        'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-inherit',
+        'focus:outline-none focus:ring-2 focus:ring-accent/50 focus:ring-offset-2 focus:ring-offset-background',
+        'disabled:opacity-50 disabled:text-foreground-muted disabled:cursor-not-allowed disabled:hover:bg-inherit',
         variants[variant],
         sizes[size],
         className
       )}
       disabled={disabled || isLoading}
+      aria-busy={isLoading}
+      aria-disabled={disabled || isLoading}
       {...props}
     >
       {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}

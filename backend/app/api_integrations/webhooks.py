@@ -33,9 +33,7 @@ class Webhook(BaseModel):
     events: list[str]  # Events to listen for
     api_key_id: str  # Associated API key
     active: bool = True
-    created_at: str = Field(
-        default_factory=lambda: datetime.utcnow().isoformat()
-    )
+    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     last_triggered_at: str | None = None
     failure_count: int = 0
     metadata: dict[str, Any] = {}
@@ -45,9 +43,7 @@ class WebhookPayload(BaseModel):
     """Payload sent to webhook endpoints."""
 
     event_type: str
-    timestamp: str = Field(
-        default_factory=lambda: datetime.utcnow().isoformat()
-    )
+    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     webhook_id: str
     data: dict[str, Any]
     signature: str | None = None
@@ -63,9 +59,7 @@ class WebhookDelivery(BaseModel):
     status_code: int | None
     success: bool
     error_message: str | None = None
-    timestamp: str = Field(
-        default_factory=lambda: datetime.utcnow().isoformat()
-    )
+    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     response_time_ms: float | None = None
 
 
@@ -101,9 +95,7 @@ class WebhookManager:
                     delivery = WebhookDelivery(**del_data)
                     self._deliveries.append(delivery)
                 self._initialized = True
-                logger.info(
-                    f"Loaded {len(self._webhooks)} webhooks from database"
-                )
+                logger.info(f"Loaded {len(self._webhooks)} webhooks from database")
             except Exception as e:
                 logger.warning(f"Failed to load webhooks from DB: {e}")
 
@@ -141,14 +133,9 @@ class WebhookManager:
             ValueError: If URL or events are invalid
         """
         # Validate events
-        invalid_events = [
-            e for e in events if e not in WEBHOOK_EVENT_TYPES
-        ]
+        invalid_events = [e for e in events if e not in WEBHOOK_EVENT_TYPES]
         if invalid_events:
-            raise ValueError(
-                f"Invalid event types: {invalid_events}. "
-                f"Valid types: {WEBHOOK_EVENT_TYPES}"
-            )
+            raise ValueError(f"Invalid event types: {invalid_events}. " f"Valid types: {WEBHOOK_EVENT_TYPES}")
 
         if not url.startswith(("http://", "https://")):
             raise ValueError("URL must start with http:// or https://")
@@ -165,10 +152,7 @@ class WebhookManager:
         # Persist to database (async fire-and-forget)
         asyncio.create_task(self._save_webhook(webhook))
 
-        logger.info(
-            f"Registered webhook {webhook.webhook_id} "
-            f"for events: {events}"
-        )
+        logger.info(f"Registered webhook {webhook.webhook_id} " f"for events: {events}")
         return webhook
 
     async def _save_webhook(self, webhook: Webhook) -> None:
@@ -178,9 +162,7 @@ class WebhookManager:
         except Exception as e:
             logger.warning(f"Failed to persist webhook to DB: {e}")
 
-    async def list_webhooks(
-        self, api_key_id: str | None = None
-    ) -> list[Webhook]:
+    async def list_webhooks(self, api_key_id: str | None = None) -> list[Webhook]:
         """List webhooks, optionally filtered by API key.
 
         Args:
@@ -191,10 +173,7 @@ class WebhookManager:
         """
         await self._ensure_loaded()
         if api_key_id:
-            return [
-                w for w in self._webhooks.values()
-                if w.api_key_id == api_key_id
-            ]
+            return [w for w in self._webhooks.values() if w.api_key_id == api_key_id]
         return list(self._webhooks.values())
 
     async def get_webhook(self, webhook_id: str) -> Webhook | None:
@@ -244,20 +223,14 @@ class WebhookManager:
         deliveries = []
 
         # Find webhooks subscribed to this event
-        matching_webhooks = [
-            w for w in self._webhooks.values()
-            if w.active and event_type in w.events
-        ]
+        matching_webhooks = [w for w in self._webhooks.values() if w.active and event_type in w.events]
 
         if not matching_webhooks:
             logger.debug(f"No webhooks subscribed to {event_type}")
             return deliveries
 
         # Fire all webhooks concurrently
-        tasks = [
-            self._deliver_webhook(webhook, event_type, payload)
-            for webhook in matching_webhooks
-        ]
+        tasks = [self._deliver_webhook(webhook, event_type, payload) for webhook in matching_webhooks]
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -266,17 +239,10 @@ class WebhookManager:
                 deliveries.append(result)
                 self._deliveries.append(result)
                 # Save delivery to database
-                asyncio.create_task(
-                    self._save_delivery_and_update_stats(
-                        webhook, result
-                    )
-                )
+                asyncio.create_task(self._save_delivery_and_update_stats(webhook, result))
             else:
                 # Log exception
-                logger.error(
-                    f"Webhook delivery error for "
-                    f"{webhook.webhook_id}: {result}"
-                )
+                logger.error(f"Webhook delivery error for " f"{webhook.webhook_id}: {result}")
                 # Create failed delivery record
                 delivery = WebhookDelivery(
                     webhook_id=webhook.webhook_id,
@@ -289,17 +255,11 @@ class WebhookManager:
                 deliveries.append(delivery)
                 self._deliveries.append(delivery)
                 # Save delivery to database
-                asyncio.create_task(
-                    self._save_delivery_and_update_stats(
-                        webhook, delivery
-                    )
-                )
+                asyncio.create_task(self._save_delivery_and_update_stats(webhook, delivery))
 
         return deliveries
 
-    async def _save_delivery_and_update_stats(
-        self, webhook: Webhook, delivery: WebhookDelivery
-    ) -> None:
+    async def _save_delivery_and_update_stats(self, webhook: Webhook, delivery: WebhookDelivery) -> None:
         """Save delivery to database and update webhook stats."""
         try:
             await webhook_repo.save_delivery(delivery.model_dump())
@@ -390,10 +350,7 @@ class WebhookManager:
                 f"({status_code}, {response_time:.0f}ms)"
             )
         else:
-            logger.warning(
-                f"Webhook {webhook.webhook_id} failed "
-                f"{event_type} to {webhook.url}: {error_message}"
-            )
+            logger.warning(f"Webhook {webhook.webhook_id} failed " f"{event_type} to {webhook.url}: {error_message}")
 
         return delivery
 

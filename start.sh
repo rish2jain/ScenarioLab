@@ -212,13 +212,8 @@ wait_for_neo4j() {
     print_info "Waiting for Neo4j to be ready..."
     
     while [ $attempt -le $max_attempts ]; do
-        if curl -s -u neo4j:password http://localhost:7474/dbms/health 2>/dev/null | grep -q '"status" : "UP"'; then
-            print_success "Neo4j is ready!"
-            return 0
-        fi
-        
-        # Also try the browser endpoint
-        if curl -s http://localhost:7474 2>/dev/null | grep -q "Neo4j"; then
+        # Neo4j 5.x root endpoint returns JSON with "neo4j_version"
+        if curl -s --connect-timeout 2 --max-time 5 http://localhost:7474 2>/dev/null | grep -q "neo4j_version"; then
             print_success "Neo4j is ready!"
             return 0
         fi
@@ -304,14 +299,11 @@ kill_port() {
     fi
 }
 
-# Free up all required ports
+# Free up application ports (never kill Neo4j — it may already be running)
 free_ports() {
     print_info "Freeing up required ports..."
 
     local ports=(3000 5001)
-    if [ "$NO_NEO4J" = false ]; then
-        ports+=(7474 7687)
-    fi
 
     for port in "${ports[@]}"; do
         if port_in_use "$port"; then

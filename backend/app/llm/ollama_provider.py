@@ -12,7 +12,12 @@ from tenacity import (
     wait_exponential,
 )
 
-from app.llm.provider import LLMMessage, LLMProvider, LLMResponse, _llm_semaphore
+from app.llm.provider import (
+    LLMMessage,
+    LLMProvider,
+    LLMResponse,
+    get_llm_semaphore,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,15 +43,11 @@ class OllamaProvider(LLMProvider):
             api_key="ollama",
             base_url=base_url,
         )
-        logger.info(
-            f"Initialized Ollama provider with model: {model} at {base_url}"
-        )
+        logger.info(f"Initialized Ollama provider with model: {model} at {base_url}")
 
     def _convert_messages(self, messages: list[LLMMessage]) -> list[dict]:
         """Convert LLMMessage objects to OpenAI format."""
-        return [
-            {"role": msg.role, "content": msg.content} for msg in messages
-        ]
+        return [{"role": msg.role, "content": msg.content} for msg in messages]
 
     async def generate(
         self,
@@ -56,10 +57,8 @@ class OllamaProvider(LLMProvider):
         **kwargs,
     ) -> LLMResponse:
         """Generate a completion from messages."""
-        async with _llm_semaphore:
-            return await self._generate_with_retry(
-                messages, temperature, max_tokens, **kwargs
-            )
+        async with get_llm_semaphore(self.provider_name):
+            return await self._generate_with_retry(messages, temperature, max_tokens, **kwargs)
 
     @retry(
         stop=stop_after_attempt(3),
@@ -81,14 +80,12 @@ class OllamaProvider(LLMProvider):
         """Generate a completion with retry logic."""
         try:
             ollama_messages = self._convert_messages(messages)
-            response: ChatCompletion = (
-                await self.client.chat.completions.create(
-                    model=self.model,
-                    messages=ollama_messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    **kwargs,
-                )
+            response: ChatCompletion = await self.client.chat.completions.create(
+                model=self.model,
+                messages=ollama_messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                **kwargs,
             )
 
             content = response.choices[0].message.content or ""
@@ -141,8 +138,9 @@ class OllamaProvider(LLMProvider):
     async def test_connection(self) -> dict:
         """Test connectivity to the Ollama server."""
         try:
-            # Try a minimal chat completion
-            response = await self.client.chat.completions.create(
+            # Try a minimal chat completion with a short timeout so
+            # capability probes don't block for 30+ seconds.
+            response = await self.client.with_options(timeout=5.0).chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": "Hi"}],
                 max_tokens=5,

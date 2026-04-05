@@ -37,31 +37,72 @@ class FairnessReport(BaseModel):
 # Gender name mappings for perturbation analysis
 GENDER_NAME_MAPPINGS: dict[str, dict[str, str]] = {
     "male_to_female": {
-        "James": "Jane", "John": "Joan", "Robert": "Roberta",
-        "Michael": "Michelle", "William": "Willow",
-        "David": "Diana", "Richard": "Rachel",
-        "Joseph": "Josephine", "Thomas": "Thomasina",
-        "Charles": "Charlotte", "Christopher": "Christina",
-        "Daniel": "Danielle", "Matthew": "Matilda",
-        "Anthony": "Antonia", "Mark": "Marcia",
-        "Steven": "Stephanie", "Paul": "Paula",
+        "James": "Jane",
+        "John": "Joan",
+        "Robert": "Roberta",
+        "Michael": "Michelle",
+        "William": "Willow",
+        "David": "Diana",
+        "Richard": "Rachel",
+        "Joseph": "Josephine",
+        "Thomas": "Thomasina",
+        "Charles": "Charlotte",
+        "Christopher": "Christina",
+        "Daniel": "Danielle",
+        "Matthew": "Matilda",
+        "Anthony": "Antonia",
+        "Mark": "Marcia",
+        "Steven": "Stephanie",
+        "Paul": "Paula",
         "Andrew": "Andrea",
-        "Joshua": "Joshlyn", "Kenneth": "Kendra", "Kevin": "Keva",
-        "Brian": "Brianna", "George": "Georgia", "Edward": "Edwina",
-        "Ronald": "Rhonda", "Timothy": "Tiffany", "Jason": "Jasmine",
-        "Jeffrey": "Jennifer", "Ryan": "Ryanne", "Jacob": "Jacqueline",
-        "Gary": "Grace", "Nicholas": "Nicole", "Eric": "Erica",
-        "Jonathan": "Joni", "Stephen": "Stephanie", "Larry": "Laura",
-        "Justin": "Justine", "Scott": "Scottie", "Brandon": "Brenda",
-        "Raymond": "Raye", "Samuel": "Samantha", "Benjamin": "Benjamina",
-        "Gregory": "Gregoria", "Frank": "Frances", "Alexander": "Alexandra",
-        "Patrick": "Patricia", "Jack": "Jackie", "Dennis": "Denise",
-        "Jerry": "Geraldine", "Tyler": "Tyler", "Aaron": "Erin",
-        "Jose": "Josefina", "Adam": "Ada", "Henry": "Henrietta",
-        "Nathan": "Natalie", "Douglas": "Douglas", "Zachary": "Zacharya",
-        "Peter": "Petra", "Kyle": "Kylie", "Ethan": "Ethel",
-        "Walter": "Wanda", "Noah": "Noelle", "Jeremy": "Jeremiah",
-        "Christian": "Christine", "Keith": "Keira", "Roger": "Rogene",
+        "Joshua": "Joshlyn",
+        "Kenneth": "Kendra",
+        "Kevin": "Keva",
+        "Brian": "Brianna",
+        "George": "Georgia",
+        "Edward": "Edwina",
+        "Ronald": "Rhonda",
+        "Timothy": "Tiffany",
+        "Jason": "Jasmine",
+        "Jeffrey": "Jennifer",
+        "Ryan": "Ryanne",
+        "Jacob": "Jacqueline",
+        "Gary": "Grace",
+        "Nicholas": "Nicole",
+        "Eric": "Erica",
+        "Jonathan": "Joni",
+        "Stephen": "Stephanie",
+        "Larry": "Laura",
+        "Justin": "Justine",
+        "Scott": "Scottie",
+        "Brandon": "Brenda",
+        "Raymond": "Raye",
+        "Samuel": "Samantha",
+        "Benjamin": "Benjamina",
+        "Gregory": "Gregoria",
+        "Frank": "Frances",
+        "Alexander": "Alexandra",
+        "Patrick": "Patricia",
+        "Jack": "Jackie",
+        "Dennis": "Denise",
+        "Jerry": "Geraldine",
+        "Tyler": "Tyler",
+        "Aaron": "Erin",
+        "Jose": "Josefina",
+        "Adam": "Ada",
+        "Henry": "Henrietta",
+        "Nathan": "Natalie",
+        "Douglas": "Douglas",
+        "Zachary": "Zacharya",
+        "Peter": "Petra",
+        "Kyle": "Kylie",
+        "Ethan": "Ethel",
+        "Walter": "Wanda",
+        "Noah": "Noelle",
+        "Jeremy": "Jeremiah",
+        "Christian": "Christine",
+        "Keith": "Keira",
+        "Roger": "Rogene",
     },
     "female_to_male": {},
 }
@@ -120,9 +161,7 @@ class FairnessAuditor:
                 methodology_note="Need at least 2 agents for comparison",
             )
 
-        logger.info(
-            f"Auditing simulation {simulation_id} for {perturbation_type} bias"
-        )
+        logger.info(f"Auditing simulation {simulation_id} for {perturbation_type} bias")
 
         # Gather all messages
         all_messages = []
@@ -145,17 +184,13 @@ class FairnessAuditor:
             )
 
         # Step 2: Compute metrics for each group
-        metrics = await self._compute_group_metrics(
-            agents, all_messages, groups, perturbation_type
-        )
+        metrics = await self._compute_group_metrics(agents, all_messages, groups, perturbation_type)
 
         # Step 3: Compute overall fairness score
         overall_score = self._compute_overall_fairness(metrics)
 
         # Step 4: Generate recommendations
-        recommendations = self._generate_recommendations(
-            metrics, overall_score
-        )
+        recommendations = self._generate_recommendations(metrics, overall_score)
 
         methodology = (
             f"Perturbation analysis with {perturbation_type} grouping. "
@@ -186,7 +221,11 @@ class FairnessAuditor:
             female_names = set(GENDER_NAME_MAPPINGS["female_to_male"].keys())
 
             for agent in agents:
-                name = agent.name.split()[0]  # First name
+                parts = (agent.name or "").strip().split()
+                if not parts:
+                    groups["unknown_gender"].append(agent.id)
+                    continue
+                name = parts[0]
                 if name in male_names:
                     groups["male_names"].append(agent.id)
                 elif name in female_names:
@@ -196,11 +235,9 @@ class FairnessAuditor:
 
         elif perturbation_type == "name_length":
             # Group by name length
-            name_lengths = [
-                (a.id, len(a.name)) for a in agents
-            ]
+            name_lengths = [(a.id, len(a.name)) for a in agents]
             if name_lengths:
-                lengths = [l for _, l in name_lengths]
+                lengths = [length for _, length in name_lengths]
                 median = sorted(lengths)[len(lengths) // 2]
                 for agent_id, length in name_lengths:
                     if length <= median:
@@ -250,64 +287,58 @@ class FairnessAuditor:
         for group_name, agent_ids in groups.items():
             group_size = len(agent_ids)
             if group_size > 0:
-                group_msg_rates[group_name] = (
-                    group_message_counts[group_name] / group_size
-                )
+                group_msg_rates[group_name] = group_message_counts[group_name] / group_size
 
         if len(group_msg_rates) >= 2:
             rates = list(group_msg_rates.values())
-            disparity = abs(rates[0] - rates[1]) / max(
-                max(rates), 0.001
-            )
-            p_val = self._permutation_test(
-                messages, groups, "message_count"
-            )
+            disparity = abs(rates[0] - rates[1]) / max(max(rates), 0.001)
+            p_val = self._permutation_test(messages, groups, "message_count")
 
-            metrics.append(FairnessMetric(
-                dimension="message_rate",
-                group_a=group_names[0],
-                group_b=group_names[1],
-                metric_value=round(disparity, 4),
-                p_value=round(p_val, 4),
-                significant=p_val < 0.05,
-            ))
+            metrics.append(
+                FairnessMetric(
+                    dimension="message_rate",
+                    group_a=group_names[0],
+                    group_b=group_names[1],
+                    metric_value=round(disparity, 4),
+                    p_value=round(p_val, 4),
+                    significant=p_val < 0.05,
+                )
+            )
 
         # Metric 2: Sentiment disparity
-        group_sentiments = await self._compute_group_sentiments(
-            messages, groups
-        )
+        group_sentiments = await self._compute_group_sentiments(messages, groups)
 
         if len(group_sentiments) >= 2:
             sentiments = list(group_sentiments.values())
             disparity = abs(sentiments[0] - sentiments[1])
-            p_val = self._permutation_test(
-                messages, groups, "sentiment"
-            )
+            p_val = self._permutation_test(messages, groups, "sentiment")
 
-            metrics.append(FairnessMetric(
-                dimension="sentiment_positivity",
-                group_a=group_names[0],
-                group_b=group_names[1],
-                metric_value=round(disparity, 4),
-                p_value=round(p_val, 4),
-                significant=p_val < 0.05,
-            ))
+            metrics.append(
+                FairnessMetric(
+                    dimension="sentiment_positivity",
+                    group_a=group_names[0],
+                    group_b=group_names[1],
+                    metric_value=round(disparity, 4),
+                    p_value=round(p_val, 4),
+                    significant=p_val < 0.05,
+                )
+            )
 
         # Metric 3: Decision influence (if LLM available)
         if self.llm:
-            influence_disparity = await self._compute_influence_disparity(
-                agents, messages, groups
-            )
+            influence_disparity = await self._compute_influence_disparity(agents, messages, groups)
 
             if influence_disparity is not None:
-                metrics.append(FairnessMetric(
-                    dimension="decision_influence",
-                    group_a=group_names[0],
-                    group_b=group_names[1],
-                    metric_value=round(influence_disparity, 4),
-                    p_value=None,
-                    significant=influence_disparity > 0.2,
-                ))
+                metrics.append(
+                    FairnessMetric(
+                        dimension="decision_influence",
+                        group_a=group_names[0],
+                        group_b=group_names[1],
+                        metric_value=round(influence_disparity, 4),
+                        p_value=None,
+                        significant=influence_disparity > 0.2,
+                    )
+                )
 
         return metrics
 
@@ -318,12 +349,27 @@ class FairnessAuditor:
     ) -> dict[str, float]:
         """Compute average sentiment for each group."""
         positive_words = {
-            "agree", "support", "approve", "positive", "good",
-            "excellent", "benefit", "advantage", "success",
+            "agree",
+            "support",
+            "approve",
+            "positive",
+            "good",
+            "excellent",
+            "benefit",
+            "advantage",
+            "success",
         }
         negative_words = {
-            "disagree", "oppose", "reject", "negative", "bad",
-            "poor", "problem", "issue", "concern", "risk",
+            "disagree",
+            "oppose",
+            "reject",
+            "negative",
+            "bad",
+            "poor",
+            "problem",
+            "issue",
+            "concern",
+            "risk",
         }
 
         group_sentiments: dict[str, list[float]] = defaultdict(list)
@@ -363,9 +409,7 @@ class FairnessAuditor:
             return 1.0
 
         # Compute observed difference
-        observed = self._compute_statistic(
-            messages, groups, metric_type
-        )
+        observed = self._compute_statistic(messages, groups, metric_type)
 
         # Permutation test
         all_agent_ids = []
@@ -387,13 +431,11 @@ class FairnessAuditor:
             perm_groups = {}
             idx = 0
             for i, gname in enumerate(group_names):
-                perm_groups[gname] = shuffled[idx:idx + group_sizes[i]]
+                perm_groups[gname] = shuffled[idx : idx + group_sizes[i]]
                 idx += group_sizes[i]
 
             # Compute statistic for permuted groups
-            perm_stat = self._compute_statistic(
-                messages, perm_groups, metric_type
-            )
+            perm_stat = self._compute_statistic(messages, perm_groups, metric_type)
 
             if abs(perm_stat) >= abs(observed):
                 more_extreme += 1
@@ -414,10 +456,7 @@ class FairnessAuditor:
         if metric_type == "message_count":
             counts = []
             for gname in group_names[:2]:
-                count = sum(
-                    1 for m in messages
-                    if m.agent_id in groups[gname]
-                )
+                count = sum(1 for m in messages if m.agent_id in groups[gname])
                 size = len(groups[gname])
                 counts.append(count / max(size, 1))
 
@@ -438,9 +477,7 @@ class FairnessAuditor:
                         neg = sum(1 for w in negative_words if w in content)
                         if pos + neg > 0:
                             scores.append(pos / (pos + neg))
-                sentiments[gname] = (
-                    sum(scores) / len(scores) if scores else 0.5
-                )
+                sentiments[gname] = sum(scores) / len(scores) if scores else 0.5
 
             return abs(sentiments[group_names[0]] - sentiments[group_names[1]])
 
@@ -467,10 +504,7 @@ class FairnessAuditor:
                 if msg.agent_id in agent_ids:
                     group_msgs[gname].append(msg.content[:200])
 
-        samples = {
-            gname: msgs[:5]  # First 5 messages per group
-            for gname, msgs in group_msgs.items()
-        }
+        samples = {gname: msgs[:5] for gname, msgs in group_msgs.items()}  # First 5 messages per group
 
         prompt = f"""Compare the influence of two agent groups in a simulation.
 
@@ -491,10 +525,7 @@ Respond with JSON:
                 messages=[
                     LLMMessage(
                         role="system",
-                        content=(
-                            "You analyze group dynamics for fairness. "
-                            "Respond with valid JSON only."
-                        ),
+                        content=("You analyze group dynamics for fairness. " "Respond with valid JSON only."),
                     ),
                     LLMMessage(role="user", content=prompt),
                 ],
@@ -563,23 +594,15 @@ Respond with JSON:
                 )
             elif metric.metric_value > 0.2:
                 recommendations.append(
-                    f"Moderate {metric.dimension} disparity observed "
-                    f"between {metric.group_a} and {metric.group_b}"
+                    f"Moderate {metric.dimension} disparity observed " f"between {metric.group_a} and {metric.group_b}"
                 )
 
         if overall_score >= 0.9:
-            recommendations.append(
-                "Overall simulation shows good fairness characteristics"
-            )
+            recommendations.append("Overall simulation shows good fairness characteristics")
         elif overall_score >= 0.7:
-            recommendations.append(
-                "Consider reviewing agent behavior for potential bias"
-            )
+            recommendations.append("Consider reviewing agent behavior for potential bias")
         else:
-            recommendations.append(
-                "Significant fairness concerns detected - "
-                "recommend detailed review"
-            )
+            recommendations.append("Significant fairness concerns detected - " "recommend detailed review")
 
         return recommendations
 
@@ -601,9 +624,7 @@ Respond with JSON:
                 "perturbation_type": audit_results.perturbation_type,
                 "overall_fairness_score": audit_results.overall_fairness_score,
                 "metrics_count": len(audit_results.metrics),
-                "significant_issues": sum(
-                    1 for m in audit_results.metrics if m.significant
-                ),
+                "significant_issues": sum(1 for m in audit_results.metrics if m.significant),
             },
             "metrics": [
                 {
@@ -620,12 +641,9 @@ Respond with JSON:
                 "fairness_gauge": {
                     "value": audit_results.overall_fairness_score,
                     "ranges": [
-                        {"min": 0.0, "max": 0.6,
-                         "label": "Poor", "color": "red"},
-                        {"min": 0.6, "max": 0.8,
-                         "label": "Fair", "color": "yellow"},
-                        {"min": 0.8, "max": 1.0,
-                         "label": "Good", "color": "green"},
+                        {"min": 0.0, "max": 0.6, "label": "Poor", "color": "red"},
+                        {"min": 0.6, "max": 0.8, "label": "Fair", "color": "yellow"},
+                        {"min": 0.8, "max": 1.0, "label": "Good", "color": "green"},
                     ],
                 },
                 "metrics_bar_chart": [

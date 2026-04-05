@@ -3,8 +3,8 @@
 Tests SimulationRepository via the new app.db.simulations module,
 with a temporary DB using init_schema().
 
-Also exercises SeedRepository, AnnotationRepository, ChatHistoryRepository,
-and AgentMemoryRepository at a basic create/read/delete level.
+Also exercises AuditTrailRepository, ChatHistoryRepository, and
+AgentMemoryRepository at a basic create/read/delete level.
 """
 
 from unittest.mock import patch
@@ -20,7 +20,6 @@ from app.simulation.models import (
     SimulationState,
     SimulationStatus,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -47,14 +46,26 @@ def sim_state(sim_config):
 async def sim_repo(tmp_path):
     """Initialize a temp DB and return a SimulationRepository."""
     db_path = tmp_path / "test.db"
-    with patch.object(conn_mod, "DB_PATH", db_path), patch.object(
-        conn_mod, "_DB_DIR", tmp_path
-    ):
-        conn_mod._db = None
+    with patch.object(conn_mod, "DB_PATH", db_path), patch.object(conn_mod, "_DB_DIR", tmp_path):
+        await conn_mod.close_database()  # safe no-op if not yet open
         await conn_mod.init_schema()
         yield SimulationRepository()
         await conn_mod.close_database()
-    conn_mod._db = None
+
+
+@pytest.fixture
+async def temp_db(tmp_path):
+    """Initialize a fresh temp DB, yield, then tear down.
+
+    Shared by the AuditTrail, Chat, and Memory smoke tests to avoid
+    duplicating setup/teardown boilerplate in each test function.
+    """
+    db_path = tmp_path / "temp.db"
+    with patch.object(conn_mod, "DB_PATH", db_path), patch.object(conn_mod, "_DB_DIR", tmp_path):
+        await conn_mod.close_database()  # safe no-op if not yet open
+        await conn_mod.init_schema()
+        yield
+        await conn_mod.close_database()
 
 
 # ---------------------------------------------------------------------------
@@ -82,9 +93,7 @@ class TestSimulationRepository:
 
     async def test_list_all(self, sim_repo, sim_config):
         for i in range(3):
-            config = sim_config.model_copy(
-                update={"id": f"sim-{i}", "name": f"Sim {i}"}
-            )
+            config = sim_config.model_copy(update={"id": f"sim-{i}", "name": f"Sim {i}"})
             state = SimulationState(config=config, status=SimulationStatus.READY)
             await sim_repo.save(state)
 
@@ -128,45 +137,133 @@ class TestSimulationRepository:
         for key in ("id", "name", "status", "environment_type", "created_at", "updated_at"):
             assert key in s, f"Missing key '{key}' in summary"
 
+    async def test_list_all_current_round_from_state_not_config_cap(self, sim_repo, sim_state):
+        """Persisted summaries must show real progress, not total_rounds for both fields."""
+        await sim_repo.save(sim_state)
+        summaries = await sim_repo.list_all()
+        assert summaries[0]["current_round"] == 0
+        assert summaries[0]["total_rounds"] == 5
+
+        sim_state.current_round = 2
+        await sim_repo.save(sim_state)
+        summaries = await sim_repo.list_all()
+        assert summaries[0]["current_round"] == 2
+        assert summaries[0]["total_rounds"] == 5
+
 
 # ---------------------------------------------------------------------------
 # AuditTrailRepository (basic smoke test)
 # ---------------------------------------------------------------------------
 
 
+def test_audit_event_hash_matches_canonical_function():
+    """DB verification must use the same digest as runtime AuditEvent."""
+    from app.db.audit import AuditTrailRepository, compute_audit_event_hash
+    from app.simulation.audit_trail import (
+        GENESIS_HASH,
+        AuditEvent,
+        AuditEventType,
+    )
+
+    event = AuditEvent(
+        simulation_id="s1",
+        event_type=AuditEventType.SIMULATION_START,
+        actor="user",
+        details={"foo": 1},
+        previous_hash=GENESIS_HASH,
+    )
+    assert event.hash == compute_audit_event_hash(
+        previous_hash=GENESIS_HASH,
+        event_id=event.event_id,
+        event_type=event.event_type.value,
+        timestamp=event.timestamp,
+        details=event.details,
+    )
+    row = event.model_dump()
+    assert AuditTrailRepository._compute_event_hash(row) == event.hash
+
+
 @pytest.mark.asyncio
-async def test_audit_save_and_retrieve(tmp_path):
-    db_path = tmp_path / "audit_test.db"
-    with patch.object(conn_mod, "DB_PATH", db_path), patch.object(
-        conn_mod, "_DB_DIR", tmp_path
-    ):
-        conn_mod._db = None
-        await conn_mod.init_schema()
-        try:
-            from app.db.audit import AuditTrailRepository
+async def test_audit_save_and_retrieve(temp_db):
+    from app.db.audit import AuditTrailRepository
 
-            repo = AuditTrailRepository()
-            event = {
-                "event_id": "ev-1",
-                "simulation_id": "sim-1",
-                "event_type": "turn_complete",
-                "timestamp": "2026-01-01T00:00:00+00:00",
-                "actor": "engine",
-                "details": {"round": 1},
-                "previous_hash": "0" * 64,
-                "hash": "a" * 64,
-            }
-            await repo.save_event(event)
-            events = await repo.get_events("sim-1")
-            assert len(events) == 1
-            assert events[0]["event_id"] == "ev-1"
+    repo = AuditTrailRepository()
+    event = {
+        "event_id": "ev-1",
+        "simulation_id": "sim-1",
+        "event_type": "turn_complete",
+        "timestamp": "2026-01-01T00:00:00+00:00",
+        "actor": "engine",
+        "details": {"round": 1},
+        "previous_hash": "0" * 64,
+        "hash": "a" * 64,
+    }
+    await repo.save_event(event)
+    events = await repo.get_events("sim-1")
+    assert len(events) == 1
+    assert events[0]["event_id"] == "ev-1"
 
-            # Single event — chain is trivially valid
-            ok, msg = await repo.verify_integrity("sim-1")
-            assert ok, msg
-        finally:
-            await conn_mod.close_database()
-    conn_mod._db = None
+    # Chain linkage is valid (single event with correct previous_hash).
+    # Hash recomputation will FAIL here because the stored "a"*64 doesn't
+    # match the SHA-256 of the payload — that's expected in this smoke test
+    # which only tests round-trip persistence, not hash authenticity.
+    _ok, _msg = await repo.verify_integrity("sim-1")
+    # We don't assert ok here; a separate integrity test covers that path.
+
+
+@pytest.mark.asyncio
+async def test_audit_integrity_checks(temp_db):
+    from app.db.audit import AuditTrailRepository
+
+    repo = AuditTrailRepository()
+
+    # 1. Valid hash chain
+    event1 = {
+        "event_id": "ev-int-1",
+        "simulation_id": "sim-int-1",
+        "event_type": "turn",
+        "timestamp": "2026-01-01",
+        "actor": "sys",
+        "details": {},
+        "previous_hash": "0" * 64,
+    }
+    event1["hash"] = repo._compute_event_hash(event1)
+    await repo.save_event(event1)
+
+    ok, msg = await repo.verify_integrity("sim-int-1")
+    assert ok is True
+
+    # 2. Tampered payload / hash mismatch
+    event_tamper = {
+        "event_id": "ev-int-2",
+        "simulation_id": "sim-int-tampered",
+        "event_type": "turn",
+        "timestamp": "2026-01-01",
+        "actor": "sys",
+        "details": {},
+        "previous_hash": "0" * 64,
+        "hash": "invalid_stored_hash_tampered_value",
+    }
+    await repo.save_event(event_tamper)
+    ok, msg = await repo.verify_integrity("sim-int-tampered")
+    assert ok is False
+    assert "Invalid hash" in msg or "hash mismatch" in msg.lower() or "integrity" in msg.lower()
+
+    # 3. Chain linkage broken
+    event2 = {
+        "event_id": "ev-int-3",
+        "simulation_id": "sim-int-1",
+        "event_type": "turn",
+        "timestamp": "2026-01-02",
+        "actor": "sys",
+        "details": {},
+        "previous_hash": "b" * 64,  # Intentionally broken linkage from ev-int-1
+    }
+    event2["hash"] = repo._compute_event_hash(event2)
+    await repo.save_event(event2)
+
+    ok, msg = await repo.verify_integrity("sim-int-1")
+    assert ok is False
 
 
 # ---------------------------------------------------------------------------
@@ -175,36 +272,55 @@ async def test_audit_save_and_retrieve(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_chat_save_and_retrieve(tmp_path):
-    db_path = tmp_path / "chat_test.db"
-    with patch.object(conn_mod, "DB_PATH", db_path), patch.object(
-        conn_mod, "_DB_DIR", tmp_path
-    ):
-        conn_mod._db = None
-        await conn_mod.init_schema()
-        try:
-            from app.db.chat import ChatHistoryRepository
+async def test_chat_save_and_retrieve(temp_db):
+    from app.db.chat import ChatHistoryRepository
 
-            repo = ChatHistoryRepository()
-            msg_id = await repo.save_message(
-                simulation_id="sim-1",
-                agent_id="agent-a",
-                agent_name="CEO",
-                user_message="What is your strategy?",
-                agent_response="We will expand globally.",
-                timestamp="2026-01-01T00:00:00+00:00",
-            )
-            assert msg_id is not None
-            history = await repo.get_history("sim-1")
-            assert len(history) == 1
-            assert history[0]["user_message"] == "What is your strategy?"
+    repo = ChatHistoryRepository()
+    msg_id = await repo.save_message(
+        simulation_id="sim-1",
+        agent_id="agent-a",
+        agent_name="CEO",
+        user_message="What is your strategy?",
+        agent_response="We will expand globally.",
+        timestamp="2026-01-01T00:00:00+00:00",
+    )
+    assert msg_id is not None
+    history = await repo.get_history("sim-1")
+    assert len(history) == 1
+    assert history[0]["user_message"] == "What is your strategy?"
 
-            count = await repo.clear_history("sim-1")
-            assert count == 1
-            assert await repo.get_history("sim-1") == []
-        finally:
-            await conn_mod.close_database()
-    conn_mod._db = None
+    count = await repo.clear_history("sim-1")
+    assert count == 1
+    assert await repo.get_history("sim-1") == []
+
+
+def test_flatten_chat_exchanges_interleaves_user_and_assistant():
+    """Session replay must alternate user/assistant per exchange, not all users then all assistants."""
+    from app.db.chat import flatten_chat_exchanges_to_session_messages
+
+    rows = [
+        {
+            "id": "a",
+            "simulation_id": "sim",
+            "agent_id": "ag1",
+            "agent_name": "A",
+            "user_message": "u1",
+            "agent_response": "a1",
+            "timestamp": "t1",
+        },
+        {
+            "id": "b",
+            "simulation_id": "sim",
+            "agent_id": "ag1",
+            "agent_name": "A",
+            "user_message": "u2",
+            "agent_response": "a2",
+            "timestamp": "t2",
+        },
+    ]
+    flat = flatten_chat_exchanges_to_session_messages(rows)
+    assert [m["content"] for m in flat] == ["u1", "a1", "u2", "a2"]
+    assert [m["is_user"] for m in flat] == [True, False, True, False]
 
 
 # ---------------------------------------------------------------------------
@@ -213,35 +329,25 @@ async def test_chat_save_and_retrieve(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_memory_save_and_search(tmp_path):
-    db_path = tmp_path / "mem_test.db"
-    with patch.object(conn_mod, "DB_PATH", db_path), patch.object(
-        conn_mod, "_DB_DIR", tmp_path
-    ):
-        conn_mod._db = None
-        await conn_mod.init_schema()
-        try:
-            from app.db.memories import AgentMemoryRepository
+async def test_memory_save_and_search(temp_db):
+    from app.db.memories import AgentMemoryRepository
 
-            repo = AgentMemoryRepository()
-            mem_id = await repo.save_memory(
-                simulation_id="sim-1",
-                agent_id="agent-a",
-                round_number=1,
-                content="The market is highly competitive.",
-                memory_type="observation",
-                timestamp="2026-01-01T00:00:00+00:00",
-            )
-            assert mem_id is not None
+    repo = AgentMemoryRepository()
+    mem_id = await repo.save_memory(
+        simulation_id="sim-1",
+        agent_id="agent-a",
+        round_number=1,
+        content="The market is highly competitive.",
+        memory_type="observation",
+        timestamp="2026-01-01T00:00:00+00:00",
+    )
+    assert mem_id is not None
 
-            memories = await repo.get_memories("sim-1", "agent-a")
-            assert len(memories) == 1
+    memories = await repo.get_memories("sim-1", "agent-a")
+    assert len(memories) == 1
 
-            results = await repo.search_memories("sim-1", "agent-a", "competitive")
-            assert len(results) == 1
+    results = await repo.search_memories("sim-1", "agent-a", "competitive")
+    assert len(results) == 1
 
-            empty = await repo.search_memories("sim-1", "agent-a", "unicorn")
-            assert empty == []
-        finally:
-            await conn_mod.close_database()
-    conn_mod._db = None
+    empty = await repo.search_memories("sim-1", "agent-a", "unicorn")
+    assert empty == []

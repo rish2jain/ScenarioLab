@@ -26,6 +26,7 @@ from app.simulation.models import (
 )
 from app.simulation.objectives import (
     format_simulation_objective_for_prompt,
+    objective_text_for_stale_check,
     stop_conditions_met,
 )
 from app.simulation.turn_rules import TurnManager
@@ -80,9 +81,7 @@ class SimulationEngine:
         self._repo = SimulationRepository()
         self._lock = asyncio.Lock()  # Protects dict mutations from races
 
-    def get_agent_router(
-        self, sim_id: str, agent_index: int = 0
-    ) -> InferenceRouter | None:
+    def get_agent_router(self, sim_id: str, agent_index: int = 0) -> InferenceRouter | None:
         """Return the inference router for a runtime agent, or None if missing."""
         agents = self._agents.get(sim_id)
         if not agents:
@@ -106,14 +105,15 @@ class SimulationEngine:
         logger.info(f"Creating simulation: {config.name} ({config.id})")
 
         if len(config.agents) > settings.simulation_max_agents:
-            raise ValueError(
-                f"Too many agents ({len(config.agents)}); "
-                f"max is {settings.simulation_max_agents}"
-            )
+            raise ValueError(f"Too many agents ({len(config.agents)}); " f"max is {settings.simulation_max_agents}")
 
         # Auto-parse objective server-side when description exists but
         # parsedObjective was not supplied by the client.
         await self._ensure_parsed_objective(config)
+        # Persist user objective on config.description when only parameters.simulation_requirement is set.
+        canon = objective_text_for_stale_check(config.description, config.parameters)
+        if canon:
+            config.description = canon
 
         # Load seed documents and build context
         seed_context = await self._load_seed_context(config)
@@ -143,9 +143,7 @@ class SimulationEngine:
             self._agents[config.id] = agents
         try:
             await self._repo.save(sim_state)
-            self._memory_managers[config.id] = SimulationMemoryManager(
-                graph_memory_manager
-            )
+            self._memory_managers[config.id] = SimulationMemoryManager(graph_memory_manager)
         except BaseException:
             try:
                 await self.delete_simulation(config.id)
@@ -156,9 +154,7 @@ class SimulationEngine:
                 )
             raise
 
-        logger.info(
-            f"Simulation {config.id} created with {len(agents)} agents"
-        )
+        logger.info(f"Simulation {config.id} created with {len(agents)} agents")
         return sim_state
 
     async def _ensure_parsed_objective(
@@ -172,18 +168,32 @@ class SimulationEngine:
         agents always receive structured objective context.  Non-fatal:
         failures are logged but do not block simulation creation.
         """
-        desc = (config.description or "").strip()
+        from app.simulation.objectives import (
+            objective_text_for_stale_check,
+            parse_simulation_objective,
+            parsed_objective_matches_description,
+        )
+
+        desc = objective_text_for_stale_check(config.description, config.parameters)
         if not desc:
             return
 
         params = config.parameters
-        if (params.get("parsedObjective")
-                or params.get("parsed_objective")):
-            return  # already parsed by the client
+        po = params.get("parsedObjective") or params.get("parsed_objective")
+        if isinstance(po, dict) and po and not parsed_objective_matches_description(
+            po, config.description, config.parameters
+        ):
+            config.parameters = {
+                k: v
+                for k, v in dict(params).items()
+                if k not in ("parsedObjective", "parsed_objective")
+            }
+            params = config.parameters
+
+        if params.get("parsedObjective") or params.get("parsed_objective"):
+            return  # already parsed by the client (and matches current text)
 
         try:
-            from app.simulation.objectives import parse_simulation_objective
-
             parsed = await parse_simulation_objective(desc)
             # Store as dict so format_simulation_objective_for_prompt picks it up
             config.parameters = {
@@ -197,8 +207,7 @@ class SimulationEngine:
             )
         except Exception:
             logger.exception(
-                "Auto-parse objective failed for %s; agents will still "
-                "receive the raw description",
+                "Auto-parse objective failed for %s; agents will still " "receive the raw description",
                 config.id,
             )
 
@@ -297,9 +306,7 @@ class SimulationEngine:
     ) -> list[SimulationAgent]:
         """Initialize simulation agents from configurations."""
         agents = []
-        mo = _wizard_model_override(
-            simulation_config.parameters if simulation_config else None
-        )
+        mo = _wizard_model_override(simulation_config.parameters if simulation_config else None)
         params = simulation_config.parameters if simulation_config else None
         mode, cloud_rounds = _wizard_inference_params(params)
 
@@ -310,17 +317,13 @@ class SimulationEngine:
             # Wizard `parameters.model` is the cloud model only — do not pass it to
             # the local tier (would send e.g. gpt-4o to Ollama). Local uses LOCAL_LLM_*.
             local = get_local_llm_provider()
-            router = await InferenceRouter.create(
-                cloud, local, mode, cloud_rounds
-            )
+            router = await InferenceRouter.create(cloud, local, mode, cloud_rounds)
 
         for config in agent_configs:
             # Get archetype
             archetype = get_archetype(config.archetype_id)
             if not archetype:
-                logger.warning(
-                    f"Archetype not found: {config.archetype_id}"
-                )
+                logger.warning(f"Archetype not found: {config.archetype_id}")
                 continue
 
             base_cust = dict(config.customization)
@@ -331,9 +334,7 @@ class SimulationEngine:
                 )
                 if ob:
                     existing = (base_cust.get("context") or "").strip()
-                    base_cust["context"] = (
-                        f"{existing}\n\n{ob}" if existing else ob
-                    )
+                    base_cust["context"] = f"{existing}\n\n{ob}" if existing else ob
 
             # Inject seed + external research into agent customization
             extra: dict = {}
@@ -419,9 +420,7 @@ class SimulationEngine:
             return
         paused_right_after_priming = len(sim_state.rounds) == cloud_rounds
         for agent in agents:
-            ams = [
-                m for m in round_state.messages if m.agent_id == agent.id
-            ]
+            ams = [m for m in round_state.messages if m.agent_id == agent.id]
             stance: str | None = None
             if paused_right_after_priming:
                 persisted = next(
@@ -460,25 +459,17 @@ class SimulationEngine:
                     )
 
                 async with self._lock:
-                    if (
-                        rehydrated_agents is not None
-                        and simulation_id not in self._agents
-                    ):
+                    if rehydrated_agents is not None and simulation_id not in self._agents:
                         self._agents[simulation_id] = rehydrated_agents
 
                     if simulation_id not in self._memory_managers:
-                        self._memory_managers[simulation_id] = (
-                            SimulationMemoryManager(None)
-                        )
+                        self._memory_managers[simulation_id] = SimulationMemoryManager(None)
 
                     self.simulations[simulation_id] = sim_state
             else:
                 raise ValueError(f"Simulation not found: {simulation_id}")
 
-        if (
-            self.running_tasks.get(simulation_id)
-            and sim_state.status == SimulationStatus.RUNNING
-        ):
+        if self.running_tasks.get(simulation_id) and sim_state.status == SimulationStatus.RUNNING:
             raise ValueError("Simulation is already running")
 
         # Mark as running
@@ -568,9 +559,7 @@ class SimulationEngine:
                             round_num,
                             timeout_s,
                         )
-                        raise RuntimeError(
-                            f"Round {round_num} timed out after {timeout_s}s"
-                        ) from None
+                        raise RuntimeError(f"Round {round_num} timed out after {timeout_s}s") from None
                 else:
                     await self._run_round(
                         sim_state=sim_state,
@@ -605,25 +594,15 @@ class SimulationEngine:
                         )
                     if agents:
                         router = agents[0].router
-                        if (
-                            router.mode == "hybrid"
-                            and router.local is not None
-                            and round_num == router.cloud_rounds
-                        ):
+                        if router.mode == "hybrid" and router.local is not None and round_num == router.cloud_rounds:
                             for agent in agents:
-                                ams = [
-                                    m
-                                    for m in round_state.messages
-                                    if m.agent_id == agent.id
-                                ]
+                                ams = [m for m in round_state.messages if m.agent_id == agent.id]
                                 router.store_exemplar(
                                     agent.id,
                                     ams,
                                     stance_text=agent.state.current_stance,
                                 )
-                            sim_state.hybrid_exemplar_snapshot = (
-                                router.snapshot_exemplars()
-                            )
+                            sim_state.hybrid_exemplar_snapshot = router.snapshot_exemplars()
 
                 # Persist the same AgentState objects the runtime agents mutate
                 sim_state.agents = [a.state for a in agents]
@@ -632,9 +611,7 @@ class SimulationEngine:
                 # save when pause raced, losing the last round from DB before resume.
                 await self._repo.save(sim_state)
 
-                if stop_conditions_met(
-                    sim_state.config.parameters, sim_state.rounds
-                ):
+                if stop_conditions_met(sim_state.config.parameters, sim_state.rounds):
                     logger.info(
                         "Simulation %s: stop conditions met after round %s",
                         simulation_id,
@@ -731,8 +708,7 @@ class SimulationEngine:
             # Send messages via callback
             if on_message:
                 for msg in round_state.messages:
-                    if (msg.round_number == round_number
-                            and msg.phase == current_phase):
+                    if msg.round_number == round_number and msg.phase == current_phase:
                         await on_message(msg)
 
             # Move to next phase
@@ -838,7 +814,8 @@ class SimulationEngine:
         sim_state.results_summary = rs
 
     def _maybe_cross_sim_learn(
-        self, sim_state: SimulationState,
+        self,
+        sim_state: SimulationState,
     ) -> None:
         """Fire-and-forget cross-simulation pattern extraction."""
         try:
@@ -854,8 +831,7 @@ class SimulationEngine:
                     patterns = learner.extract_patterns(sim_state)
                     if patterns:
                         logger.info(
-                            "Cross-sim: extracted %d patterns "
-                            "from %s",
+                            "Cross-sim: extracted %d patterns " "from %s",
                             len(patterns),
                             sim_state.config.id,
                         )
@@ -869,7 +845,8 @@ class SimulationEngine:
             asyncio.create_task(_run())
         except Exception:
             logger.debug(
-                "Cross-sim import failed", exc_info=True,
+                "Cross-sim import failed",
+                exc_info=True,
             )
 
     async def _maybe_run_inline_monte_carlo(self, primary: SimulationState) -> None:
@@ -884,8 +861,7 @@ class SimulationEngine:
         effective = min(requested, cap)
         if requested > cap:
             logger.warning(
-                "Inline Monte Carlo iterations capped from %s to %s "
-                "(inline_monte_carlo_max_iterations=%s)",
+                "Inline Monte Carlo iterations capped from %s to %s " "(inline_monte_carlo_max_iterations=%s)",
                 requested,
                 effective,
                 cap,
@@ -902,9 +878,7 @@ class SimulationEngine:
             from app.simulation.monte_carlo import MonteCarloConfig, MonteCarloRunner
 
             runner = MonteCarloRunner(self)
-            result = await runner.run(
-                MonteCarloConfig(base_config=base, iterations=n)
-            )
+            result = await runner.run(MonteCarloConfig(base_config=base, iterations=n))
             rs = dict(primary.results_summary or {})
             mc_out = result.model_dump(mode="json")
             mc_out["requested_iterations"] = requested
@@ -1003,9 +977,7 @@ class SimulationEngine:
         logger.info(f"Resuming simulation {simulation_id}")
         await self.run_simulation(simulation_id)
 
-    async def get_simulation(
-        self, simulation_id: str
-    ) -> SimulationState | None:
+    async def get_simulation(self, simulation_id: str) -> SimulationState | None:
         """Get simulation state (in-memory first, then DB fallback)."""
         in_memory = self.simulations.get(simulation_id)
         if in_memory is not None:

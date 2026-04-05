@@ -1,10 +1,7 @@
 """Tests for simulation data models."""
 
-import pytest
-
 from app.simulation.models import (
     AgentConfig,
-    AgentState,
     EnvironmentType,
     RoundState,
     SimulationConfig,
@@ -26,6 +23,7 @@ class TestSimulationStatus:
         assert SimulationStatus.PAUSED == "paused"
         assert SimulationStatus.COMPLETED == "completed"
         assert SimulationStatus.FAILED == "failed"
+        assert SimulationStatus.CANCELLED == "cancelled"
 
 
 class TestEnvironmentType:

@@ -39,17 +39,39 @@ export function TornadoChart({
     return [...data.parameters].sort((a, b) => b.impact - a.impact);
   }, [data.parameters]);
 
-  // Chart dimensions
-  const margin = { top: 60, right: 120, bottom: 60, left: 200 };
+  // Chart dimensions — right margin must leave room for per-row impact labels and the
+  // legend group (origin at width - margin.right + 12); space to SVG edge = margin.right - 12.
+  const LEGEND_CONTENT_WIDTH = 132;
+  const margin = {
+    top: 72,
+    right: 12 + LEGEND_CONTENT_WIDTH + 8,
+    bottom: 56,
+    left: 220,
+  };
   const chartWidth = width - margin.left - margin.right;
-  const chartHeight = height - margin.top - margin.bottom;
+  // Dynamic height to prevent Y-axis labels from overlapping if there are many parameters
+  const minBarHeight = 24;
+  const barGap = 8;
+  const dynamicHeight = Math.max(
+    height,
+    sortedParams.length * (minBarHeight + barGap) + margin.top + margin.bottom
+  );
+  
+  const chartHeight = dynamicHeight - margin.top - margin.bottom;
 
   // Calculate scales
-  const maxImpact = Math.max(...sortedParams.map((p) => p.impact));
-  const scaleFactor = (chartWidth / 2) / maxImpact;
+  const paramExtents = sortedParams.map((param) => ({
+    param,
+    leftDelta: Math.max(0, Math.abs(param.baseValue - param.lowValue)),
+    rightDelta: Math.max(0, Math.abs(param.highValue - param.baseValue)),
+  }));
+  const maxDelta = Math.max(
+    1,
+    ...paramExtents.flatMap(({ leftDelta, rightDelta }) => [leftDelta, rightDelta])
+  );
+  const scaleFactor = (chartWidth / 2) / maxDelta;
 
-  const barHeight = Math.min(40, (chartHeight - (sortedParams.length - 1) * 8) / sortedParams.length);
-  const barGap = 8;
+  const barHeight = sortedParams.length === 0 ? 0 : Math.min(40, (chartHeight - (sortedParams.length - 1) * barGap) / sortedParams.length);
 
   // Center line X position
   const centerX = margin.left + chartWidth / 2;
@@ -113,13 +135,13 @@ export function TornadoChart({
     const svg = svgRef.current;
     const canvas = document.createElement('canvas');
     canvas.width = width;
-    canvas.height = height;
+    canvas.height = dynamicHeight;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     // Fill background
     ctx.fillStyle = '#0f172a';
-    ctx.fillRect(0, 0, width, height);
+    ctx.fillRect(0, 0, width, dynamicHeight);
 
     // Convert SVG to image
     const svgData = new XMLSerializer().serializeToString(svg);
@@ -131,8 +153,11 @@ export function TornadoChart({
       link.href = canvas.toDataURL('image/png');
       link.click();
     };
-    img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
-  }, [width, height]);
+    const svgBase64 = btoa(
+      unescape(encodeURIComponent(svgData))
+    );
+    img.src = 'data:image/svg+xml;base64,' + svgBase64;
+  }, [width, dynamicHeight]);
 
   const exportAsSVG = useCallback(() => {
     if (!svgRef.current) return;
@@ -152,7 +177,7 @@ export function TornadoChart({
       <svg
         ref={svgRef}
         width={width}
-        height={height}
+        height={dynamicHeight}
         className="overflow-visible"
       >
         {/* Background */}
@@ -199,14 +224,14 @@ export function TornadoChart({
 
         {/* Y-axis labels and bars */}
         {sortedParams.map((param, index) => {
-          const y = margin.top + index * (barHeight + barGap) + barGap;
-          const barWidth = param.impact * scaleFactor;
-          const isPositive = param.impactDirection === 'positive';
-          const barColor = isPositive ? '#14b8a6' : '#ef4444';
-
-          // Calculate bar positions
-          const leftBarWidth = isPositive ? barWidth * 0.5 : barWidth;
-          const rightBarWidth = isPositive ? barWidth * 0.5 : 0;
+          const y = margin.top + index * (barHeight + barGap);
+          const { leftDelta, rightDelta } =
+            paramExtents.find((entry) => entry.param.id === param.id) ?? {
+              leftDelta: 0,
+              rightDelta: 0,
+            };
+          const leftBarWidth = leftDelta * scaleFactor;
+          const rightBarWidth = rightDelta * scaleFactor;
 
           return (
             <g key={param.id}>
@@ -229,7 +254,7 @@ export function TornadoChart({
                 y={y}
                 width={leftBarWidth}
                 height={barHeight}
-                fill={isPositive ? '#ef4444' : '#14b8a6'}
+                fill="#ef4444"
                 rx={4}
                 className="cursor-pointer transition-opacity hover:opacity-80"
                 onMouseEnter={(e) => handleBarHover(e, param)}
@@ -243,7 +268,7 @@ export function TornadoChart({
                 y={y}
                 width={rightBarWidth}
                 height={barHeight}
-                fill={barColor}
+                fill="#14b8a6"
                 rx={4}
                 className="cursor-pointer transition-opacity hover:opacity-80"
                 onMouseEnter={(e) => handleBarHover(e, param)}
@@ -253,11 +278,12 @@ export function TornadoChart({
 
               {/* Impact value label */}
               <text
-                x={centerX + barWidth + 10}
+                x={width - margin.right + 12}
                 y={y + barHeight / 2}
                 dominantBaseline="middle"
                 fill="#94a3b8"
                 fontSize={11}
+                textAnchor="end"
               >
                 {param.impact.toFixed(2)}
               </text>
@@ -268,7 +294,7 @@ export function TornadoChart({
         {/* X-axis labels */}
         <text
           x={centerX - chartWidth / 4}
-          y={height - 20}
+          y={dynamicHeight - 20}
           textAnchor="middle"
           fill="#64748b"
           fontSize={11}
@@ -277,7 +303,7 @@ export function TornadoChart({
         </text>
         <text
           x={centerX + chartWidth / 4}
-          y={height - 20}
+          y={dynamicHeight - 20}
           textAnchor="middle"
           fill="#64748b"
           fontSize={11}
@@ -286,7 +312,7 @@ export function TornadoChart({
         </text>
         <text
           x={centerX}
-          y={height - 20}
+          y={dynamicHeight - 20}
           textAnchor="middle"
           fill="#94a3b8"
           fontSize={11}
@@ -296,7 +322,7 @@ export function TornadoChart({
         </text>
 
         {/* Legend */}
-        <g transform={`translate(${width - 110}, ${margin.top})`}>
+        <g transform={`translate(${width - margin.right + 12}, ${margin.top})`}>
           <rect
             x={0}
             y={0}

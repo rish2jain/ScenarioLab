@@ -26,9 +26,7 @@ class PlaybookCopilot:
     def __init__(self, llm_provider: LLMProvider | None = None):
         self.llm = llm_provider
 
-    async def analyze_seed_with_research(
-        self, seed_content: str
-    ) -> CopilotSuggestions:
+    async def analyze_seed_with_research(self, seed_content: str) -> CopilotSuggestions:
         """Analyze seed material enriched with external research context.
 
         First augments the seed content with autoresearch results, then
@@ -43,25 +41,16 @@ class PlaybookCopilot:
         try:
             from app.research.service import research_service
 
-            result = await research_service.augment_text(
-                seed_content, purpose="playbook selection"
-            )
+            result = await research_service.augment_text(seed_content, purpose="playbook selection")
             augmented_context = result.get("augmented_context", "")
 
             if augmented_context:
-                enriched_content = (
-                    seed_content
-                    + "\n\n--- AUTORESEARCH CONTEXT ---\n\n"
-                    + augmented_context
-                )
+                enriched_content = seed_content + "\n\n--- AUTORESEARCH CONTEXT ---\n\n" + augmented_context
             else:
                 enriched_content = seed_content
 
             entities_found = result.get("entities_found", [])
-            logger.info(
-                f"Enriched seed content with research context "
-                f"({len(entities_found)} entities found)"
-            )
+            logger.info(f"Enriched seed content with research context " f"({len(entities_found)} entities found)")
 
         except Exception as e:
             logger.error(f"Research augmentation failed, using original content: {e}")
@@ -118,8 +107,7 @@ Respond with valid JSON only."""
                     LLMMessage(
                         role="system",
                         content=(
-                            "You analyze seed materials for strategic simulations. "
-                            "Respond with valid JSON only."
+                            "You analyze seed materials for strategic simulations. " "Respond with valid JSON only."
                         ),
                     ),
                     LLMMessage(role="user", content=prompt),
@@ -172,7 +160,8 @@ Respond with valid JSON only."""
 
         # Extract potential entities (capitalized words)
         import re
-        potential_entities = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b', seed_content)
+
+        potential_entities = re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b", seed_content)
         key_entities = list(set(potential_entities))[:10]
 
         return CopilotSuggestions(
@@ -223,8 +212,7 @@ Respond with valid JSON only."""
                 messages=[
                     LLMMessage(
                         role="system",
-                        content="You refine simulation suggestions based on feedback. "
-                                "Respond with valid JSON only.",
+                        content="You refine simulation suggestions based on feedback. " "Respond with valid JSON only.",
                     ),
                     LLMMessage(role="user", content=prompt),
                 ],

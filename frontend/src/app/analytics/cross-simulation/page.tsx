@@ -1,134 +1,131 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Brain, TrendingUp, Shield, Lightbulb, Users, BarChart3, CheckCircle } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { api } from '@/lib/api';
+import { useToast } from '@/components/ui/Toast';
+import { api, loadSimulationsFromApi } from '@/lib/api';
 import type { CrossSimulationPattern, PrivacyReport, ArchetypeImprovement } from '@/lib/types';
 
-// Mock data
-const mockPatterns: CrossSimulationPattern = {
-  total_simulations: 47,
-  patterns: {
-    archetype_decisions: {
-      aggressor: {
-        average_support_rate: 0.72,
-        sample_size: 156,
-        confidence: 0.89,
-      },
-      defender: {
-        average_support_rate: 0.58,
-        sample_size: 142,
-        confidence: 0.85,
-      },
-      mediator: {
-        average_support_rate: 0.81,
-        sample_size: 128,
-        confidence: 0.91,
-      },
-      analyst: {
-        average_support_rate: 0.69,
-        sample_size: 134,
-        confidence: 0.87,
-      },
-    },
-    coalition_formations: {
-      'aggressor-mediator': { frequency: 0.34 },
-      'defender-analyst': { frequency: 0.28 },
-      'mediator-analyst': { frequency: 0.22 },
-    },
-    environment_outcomes: {
-      corporate: {
-        average_rounds: 8.5,
-        consensus_rate: 0.67,
-        sample_size: 23,
-      },
-      crisis: {
-        average_rounds: 5.2,
-        consensus_rate: 0.45,
-        sample_size: 12,
-      },
-      market: {
-        average_rounds: 11.3,
-        consensus_rate: 0.52,
-        sample_size: 12,
-      },
-    },
-  },
-};
+/** Cross-simulation load uses these backend routes. */
+const CROSS_SIMULATION_LOAD_ENDPOINTS = [
+  'GET /api/analytics/cross-simulation/patterns',
+  'POST /api/analytics/cross-simulation/improve-archetypes',
+  'GET /api/analytics/cross-simulation/privacy-report/:simulationId',
+] as const;
 
-const mockPrivacyReport: PrivacyReport = {
-  simulation_id: 'sim-1',
-  opted_in: true,
-  data_points_shared: 156,
-  categories: {
-    decisions: 45,
-    outcomes: 38,
-    patterns: 73,
-  },
-  anonymization_method: 'differential_privacy',
-  privacy_epsilon: 0.1,
-  shared_at: '2024-01-15T10:00:00Z',
-};
+type ApiLoadErrorKind = 'unavailable' | 'unexpected';
 
-const mockImprovements: Record<string, ArchetypeImprovement> = {
-  aggressor: {
-    parameter: 'risk_tolerance',
-    suggested_value: 0.75,
-    current_estimate: 0.68,
-    confidence: 0.82,
-    sample_size: 156,
-    rationale: 'Based on cross-simulation analysis, aggressor archetypes show higher success rates with slightly elevated risk tolerance in M&A scenarios.',
-  },
-  defender: {
-    parameter: 'coalition_tendencies',
-    suggested_value: 0.62,
-    current_estimate: 0.55,
-    confidence: 0.78,
-    sample_size: 142,
-    rationale: 'Defender archetypes benefit from increased coalition formation, particularly with analyst types in regulatory scenarios.',
-  },
-};
+function classifyCrossSimulationLoadError(error: unknown): ApiLoadErrorKind {
+  if (error instanceof TypeError) {
+    return 'unavailable';
+  }
+  const msg = error instanceof Error ? error.message : String(error);
+  if (/failed to fetch|networkerror|load failed|aborted|connection refused|econnrefused/i.test(msg)) {
+    return 'unavailable';
+  }
+  return 'unexpected';
+}
 
 export default function CrossSimulationPage() {
+  const { addToast } = useToast();
   const [patterns, setPatterns] = useState<CrossSimulationPattern | null>(null);
   const [privacyReport, setPrivacyReport] = useState<PrivacyReport | null>(null);
   const [improvements, setImprovements] = useState<Record<string, ArchetypeImprovement>>({});
   const [isLoading, setIsLoading] = useState(true);
-  const [optInEnabled, setOptInEnabled] = useState(true);
+  const [targetSimulationId, setTargetSimulationId] = useState<string | null>(null);
+  const [apiLoadError, setApiLoadError] = useState<ApiLoadErrorKind | null>(null);
+  const [isOptingIn, setIsOptingIn] = useState(false);
+  const optInInFlightRef = useRef(false);
 
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
+      let candidateSimulationId: string | null = null;
       try {
-        const [patternsData, privacyData, improvementsData] = await Promise.all([
+        setApiLoadError(null);
+        const simRes = await loadSimulationsFromApi();
+        if (!simRes.ok) {
+          addToast('Could not load simulations. Check that the API is running.', 'error');
+        }
+        const simulations = simRes.ok ? (simRes.simulations ?? []) : [];
+        candidateSimulationId =
+          simulations.find((simulation) => simulation.status === 'completed' || simulation.status === 'failed')?.id
+          ?? simulations[0]?.id
+          ?? null;
+        setTargetSimulationId(candidateSimulationId);
+
+        const [patternsData, improvementsData, privacyData] = await Promise.all([
           api.getCrossSimulationPatterns(),
-          api.getPrivacyReport('sim-1'),
           api.getArchetypeImprovements(),
+          candidateSimulationId ? api.getPrivacyReport(candidateSimulationId) : Promise.resolve(null),
         ]);
         setPatterns(patternsData);
         setPrivacyReport(privacyData);
         setImprovements(improvementsData.suggestions || {});
-      } catch {
-        setPatterns(mockPatterns);
-        setPrivacyReport(mockPrivacyReport);
-        setImprovements(mockImprovements);
+      } catch (error: unknown) {
+        const kind = classifyCrossSimulationLoadError(error);
+        setApiLoadError(kind);
+        console.error('[cross-simulation] Failed to load analytics.', {
+          endpoints: CROSS_SIMULATION_LOAD_ENDPOINTS,
+          simulationId: candidateSimulationId ?? '(none)',
+          kind,
+          error,
+        });
+        if (kind === 'unavailable') {
+          addToast(
+            `Cross-simulation API unreachable (simulation: ${candidateSimulationId ?? 'n/a'}).`,
+            'error'
+          );
+        } else {
+          addToast(
+            `Unexpected error loading cross-simulation analytics (simulation: ${candidateSimulationId ?? 'n/a'}).`,
+            'error'
+          );
+        }
+        setPatterns(null);
+        setPrivacyReport(null);
+        setImprovements({});
       }
       setIsLoading(false);
     };
 
     loadData();
-  }, []);
+  }, [addToast]);
 
   const handleOptInToggle = async () => {
-    const newValue = !optInEnabled;
-    setOptInEnabled(newValue);
+    if (isOptingIn) return;
+    if (optInInFlightRef.current) return;
+    if (!targetSimulationId || privacyReport?.opted_in) return;
+
+    optInInFlightRef.current = true;
+    setIsOptingIn(true);
     try {
-      await api.crossSimulationOptIn('sim-1');
-    } catch {
-      // Mock success
+      const result = await api.crossSimulationOptIn(targetSimulationId);
+      setPrivacyReport((prev) =>
+        prev
+          ? { ...prev, opted_in: result.opted_in }
+          : {
+              simulation_id: result.simulation_id,
+              opted_in: result.opted_in,
+              data_points_shared: 0,
+              categories: {},
+              anonymization_method: 'differential_privacy',
+              privacy_epsilon: 0.1,
+              shared_at: new Date().toISOString(),
+            }
+      );
+    } catch (error) {
+      console.error('Opt-in failed:', error);
+      const message =
+        error instanceof Error && error.message
+          ? `Failed to opt in to cross-simulation sharing: ${error.message}`
+          : 'Failed to opt in to cross-simulation sharing.';
+      addToast(message, 'error');
+    } finally {
+      optInInFlightRef.current = false;
+      setIsOptingIn(false);
     }
   };
 
@@ -140,8 +137,22 @@ export default function CrossSimulationPage() {
     );
   }
 
+  const hasData = (patterns?.total_simulations || 0) > 0;
+
+  const optInEnabled = Boolean(privacyReport?.opted_in);
+
   return (
     <div className="space-y-6 animate-fade-in">
+      {apiLoadError && (
+        <div
+          role="alert"
+          className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
+        >
+          {apiLoadError === 'unavailable'
+            ? 'Cross-simulation API was unreachable. No sample data is being shown.'
+            : 'An unexpected error occurred while loading cross-simulation analytics.'}
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -154,8 +165,13 @@ export default function CrossSimulationPage() {
           <span className="text-sm text-slate-400">Opt-in to share data:</span>
           <button
             onClick={handleOptInToggle}
+            disabled={isOptingIn || !targetSimulationId || optInEnabled}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
               optInEnabled ? 'bg-accent' : 'bg-slate-600'
+            } ${
+              isOptingIn || !targetSimulationId || optInEnabled
+                ? 'cursor-not-allowed opacity-60'
+                : ''
             }`}
           >
             <span
@@ -167,15 +183,40 @@ export default function CrossSimulationPage() {
         </div>
       </div>
 
-      {/* Privacy Report */}
-      <Card
-        header={
-          <div className="flex items-center gap-2">
-            <Shield className="w-5 h-5 text-accent" />
-            <h2 className="text-lg font-semibold text-slate-100">Privacy Report</h2>
+      <Card padding="md">
+        <p className="text-sm text-slate-400">
+          Compare two environment presets with the same roster and seeds: call{' '}
+          <code className="text-slate-300">POST /api/simulations/dual-run-preset</code>{' '}
+          (returns <code className="text-slate-300">batch_parent_id</code> and two create payloads),
+          then create both simulations and analyze them here. Start from{' '}
+          <Link href="/simulations/new" className="text-accent hover:underline">
+            New simulation
+          </Link>
+          .
+        </p>
+      </Card>
+
+      {!hasData ? (
+        <Card padding="lg">
+          <div className="flex flex-col items-center justify-center p-8 text-center">
+            <Brain className="w-12 h-12 text-slate-500 mb-4" />
+            <h2 className="text-xl font-bold text-slate-200">Insufficient Data</h2>
+            <p className="text-slate-400 mt-2 max-w-md">
+              Cross-simulation learning requires completed simulations to identify patterns and insights. Check back once more simulations have finished.
+            </p>
           </div>
-        }
-      >
+        </Card>
+      ) : (
+        <>
+          {/* Privacy Report */}
+          <Card
+            header={
+              <div className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-accent" />
+                <h2 className="text-lg font-semibold text-slate-100">Privacy Report</h2>
+              </div>
+            }
+          >
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="p-4 bg-slate-700/20 rounded-lg text-center">
             <div className="text-2xl font-bold text-slate-100">{privacyReport?.data_points_shared || 0}</div>
@@ -314,38 +355,50 @@ export default function CrossSimulationPage() {
           </div>
         }
       >
-        <div className="space-y-4">
-          {Object.entries(improvements).map(([archetype, improvement]) => (
-            <div key={archetype} className="p-4 bg-slate-700/20 rounded-lg">
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <span className="font-medium text-slate-200 capitalize">{archetype}</span>
-                  <span className="text-slate-400 mx-2">→</span>
-                  <span className="text-sm text-slate-400">{improvement.parameter}</span>
+        {Object.keys(improvements).length === 0 ? (
+          <div className="flex flex-col items-center justify-center p-8 text-center">
+            <Lightbulb className="w-8 h-8 text-slate-500 mb-4 opacity-50" />
+            <h2 className="text-lg font-semibold text-slate-200">Insufficient Data</h2>
+            <p className="text-sm text-slate-400 mt-2">
+              No improvement suggestions available yet.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {Object.entries(improvements).map(([archetype, improvement]) => (
+              <div key={archetype} className="p-4 bg-slate-700/20 rounded-lg">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <span className="font-medium text-slate-200 capitalize">{archetype}</span>
+                    <span className="text-slate-400 mx-2">→</span>
+                    <span className="text-sm text-slate-400">{improvement.parameter}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-500">{(improvement.confidence * 100).toFixed(0)}% confidence</span>
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-500">{(improvement.confidence * 100).toFixed(0)}% confidence</span>
-                  <CheckCircle className="w-4 h-4 text-green-400" />
+                <div className="flex items-center gap-4 mb-2">
+                  <div className="text-sm">
+                    <span className="text-slate-500">Current: </span>
+                    <span className="text-slate-300">{improvement.current_estimate.toFixed(2)}</span>
+                  </div>
+                  <div className="text-sm">
+                    <span className="text-slate-500">Suggested: </span>
+                    <span className="text-accent font-medium">{improvement.suggested_value.toFixed(2)}</span>
+                  </div>
+                  <div className="text-sm text-slate-500">
+                    n = {improvement.sample_size}
+                  </div>
                 </div>
+                <p className="text-sm text-slate-400">{improvement.rationale}</p>
               </div>
-              <div className="flex items-center gap-4 mb-2">
-                <div className="text-sm">
-                  <span className="text-slate-500">Current: </span>
-                  <span className="text-slate-300">{improvement.current_estimate.toFixed(2)}</span>
-                </div>
-                <div className="text-sm">
-                  <span className="text-slate-500">Suggested: </span>
-                  <span className="text-accent font-medium">{improvement.suggested_value.toFixed(2)}</span>
-                </div>
-                <div className="text-sm text-slate-500">
-                  n = {improvement.sample_size}
-                </div>
-              </div>
-              <p className="text-sm text-slate-400">{improvement.rationale}</p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </Card>
+        </>
+      )}
     </div>
   );
 }

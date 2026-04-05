@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 class RiskTolerance(str, Enum):
     """Risk tolerance levels for decision-making."""
+
     CONSERVATIVE = "conservative"
     MODERATE = "moderate"
     AGGRESSIVE = "aggressive"
@@ -14,6 +15,7 @@ class RiskTolerance(str, Enum):
 
 class InformationBias(str, Enum):
     """Information processing preferences."""
+
     QUALITATIVE = "qualitative"
     QUANTITATIVE = "quantitative"
     BALANCED = "balanced"
@@ -21,6 +23,7 @@ class InformationBias(str, Enum):
 
 class DecisionSpeed(str, Enum):
     """Decision-making velocity."""
+
     FAST = "fast"
     MODERATE = "moderate"
     SLOW = "slow"
@@ -28,6 +31,7 @@ class DecisionSpeed(str, Enum):
 
 class IncentiveType(str, Enum):
     """Types of incentives that drive behavior."""
+
     FINANCIAL = "financial"
     REPUTATIONAL = "reputational"
     OPERATIONAL = "operational"
@@ -36,6 +40,7 @@ class IncentiveType(str, Enum):
 
 class GovernanceStyle(str, Enum):
     """Board member governance styles."""
+
     ACTIVIST = "activist"
     INSTITUTIONAL = "institutional"
     INDEPENDENT = "independent"
@@ -44,6 +49,7 @@ class GovernanceStyle(str, Enum):
 
 class ArchetypeDefinition(BaseModel):
     """Definition of a consulting persona archetype."""
+
     id: str
     name: str
     role: str
@@ -528,9 +534,9 @@ CONSULTING_ARCHETYPES: dict[str, ArchetypeDefinition] = {
         behavioral_axioms=[
             "Prioritizes shareholder value and strategic vision",
             "Will override consensus for bold moves when conviction is high",
-            "Frames all decisions in terms of long-term competitive position"
+            "Frames all decisions in terms of long-term competitive position",
         ],
-        system_prompt_template=CEO_PROMPT
+        system_prompt_template=CEO_PROMPT,
     ),
     "cfo": ArchetypeDefinition(
         id="cfo",
@@ -546,9 +552,9 @@ CONSULTING_ARCHETYPES: dict[str, ArchetypeDefinition] = {
         behavioral_axioms=[
             "Defaults to risk-averse; seeks quantitative justification before support",
             "Will veto proposals exceeding budget thresholds without clear ROI",
-            "Challenges assumptions with financial modeling"
+            "Challenges assumptions with financial modeling",
         ],
-        system_prompt_template=CFO_PROMPT
+        system_prompt_template=CFO_PROMPT,
     ),
     "cro": ArchetypeDefinition(
         id="cro",
@@ -564,9 +570,9 @@ CONSULTING_ARCHETYPES: dict[str, ArchetypeDefinition] = {
         behavioral_axioms=[
             "Escalates compliance issues regardless of business pressure",
             "Requires risk quantification before approving initiatives",
-            "Acts as institutional brake on aggressive expansion"
+            "Acts as institutional brake on aggressive expansion",
         ],
-        system_prompt_template=CRO_PROMPT
+        system_prompt_template=CRO_PROMPT,
     ),
     "board_member": ArchetypeDefinition(
         id="board_member",
@@ -578,14 +584,18 @@ CONSULTING_ARCHETYPES: dict[str, ArchetypeDefinition] = {
         information_bias=InformationBias.BALANCED,
         decision_speed=DecisionSpeed.SLOW,
         coalition_tendencies=0.6,
-        incentive_structure=[IncentiveType.FINANCIAL, IncentiveType.REPUTATIONAL, IncentiveType.REGULATORY],
+        incentive_structure=[
+            IncentiveType.FINANCIAL,
+            IncentiveType.REPUTATIONAL,
+            IncentiveType.REGULATORY,
+        ],
         behavioral_axioms=[
             "Focuses on fiduciary duty and governance",
             "Requests independent verification of management claims",
-            "Balances short-term performance with long-term sustainability"
+            "Balances short-term performance with long-term sustainability",
         ],
         system_prompt_template=BOARD_MEMBER_PROMPT,
-        governance_style=GovernanceStyle.INDEPENDENT
+        governance_style=GovernanceStyle.INDEPENDENT,
     ),
     "activist_investor": ArchetypeDefinition(
         id="activist_investor",
@@ -601,9 +611,9 @@ CONSULTING_ARCHETYPES: dict[str, ArchetypeDefinition] = {
         behavioral_axioms=[
             "Pushes for immediate shareholder value creation",
             "Challenges management underperformance publicly",
-            "Forms coalitions with other dissatisfied stakeholders"
+            "Forms coalitions with other dissatisfied stakeholders",
         ],
-        system_prompt_template=ACTIVIST_INVESTOR_PROMPT
+        system_prompt_template=ACTIVIST_INVESTOR_PROMPT,
     ),
     "union_rep": ArchetypeDefinition(
         id="union_rep",
@@ -619,9 +629,9 @@ CONSULTING_ARCHETYPES: dict[str, ArchetypeDefinition] = {
         behavioral_axioms=[
             "Prioritizes workforce stability and fair treatment",
             "Will escalate to collective action if workforce concerns are ignored",
-            "Seeks negotiated compromises over unilateral decisions"
+            "Seeks negotiated compromises over unilateral decisions",
         ],
-        system_prompt_template=UNION_REP_PROMPT
+        system_prompt_template=UNION_REP_PROMPT,
     ),
     "regulator": ArchetypeDefinition(
         id="regulator",
@@ -637,9 +647,9 @@ CONSULTING_ARCHETYPES: dict[str, ArchetypeDefinition] = {
         behavioral_axioms=[
             "Enforces regulatory compliance without exception",
             "Applies precedent-based reasoning",
-            "Issues warnings before enforcement actions"
+            "Issues warnings before enforcement actions",
         ],
-        system_prompt_template=REGULATOR_PROMPT
+        system_prompt_template=REGULATOR_PROMPT,
     ),
     "competitor_exec": ArchetypeDefinition(
         id="competitor_exec",
@@ -655,9 +665,9 @@ CONSULTING_ARCHETYPES: dict[str, ArchetypeDefinition] = {
         behavioral_axioms=[
             "Responds to market moves with calculated counter-strategies",
             "Analyzes competitor weaknesses before acting",
-            "Protects market share as primary objective"
+            "Protects market share as primary objective",
         ],
-        system_prompt_template=COMPETITOR_EXEC_PROMPT
+        system_prompt_template=COMPETITOR_EXEC_PROMPT,
     ),
     "media_stakeholder": ArchetypeDefinition(
         id="media_stakeholder",
@@ -673,9 +683,9 @@ CONSULTING_ARCHETYPES: dict[str, ArchetypeDefinition] = {
         behavioral_axioms=[
             "Amplifies public interest narratives",
             "Seeks transparency and accountability",
-            "Influences through reputation rather than authority"
+            "Influences through reputation rather than authority",
         ],
-        system_prompt_template=MEDIA_STAKEHOLDER_PROMPT
+        system_prompt_template=MEDIA_STAKEHOLDER_PROMPT,
     ),
     "hr_head": ArchetypeDefinition(
         id="hr_head",
@@ -691,9 +701,9 @@ CONSULTING_ARCHETYPES: dict[str, ArchetypeDefinition] = {
         behavioral_axioms=[
             "Champions culture and employee engagement",
             "Flags integration risks related to talent retention",
-            "Mediates conflicts between functions"
+            "Mediates conflicts between functions",
         ],
-        system_prompt_template=HR_HEAD_PROMPT
+        system_prompt_template=HR_HEAD_PROMPT,
     ),
     "general_counsel": ArchetypeDefinition(
         id="general_counsel",
@@ -709,9 +719,9 @@ CONSULTING_ARCHETYPES: dict[str, ArchetypeDefinition] = {
         behavioral_axioms=[
             "Evaluates all decisions through legal risk lens",
             "Recommends conservative approach when liability is uncertain",
-            "Documents decision rationale for audit trail"
+            "Documents decision rationale for audit trail",
         ],
-        system_prompt_template=GENERAL_COUNSEL_PROMPT
+        system_prompt_template=GENERAL_COUNSEL_PROMPT,
     ),
     "strategy_vp": ArchetypeDefinition(
         id="strategy_vp",
@@ -727,9 +737,9 @@ CONSULTING_ARCHETYPES: dict[str, ArchetypeDefinition] = {
         behavioral_axioms=[
             "Frames decisions in strategic framework context",
             "Champions data-driven strategy over intuition",
-            "Bridges operational and strategic perspectives"
+            "Bridges operational and strategic perspectives",
         ],
-        system_prompt_template=STRATEGY_VP_PROMPT
+        system_prompt_template=STRATEGY_VP_PROMPT,
     ),
     "operations_head": ArchetypeDefinition(
         id="operations_head",
@@ -745,9 +755,9 @@ CONSULTING_ARCHETYPES: dict[str, ArchetypeDefinition] = {
         behavioral_axioms=[
             "Focuses on execution feasibility and operational impact",
             "Raises resource constraints and timeline concerns",
-            "Prioritizes operational continuity during transitions"
+            "Prioritizes operational continuity during transitions",
         ],
-        system_prompt_template=OPERATIONS_HEAD_PROMPT
+        system_prompt_template=OPERATIONS_HEAD_PROMPT,
     ),
     "policymaker": ArchetypeDefinition(
         id="policymaker",
@@ -763,9 +773,9 @@ CONSULTING_ARCHETYPES: dict[str, ArchetypeDefinition] = {
         behavioral_axioms=[
             "Prioritizes public interest and societal welfare above private gain",
             "Exercises regulatory caution to avoid unintended consequences",
-            "Seeks broad stakeholder input before major decisions"
+            "Seeks broad stakeholder input before major decisions",
         ],
-        system_prompt_template=POLICYMAKER_PROMPT
+        system_prompt_template=POLICYMAKER_PROMPT,
     ),
     "lobbyist": ArchetypeDefinition(
         id="lobbyist",
@@ -781,9 +791,9 @@ CONSULTING_ARCHETYPES: dict[str, ArchetypeDefinition] = {
         behavioral_axioms=[
             "Prioritizes industry protection and competitive advantage",
             "Builds coalitions to amplify advocacy influence",
-            "Frames issues to highlight economic and employment impacts"
+            "Frames issues to highlight economic and employment impacts",
         ],
-        system_prompt_template=LOBBYIST_PROMPT
+        system_prompt_template=LOBBYIST_PROMPT,
     ),
     "ngo_representative": ArchetypeDefinition(
         id="ngo_representative",
@@ -799,9 +809,9 @@ CONSULTING_ARCHETYPES: dict[str, ArchetypeDefinition] = {
         behavioral_axioms=[
             "Prioritizes social impact and ethical considerations",
             "Amplifies voices of affected communities and marginalized groups",
-            "Holds power accountable through transparency and advocacy"
+            "Holds power accountable through transparency and advocacy",
         ],
-        system_prompt_template=NGO_REPRESENTATIVE_PROMPT
+        system_prompt_template=NGO_REPRESENTATIVE_PROMPT,
     ),
     "foreign_diplomat": ArchetypeDefinition(
         id="foreign_diplomat",
@@ -817,10 +827,10 @@ CONSULTING_ARCHETYPES: dict[str, ArchetypeDefinition] = {
         behavioral_axioms=[
             "Prioritizes multilateral consensus and diplomatic solutions",
             "Balances national interests with international cooperation",
-            "Follows protocol and respects sovereign equality"
+            "Follows protocol and respects sovereign equality",
         ],
-        system_prompt_template=FOREIGN_DIPLOMAT_PROMPT
-    )
+        system_prompt_template=FOREIGN_DIPLOMAT_PROMPT,
+    ),
 }
 
 
@@ -830,6 +840,12 @@ PLAYBOOK_ROLE_MAPPING: dict[str, tuple[str, dict]] = {
     "Chief Compliance Officer": ("general_counsel", {"hybrid": "cro", "focus": "compliance"}),
     "Business Line Heads": ("operations_head", {"context": "business-unit"}),
     "Market Analysts": ("competitor_exec", {"variant": "analyst", "focus": "market-analysis"}),
-    "Key Customers": ("media_stakeholder", {"variant": "customer", "focus": "customer-perspective"}),
-    "Industry Observer": ("media_stakeholder", {"variant": "observer", "focus": "industry-analysis"})
+    "Key Customers": (
+        "media_stakeholder",
+        {"variant": "customer", "focus": "customer-perspective"},
+    ),
+    "Industry Observer": (
+        "media_stakeholder",
+        {"variant": "observer", "focus": "industry-analysis"},
+    ),
 }

@@ -1,4 +1,5 @@
 import { clsx } from 'clsx';
+import { archetypeColors } from '@/lib/archetypeColors';
 import type { Agent } from '@/lib/types';
 import { User, Brain, Target, Shield, Scale, MessageCircle } from 'lucide-react';
 
@@ -28,6 +29,34 @@ const archetypeLabels: Record<string, string> = {
   skeptic: 'Skeptic',
 };
 
+/** Matches `displayColor` fallback when `agent.color` and archetype map omit a color. */
+const FALLBACK_DISPLAY_COLOR = '#6b7280';
+
+function parseHexRgb(color: string): { r: number; g: number; b: number } | null {
+  if (!color || typeof color !== 'string') return null;
+  let hex = color.trim().replace(/^#/, '');
+  if (hex.length === 3) {
+    if (!/^[0-9a-fA-F]{3}$/.test(hex)) return null;
+    hex = hex
+      .split('')
+      .map((c) => c + c)
+      .join('');
+  }
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) return null;
+  return {
+    r: parseInt(hex.slice(0, 2), 16),
+    g: parseInt(hex.slice(2, 4), 16),
+    b: parseInt(hex.slice(4, 6), 16),
+  };
+}
+
+const isLightColor = (color: string) => {
+  const rgb = parseHexRgb(color);
+  const { r, g, b } = rgb ?? parseHexRgb(FALLBACK_DISPLAY_COLOR)!;
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness > 128;
+};
+
 export function AgentCard({
   agent,
   showDetails = false,
@@ -35,15 +64,21 @@ export function AgentCard({
   onClick,
   isSelected = false,
 }: AgentCardProps) {
+  const Component = onClick ? 'button' : 'div';
+  const buttonProps = onClick ? { type: 'button' as const } : {};
+  const displayColor =
+    agent.color || archetypeColors[agent.archetype] || FALLBACK_DISPLAY_COLOR;
+
   return (
-    <div
+    <Component
       onClick={onClick}
+      {...buttonProps}
       className={clsx(
-        'p-4 rounded-lg border transition-all duration-200',
+        'w-full text-left p-4 rounded-lg border transition-all duration-200',
         isSelected
-          ? 'bg-slate-700 border-accent'
-          : 'bg-slate-800/50 border-slate-700 hover:border-slate-600',
-        onClick && 'cursor-pointer',
+          ? 'bg-background-tertiary border-accent'
+          : 'bg-background-secondary border-border hover:border-border-hover',
+        onClick && 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         className
       )}
     >
@@ -51,25 +86,25 @@ export function AgentCard({
         {/* Avatar */}
         <div
           className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"
-          style={{ backgroundColor: `${agent.color}20` }}
+          style={{ backgroundColor: displayColor }}
         >
-          <span
-            className="text-lg font-bold"
-            style={{ color: agent.color }}
-          >
+          <span className={clsx(
+            "text-lg font-bold shadow-sm",
+            isLightColor(displayColor) ? "text-gray-900" : "text-white"
+          )}>
             {agent.name.charAt(0)}
           </span>
         </div>
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <h4 className="font-semibold text-slate-200 truncate">{agent.name}</h4>
-          <p className="text-sm text-slate-400 truncate">{agent.role}</p>
+          <h4 className="font-semibold text-foreground truncate" title={agent.name}>{agent.name}</h4>
+          <p className="text-sm text-foreground-muted truncate" title={agent.role}>{agent.role}</p>
           
           {/* Archetype Badge */}
           <div
-            className="inline-flex items-center gap-1.5 mt-2 px-2 py-0.5 rounded-full text-xs font-medium"
-            style={{ backgroundColor: `${agent.color}15`, color: agent.color }}
+            className="inline-flex items-center gap-1.5 mt-2 px-2 py-0.5 rounded-full text-xs font-medium border"
+            style={{ borderColor: displayColor, color: displayColor }}
           >
             {archetypeIcons[agent.archetype]}
             {archetypeLabels[agent.archetype]}
@@ -79,31 +114,33 @@ export function AgentCard({
         {/* Status Indicator */}
         <div
           className={clsx(
-            'w-2.5 h-2.5 rounded-full',
-            agent.isActive ? 'bg-green-400' : 'bg-slate-600'
+            'w-2.5 h-2.5 rounded-full flex-shrink-0',
+            agent.isActive ? 'bg-success' : 'bg-foreground-subtle'
           )}
+          aria-label={agent.isActive ? 'Active agent' : 'Inactive agent'}
+          role="status"
         />
       </div>
 
       {showDetails && (
-        <div className="mt-4 space-y-3 pt-4 border-t border-slate-700">
+        <div className="mt-4 space-y-3 pt-4 border-t border-border">
           <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">
+            <p className="text-xs text-foreground-subtle uppercase tracking-wider mb-1">
               Description
             </p>
-            <p className="text-sm text-slate-300">{agent.description}</p>
+            <p className="text-sm text-foreground-muted">{agent.description}</p>
           </div>
 
           {agent.traits.length > 0 && (
             <div>
-              <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">
+              <p className="text-xs text-foreground-subtle uppercase tracking-wider mb-2">
                 Traits
               </p>
               <div className="flex flex-wrap gap-2">
                 {agent.traits.map((trait, idx) => (
                   <span
                     key={idx}
-                    className="px-2 py-1 bg-slate-700 rounded text-xs text-slate-300"
+                    className="px-2 py-1 bg-background-tertiary border border-border rounded text-xs text-foreground-muted"
                   >
                     {trait}
                   </span>
@@ -114,14 +151,14 @@ export function AgentCard({
 
           {agent.goals.length > 0 && (
             <div>
-              <p className="text-xs text-slate-500 uppercase tracking-wider mb-2">
+              <p className="text-xs text-foreground-subtle uppercase tracking-wider mb-2">
                 Goals
               </p>
               <ul className="space-y-1">
                 {agent.goals.map((goal, idx) => (
                   <li
                     key={idx}
-                    className="text-sm text-slate-300 flex items-start gap-2"
+                    className="text-sm text-foreground-muted flex items-start gap-2"
                   >
                     <span className="text-accent mt-1">•</span>
                     {goal}
@@ -132,6 +169,6 @@ export function AgentCard({
           )}
         </div>
       )}
-    </div>
+    </Component>
   );
 }

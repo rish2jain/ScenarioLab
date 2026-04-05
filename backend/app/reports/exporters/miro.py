@@ -143,9 +143,7 @@ class MiroBoardExporter:
         stats["frames_created"] += 1
 
         if report.executive_summary:
-            await self._export_executive_summary(
-                board_id, report.executive_summary, summary_frame_id
-            )
+            await self._export_executive_summary(board_id, report.executive_summary, summary_frame_id)
 
         # Risk Register Frame (middle left)
         risk_frame = MiroFrame(
@@ -159,9 +157,7 @@ class MiroBoardExporter:
         stats["frames_created"] += 1
 
         if report.risk_register:
-            risk_stats = await self._export_risk_register(
-                board_id, report.risk_register, risk_frame_id
-            )
+            risk_stats = await self._export_risk_register(board_id, report.risk_register, risk_frame_id)
             stats["cards_created"] += risk_stats.get("cards", 0)
             stats["sticky_notes_created"] += risk_stats.get("sticky_notes", 0)
             stats["connectors_created"] += risk_stats.get("connectors", 0)
@@ -178,9 +174,7 @@ class MiroBoardExporter:
         stats["frames_created"] += 1
 
         if report.scenario_matrix:
-            scenario_stats = await self._export_scenario_matrix(
-                board_id, report.scenario_matrix, scenario_frame_id
-            )
+            scenario_stats = await self._export_scenario_matrix(board_id, report.scenario_matrix, scenario_frame_id)
             stats["sticky_notes_created"] += scenario_stats.get("sticky_notes", 0)
 
         # Stakeholder Heatmap Frame (middle right)
@@ -245,17 +239,11 @@ class MiroBoardExporter:
         payload = {
             "name": name,
             "description": description,
-            "policy": {
-                "permissionsPolicy": {
-                    "collaborationToolsStartAccess": "all_editors"
-                }
-            },
+            "policy": {"permissionsPolicy": {"collaborationToolsStartAccess": "all_editors"}},
         }
 
         async with httpx.AsyncClient() as client:
-            response = await client.post(
-                url, headers=self.headers, json=payload
-            )
+            response = await client.post(url, headers=self.headers, json=payload)
             response.raise_for_status()
             data = response.json()
             return data["id"]
@@ -289,9 +277,7 @@ class MiroBoardExporter:
         }
 
         async with httpx.AsyncClient() as client:
-            response = await client.post(
-                url, headers=self.headers, json=payload
-            )
+            response = await client.post(url, headers=self.headers, json=payload)
             response.raise_for_status()
             data = response.json()
             return data["id"]
@@ -336,9 +322,7 @@ class MiroBoardExporter:
             payload["parent"] = {"id": parent_id}
 
         async with httpx.AsyncClient() as client:
-            response = await client.post(
-                url, headers=self.headers, json=payload
-            )
+            response = await client.post(url, headers=self.headers, json=payload)
             response.raise_for_status()
             data = response.json()
             return data["id"]
@@ -384,9 +368,7 @@ class MiroBoardExporter:
             payload["parent"] = {"id": parent_id}
 
         async with httpx.AsyncClient() as client:
-            response = await client.post(
-                url, headers=self.headers, json=payload
-            )
+            response = await client.post(url, headers=self.headers, json=payload)
             response.raise_for_status()
             data = response.json()
             return data["id"]
@@ -577,10 +559,7 @@ class MiroBoardExporter:
 
             # Key outcomes for this scenario
             if scenario.outcomes:
-                outcome_text = "\n".join(
-                    f"{k}: {v[:50]}..."
-                    for k, v in list(scenario.outcomes.items())[:3]
-                )
+                outcome_text = "\n".join(f"{k}: {v[:50]}..." for k, v in list(scenario.outcomes.items())[:3])
                 await self._create_sticky_note(
                     board_id,
                     outcome_text,
@@ -593,9 +572,7 @@ class MiroBoardExporter:
 
             # Key drivers
             if scenario.key_drivers:
-                drivers_text = "Drivers:\n" + "\n".join(
-                    f"• {d[:40]}" for d in scenario.key_drivers[:3]
-                )
+                drivers_text = "Drivers:\n" + "\n".join(f"• {d[:40]}" for d in scenario.key_drivers[:3])
                 await self._create_sticky_note(
                     board_id,
                     drivers_text,
@@ -634,15 +611,15 @@ class MiroBoardExporter:
             heatmap.stakeholders,
             key=lambda s: s.influence,
             reverse=True,
-        )[:12]  # Limit to 12
+        )[
+            :12
+        ]  # Limit to 12
 
         # Create sticky notes in a grid
         # Position based on support level (x-axis) and influence (y-axis)
         for stakeholder in sorted_stakeholders:
             # Map position to color
-            color = STAKEHOLDER_POSITION_COLORS.get(
-                stakeholder.position, "yellow"
-            )
+            color = STAKEHOLDER_POSITION_COLORS.get(stakeholder.position, "yellow")
 
             # Calculate position based on support and influence
             support_x = stakeholder.support_level * 300  # -300 to 300
@@ -698,10 +675,7 @@ class MiroBoardExporter:
             await self._create_app_card(
                 board_id,
                 title=f"{rec.priority.upper()}: {rec.title}",
-                description=(
-                    f"{rec.description}\n\n"
-                    f"Rationale: {rec.rationale[:150]}..."
-                ),
+                description=(f"{rec.description}\n\n" f"Rationale: {rec.rationale[:150]}..."),
                 x=x_start + i * spacing,
                 y=y_start,
                 parent_id=parent_frame_id,
@@ -735,10 +709,7 @@ class MiroBoardExporter:
         """
         mock_board = {
             "mock_mode": True,
-            "note": (
-                "Miro API token not configured. "
-                "This is a mock representation."
-            ),
+            "note": ("Miro API token not configured. " "This is a mock representation."),
             "board_name": f"MiroFish Report: {report.simulation_name}",
             "board_url": None,
             "frames": [],
@@ -759,22 +730,23 @@ class MiroBoardExporter:
         }
 
         if report.executive_summary:
-            summary_frame["items"].append({
-                "type": "sticky_note",
-                "content": (
-                    "Summary: "
-                    f"{report.executive_summary.summary_text[:300]}..."
-                ),
-                "color": "light_yellow",
-            })
+            summary_frame["items"].append(
+                {
+                    "type": "sticky_note",
+                    "content": ("Summary: " f"{report.executive_summary.summary_text[:300]}..."),
+                    "color": "light_yellow",
+                }
+            )
 
             findings = report.executive_summary.key_findings[:6]
             for i, finding in enumerate(findings):
-                summary_frame["items"].append({
-                    "type": "sticky_note",
-                    "content": f"Finding {i + 1}: {finding[:150]}...",
-                    "color": "light_green",
-                })
+                summary_frame["items"].append(
+                    {
+                        "type": "sticky_note",
+                        "content": f"Finding {i + 1}: {finding[:150]}...",
+                        "color": "light_green",
+                    }
+                )
 
         mock_board["frames"].append(summary_frame)
         mock_board["stats"]["frames_created"] += 1
@@ -791,25 +763,24 @@ class MiroBoardExporter:
 
         if report.risk_register:
             for risk in report.risk_register.items[:8]:
-                risk_frame["items"].append({
-                    "type": "app_card",
-                    "title": f"Risk: {risk.risk_id}",
-                    "description": (
-                        f"{risk.description[:100]}... "
-                        f"(Impact: {risk.impact})"
-                    ),
-                })
-                risk_frame["items"].append({
-                    "type": "sticky_note",
-                    "content": f"Trigger: {risk.trigger}",
-                    "color": RISK_SEVERITY_COLORS.get(risk.impact, "yellow"),
-                })
+                risk_frame["items"].append(
+                    {
+                        "type": "app_card",
+                        "title": f"Risk: {risk.risk_id}",
+                        "description": (f"{risk.description[:100]}... " f"(Impact: {risk.impact})"),
+                    }
+                )
+                risk_frame["items"].append(
+                    {
+                        "type": "sticky_note",
+                        "content": f"Trigger: {risk.trigger}",
+                        "color": RISK_SEVERITY_COLORS.get(risk.impact, "yellow"),
+                    }
+                )
 
         mock_board["frames"].append(risk_frame)
         mock_board["stats"]["frames_created"] += 1
-        mock_board["stats"]["cards_created"] += sum(
-            1 for item in risk_frame["items"] if item["type"] == "app_card"
-        )
+        mock_board["stats"]["cards_created"] += sum(1 for item in risk_frame["items"] if item["type"] == "app_card")
         mock_board["stats"]["sticky_notes_created"] += sum(
             1 for item in risk_frame["items"] if item["type"] == "sticky_note"
         )
@@ -825,14 +796,13 @@ class MiroBoardExporter:
         if report.scenario_matrix:
             for scenario in report.scenario_matrix.scenarios[:4]:
                 prob_min, prob_max = scenario.probability_range
-                scenario_frame["items"].append({
-                    "type": "sticky_note",
-                    "content": (
-                        f"{scenario.scenario_name}\n"
-                        f"Probability: {prob_min:.0%}-{prob_max:.0%}"
-                    ),
-                    "color": "blue",
-                })
+                scenario_frame["items"].append(
+                    {
+                        "type": "sticky_note",
+                        "content": (f"{scenario.scenario_name}\n" f"Probability: {prob_min:.0%}-{prob_max:.0%}"),
+                        "color": "blue",
+                    }
+                )
 
         mock_board["frames"].append(scenario_frame)
         mock_board["stats"]["frames_created"] += 1
@@ -849,17 +819,17 @@ class MiroBoardExporter:
 
         if report.stakeholder_heatmap:
             for sh in report.stakeholder_heatmap.stakeholders[:12]:
-                stakeholder_frame["items"].append({
-                    "type": "sticky_note",
-                    "content": (
-                        f"{sh.stakeholder} ({sh.role})\n"
-                        f"Influence: {sh.influence:.0%}, "
-                        f"Support: {sh.support_level:+.0%}"
-                    ),
-                    "color": STAKEHOLDER_POSITION_COLORS.get(
-                        sh.position, "yellow"
-                    ),
-                })
+                stakeholder_frame["items"].append(
+                    {
+                        "type": "sticky_note",
+                        "content": (
+                            f"{sh.stakeholder} ({sh.role})\n"
+                            f"Influence: {sh.influence:.0%}, "
+                            f"Support: {sh.support_level:+.0%}"
+                        ),
+                        "color": STAKEHOLDER_POSITION_COLORS.get(sh.position, "yellow"),
+                    }
+                )
 
         mock_board["frames"].append(stakeholder_frame)
         mock_board["stats"]["frames_created"] += 1
@@ -874,28 +844,27 @@ class MiroBoardExporter:
             "items": [],
         }
 
-        has_recs = (
-            report.executive_summary
-            and report.executive_summary.recommendations
-        )
+        has_recs = report.executive_summary and report.executive_summary.recommendations
         if has_recs:
             for rec in report.executive_summary.recommendations[:6]:
-                rec_frame["items"].append({
-                    "type": "app_card",
-                    "title": f"{rec.priority.upper()}: {rec.title}",
-                    "description": f"{rec.description[:150]}...",
-                })
-                rec_frame["items"].append({
-                    "type": "sticky_note",
-                    "content": f"Priority: {rec.priority.upper()}",
-                    "color": PRIORITY_COLORS.get(rec.priority, "yellow"),
-                })
+                rec_frame["items"].append(
+                    {
+                        "type": "app_card",
+                        "title": f"{rec.priority.upper()}: {rec.title}",
+                        "description": f"{rec.description[:150]}...",
+                    }
+                )
+                rec_frame["items"].append(
+                    {
+                        "type": "sticky_note",
+                        "content": f"Priority: {rec.priority.upper()}",
+                        "color": PRIORITY_COLORS.get(rec.priority, "yellow"),
+                    }
+                )
 
         mock_board["frames"].append(rec_frame)
         mock_board["stats"]["frames_created"] += 1
-        mock_board["stats"]["cards_created"] += sum(
-            1 for item in rec_frame["items"] if item["type"] == "app_card"
-        )
+        mock_board["stats"]["cards_created"] += sum(1 for item in rec_frame["items"] if item["type"] == "app_card")
         mock_board["stats"]["sticky_notes_created"] += sum(
             1 for item in rec_frame["items"] if item["type"] == "sticky_note"
         )
@@ -938,9 +907,7 @@ async def export_to_miro(
         logger.error(f"Miro API error: {e}")
         # Fall back to mock mode on auth failure
         if e.response.status_code in (401, 403):
-            logger.warning(
-                "Miro API authentication failed, returning mock export"
-            )
+            logger.warning("Miro API authentication failed, returning mock export")
             exporter = MiroBoardExporter("")
             mock_result = await exporter.export_report_mock(report)
             mock_result["auth_failed"] = True

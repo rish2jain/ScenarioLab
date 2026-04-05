@@ -3,96 +3,16 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, PieChart, Info, Users } from 'lucide-react';
+import { ChevronLeft, PieChart, Info, Users, Database } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { api } from '@/lib/api';
+import type { AttributionResult } from '@/lib/types';
 
-interface AttributionResult {
-  agent_attributions: Record<string, {
-    score: number;
-    confidence: number;
-    contribution_type: string;
-  }>;
-  coalition_attributions?: Record<string, {
-    score: number;
-    members: string[];
-  }>;
-  methodology: string;
-  confidence_interval: {
-    lower: number;
-    upper: number;
-  };
-}
-
-// Mock attribution data
-const mockAttribution: AttributionResult = {
-  agent_attributions: {
-    'agent-1': {
-      score: 28.5,
-      confidence: 0.92,
-      contribution_type: 'strategic_direction',
-    },
-    'agent-2': {
-      score: 22.3,
-      confidence: 0.88,
-      contribution_type: 'risk_assessment',
-    },
-    'agent-3': {
-      score: 19.7,
-      confidence: 0.85,
-      contribution_type: 'mediation',
-    },
-    'agent-4': {
-      score: 15.2,
-      confidence: 0.79,
-      contribution_type: 'operational',
-    },
-    'agent-5': {
-      score: 9.8,
-      confidence: 0.71,
-      contribution_type: 'supporting',
-    },
-    'agent-6': {
-      score: 4.5,
-      confidence: 0.65,
-      contribution_type: 'observing',
-    },
-  },
-  coalition_attributions: {
-    'Pro-Merger Coalition': {
-      score: 48.2,
-      members: ['agent-1', 'agent-3', 'agent-5'],
-    },
-    'Cautious Integration': {
-      score: 37.5,
-      members: ['agent-2', 'agent-4'],
-    },
-  },
-  methodology: 'Shapley value-based attribution with Monte Carlo sampling for coalition analysis',
-  confidence_interval: {
-    lower: 0.82,
-    upper: 0.94,
-  },
-};
-
-const agentNames: Record<string, string> = {
-  'agent-1': 'Sarah Chen (Acquiring CEO)',
-  'agent-2': 'Michael Torres (Target CEO)',
-  'agent-3': 'Jennifer Walsh (Integration Lead)',
-  'agent-4': 'David Park (HR Director)',
-  'agent-5': 'Emma Wilson (Board Member)',
-  'agent-6': 'James Liu (Legal Counsel)',
-};
-
-const agentColors: Record<string, string> = {
-  'agent-1': '#14b8a6',
-  'agent-2': '#f59e0b',
-  'agent-3': '#3b82f6',
-  'agent-4': '#8b5cf6',
-  'agent-5': '#ef4444',
-  'agent-6': '#22c55e',
-};
+const AGENT_COLORS = [
+  '#14b8a6', '#f59e0b', '#3b82f6', '#8b5cf6',
+  '#ef4444', '#22c55e', '#ec4899', '#06b6d4',
+];
 
 export default function AttributionPage() {
   const params = useParams();
@@ -107,13 +27,10 @@ export default function AttributionPage() {
       setIsLoading(true);
       try {
         const result = await api.getAttribution(simulationId);
-        if (result) {
-          setAttribution(result);
-        } else {
-          setAttribution(mockAttribution);
-        }
-      } catch {
-        setAttribution(mockAttribution);
+        setAttribution(result ?? null);
+      } catch (err) {
+        console.error('Failed to load attribution analysis', err);
+        setAttribution(null);
       }
       setIsLoading(false);
     };
@@ -129,10 +46,29 @@ export default function AttributionPage() {
     );
   }
 
-  const sortedAgents = Object.entries(attribution?.agent_attributions || {})
-    .sort((a, b) => b[1].score - a[1].score);
+  const agents = attribution?.agent_attributions ?? [];
 
-  const maxScore = Math.max(...sortedAgents.map(([, data]) => data.score));
+  if (!attribution || agents.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 text-center space-y-4">
+        <div className="w-16 h-16 bg-slate-800/50 rounded-full flex items-center justify-center mb-2">
+          <Database className="w-8 h-8 text-slate-500" />
+        </div>
+        <h2 className="text-xl font-semibold text-slate-200">Insufficient Data for Attribution Analysis</h2>
+        <p className="text-slate-400 max-w-md">
+          Not enough simulation rounds have been completed to generate statistically significant Shapley values.
+          Please wait for the simulation to progress further.
+        </p>
+        <Link href={`/simulations/${simulationId}`}>
+          <Button variant="secondary" className="mt-4">Return to Overview</Button>
+        </Link>
+      </div>
+    );
+  }
+
+  const sortedAgents = [...agents].sort((a, b) => b.attribution_score - a.attribution_score);
+  const maxScore = sortedAgents.length > 0 ? sortedAgents[0].attribution_score : 1;
+  const coalitions = attribution.coalition_attributions ?? [];
 
   return (
     <div className="h-full flex flex-col -m-4 md:-m-6">
@@ -172,48 +108,67 @@ export default function AttributionPage() {
             }
           >
             <div className="space-y-4">
-              {sortedAgents.map(([agentId, data]) => (
-                <div key={agentId} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: agentColors[agentId] || '#94a3b8' }}
-                      />
-                      <span className="text-sm font-medium text-slate-200">
-                        {agentNames[agentId] || agentId}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <span className="text-xs text-slate-400">
-                        {data.contribution_type}
-                      </span>
+              {sortedAgents.map((agent, idx) => {
+                const color = AGENT_COLORS[idx % AGENT_COLORS.length];
+                const pct = agent.attribution_score * 100;
+                const ciPair =
+                  Array.isArray(agent.confidence_interval) &&
+                  agent.confidence_interval.length >= 2
+                    ? agent.confidence_interval
+                    : null;
+                const ciLo = ciPair?.[0];
+                const ciHi = ciPair?.[1];
+                return (
+                  <div key={agent.agent_id} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: color }}
+                        />
+                        <span className="text-sm font-medium text-slate-200">
+                          {agent.agent_name}
+                        </span>
+                        <span className="text-xs text-slate-500">{agent.role}</span>
+                      </div>
                       <span className="text-sm font-bold text-slate-100 w-16 text-right">
-                        {data.score.toFixed(1)}%
+                        {pct.toFixed(1)}%
                       </span>
                     </div>
+                    <div className="h-4 bg-slate-700/50 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${maxScore > 0 ? (agent.attribution_score / maxScore) * 100 : 0}%`,
+                          backgroundColor: color,
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500">
+                        {typeof ciLo === 'number' && typeof ciHi === 'number' ? (
+                          <>
+                            Confidence: {(ciLo * 100).toFixed(0)}%–{(ciHi * 100).toFixed(0)}%
+                          </>
+                        ) : (
+                          <>Confidence: —</>
+                        )}
+                      </span>
+                      {Array.isArray(agent.key_contributions) &&
+                        agent.key_contributions.length > 0 && (
+                        <span className="text-slate-400 truncate max-w-[60%] text-right">
+                          {agent.key_contributions[0]}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="h-4 bg-slate-700/50 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${(data.score / maxScore) * 100}%`,
-                        backgroundColor: agentColors[agentId] || '#94a3b8',
-                      }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500">
-                      Confidence: {(data.confidence * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </Card>
 
           {/* Coalition Attribution */}
-          {attribution?.coalition_attributions && (
+          {coalitions.length > 0 && (
             <Card
               header={
                 <div className="flex items-center gap-2">
@@ -225,57 +180,32 @@ export default function AttributionPage() {
               }
             >
               <div className="space-y-4">
-                {Object.entries(attribution.coalition_attributions).map(([coalition, data]) => (
-                  <div key={coalition} className="p-4 bg-slate-700/20 rounded-lg">
+                {coalitions.map((c) => (
+                  <div key={c.coalition_id} className="p-4 bg-slate-700/20 rounded-lg">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium text-slate-200">{coalition}</span>
-                      <span className="text-lg font-bold text-accent">{data.score.toFixed(1)}%</span>
+                      <span className="font-medium text-slate-200">{c.coalition_id}</span>
+                      <span className="text-lg font-bold text-accent">
+                        {(c.attribution_score * 100).toFixed(1)}%
+                      </span>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {data.members.map((member) => (
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {(c.member_names ?? []).map((name, idx) => (
                         <span
-                          key={member}
+                          key={`${c.coalition_id}-${idx}`}
                           className="px-2 py-1 bg-slate-700/50 rounded text-xs text-slate-300"
                         >
-                          {agentNames[member] || member}
+                          {name}
                         </span>
                       ))}
                     </div>
+                    {c.key_influence && (
+                      <p className="text-sm text-slate-400">{c.key_influence}</p>
+                    )}
                   </div>
                 ))}
               </div>
             </Card>
           )}
-
-          {/* Confidence Interval */}
-          <Card
-            header={
-              <div className="flex items-center gap-2">
-                <Info className="w-5 h-5 text-accent" />
-                <h2 className="text-lg font-semibold text-slate-100">
-                  Confidence Interval
-                </h2>
-              </div>
-            }
-          >
-            <div className="flex items-center gap-4">
-              <div className="flex-1 h-8 bg-slate-700/30 rounded-lg relative overflow-hidden">
-                <div
-                  className="absolute h-full bg-accent/30"
-                  style={{
-                    left: `${(attribution?.confidence_interval.lower || 0) * 100}%`,
-                    right: `${100 - (attribution?.confidence_interval.upper || 1) * 100}%`,
-                  }}
-                />
-                <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-300">
-                  {(attribution?.confidence_interval.lower || 0).toFixed(2)} - {(attribution?.confidence_interval.upper || 1).toFixed(2)}
-                </div>
-              </div>
-            </div>
-            <p className="text-sm text-slate-400 mt-3">
-              95% confidence interval for attribution estimates based on Monte Carlo sampling
-            </p>
-          </Card>
 
           {/* Methodology */}
           <Card>
@@ -284,8 +214,13 @@ export default function AttributionPage() {
               <div>
                 <h3 className="font-medium text-slate-200 mb-1">Methodology</h3>
                 <p className="text-sm text-slate-400">
-                  {attribution?.methodology || 'Shapley value-based attribution analysis'}
+                  {attribution.methodology_note || 'Shapley value-based attribution analysis'}
                 </p>
+                {attribution.outcome_metric && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    Outcome metric: {attribution.outcome_metric}
+                  </p>
+                )}
               </div>
             </div>
           </Card>

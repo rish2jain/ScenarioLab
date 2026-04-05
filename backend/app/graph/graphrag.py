@@ -25,9 +25,7 @@ class GraphRAG:
         self.db = neo4j_client
         self.llm = llm_provider
 
-    async def query(
-        self, question: str, seed_id: str = None, max_depth: int = 2
-    ) -> GraphRAGResult:
+    async def query(self, question: str, seed_id: str = None, max_depth: int = 2) -> GraphRAGResult:
         """Query the knowledge graph with a natural language question."""
         # 1. Use LLM to extract key entities from the question
         key_entities = await self._extract_query_entities(question)
@@ -72,9 +70,7 @@ class GraphRAG:
         all_relationships = []
 
         for node in unique_nodes:
-            subgraph = await self.db.get_subgraph(
-                node.get("id"), depth=max_depth
-            )
+            subgraph = await self.db.get_subgraph(node.get("id"), depth=max_depth)
             for n in subgraph.get("nodes", []):
                 if n.get("id") not in all_nodes:
                     all_nodes[n.get("id")] = n
@@ -93,15 +89,10 @@ class GraphRAG:
                 seen_rels.add(rel_key)
                 unique_relationships.append(rel)
 
-        logger.info(
-            f"Expanded to {len(all_nodes)} nodes and "
-            f"{len(unique_relationships)} relationships"
-        )
+        logger.info(f"Expanded to {len(all_nodes)} nodes and " f"{len(unique_relationships)} relationships")
 
         # 4. Assemble context from retrieved subgraph
-        context = self._assemble_context(
-            list(all_nodes.values()), unique_relationships
-        )
+        context = self._assemble_context(list(all_nodes.values()), unique_relationships)
 
         return GraphRAGResult(
             query=question,
@@ -113,7 +104,7 @@ class GraphRAG:
     async def _extract_query_entities(self, question: str) -> list[str]:
         """Extract key entities from a natural language query."""
         prompt = f"""Extract key entity names from this question.
-Return a JSON array of entity names (organizations, people, products, 
+Return a JSON array of entity names (organizations, people, products,
 locations, etc.) that are explicitly mentioned or strongly implied.
 
 Question: {question}
@@ -124,16 +115,13 @@ Respond with valid JSON array only, e.g.: ["Entity1", "Entity2"]
         messages = [
             LLMMessage(
                 role="system",
-                content="You extract entity names from questions. "
-                        "Return only a JSON array."
+                content="You extract entity names from questions. " "Return only a JSON array.",
             ),
             LLMMessage(role="user", content=prompt),
         ]
 
         try:
-            response = await self.llm.generate(
-                messages=messages, temperature=0.3, max_tokens=500
-            )
+            response = await self.llm.generate(messages=messages, temperature=0.3, max_tokens=500)
 
             content = response.content.strip()
 
@@ -158,9 +146,7 @@ Respond with valid JSON array only, e.g.: ["Entity1", "Entity2"]
             # Fallback: return empty list
             return []
 
-    def _assemble_context(
-        self, nodes: list[dict], relationships: list[dict]
-    ) -> str:
+    def _assemble_context(self, nodes: list[dict], relationships: list[dict]) -> str:
         """Assemble context string from nodes and relationships."""
         context_parts = []
 
@@ -171,9 +157,7 @@ Respond with valid JSON array only, e.g.: ["Entity1", "Entity2"]
                 name = node.get("name", "Unknown")
                 entity_type = node.get("entity_type", "unknown")
                 description = node.get("description", "")
-                context_parts.append(
-                    f"- **{name}** ({entity_type}): {description}"
-                )
+                context_parts.append(f"- **{name}** ({entity_type}): {description}")
 
         # Add relationships section
         if relationships:
@@ -183,30 +167,21 @@ Respond with valid JSON array only, e.g.: ["Entity1", "Entity2"]
             node_names = {n.get("id"): n.get("name", "Unknown") for n in nodes}
 
             for rel in relationships:
-                rel_type = rel.get(
-                    "relationship_type", rel.get("type", "related_to")
-                )
-                source_id = rel.get("source_entity_id") or rel.get(
-                    "start_node_id"
-                ) or rel.get("start")
-                target_id = rel.get("target_entity_id") or rel.get(
-                    "end_node_id"
-                ) or rel.get("end")
+                rel_type = rel.get("relationship_type", rel.get("type", "related_to"))
+                source_id = rel.get("source_entity_id") or rel.get("start_node_id") or rel.get("start")
+                target_id = rel.get("target_entity_id") or rel.get("end_node_id") or rel.get("end")
                 source_name = node_names.get(source_id, "Unknown")
                 target_name = node_names.get(target_id, "Unknown")
                 description = rel.get("description", "")
                 weight = rel.get("weight", 1.0)
 
                 context_parts.append(
-                    f"- {source_name} **{rel_type}** {target_name} "
-                    f"(weight: {weight:.2f}): {description}"
+                    f"- {source_name} **{rel_type}** {target_name} " f"(weight: {weight:.2f}): {description}"
                 )
 
         return "\n".join(context_parts)
 
-    async def get_context_for_agent(
-        self, agent_role: str, seed_id: str, topics: list[str] = None
-    ) -> str:
+    async def get_context_for_agent(self, agent_role: str, seed_id: str, topics: list[str] = None) -> str:
         """Get relevant context from the knowledge graph for an agent."""
         # Query graph for entities relevant to the agent's role
         relevant_nodes = []
@@ -234,9 +209,7 @@ Respond with valid JSON array only, e.g.: ["Entity1", "Entity2"]
                 RETURN n
                 LIMIT 10
                 """
-                results = await self.db.execute_query(
-                    query, {"topic": topic.lower()}
-                )
+                results = await self.db.execute_query(query, {"topic": topic.lower()})
                 relevant_nodes.extend([dict(r["n"]) for r in results])
 
         # Deduplicate
@@ -269,7 +242,7 @@ Respond with valid JSON array only, e.g.: ["Entity1", "Entity2"]
         # Add agent-specific framing
         header = f"""# Knowledge Graph Context for {agent_role}
 
-This context provides relevant entities and relationships from the 
+This context provides relevant entities and relationships from the
 knowledge graph that may inform your decisions and responses.
 
 """

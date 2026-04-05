@@ -108,9 +108,7 @@ async def synthesize_speech(
         return StreamingResponse(
             BytesIO(audio_bytes),
             media_type="audio/mpeg",
-            headers={
-                "Content-Disposition": "attachment; filename=speech.mp3"
-            },
+            headers={"Content-Disposition": "attachment; filename=speech.mp3"},
         )
     except Exception as e:
         logger.error(f"Speech synthesis failed: {e}")
@@ -156,9 +154,7 @@ async def voice_conversation(
         if not history:
             try:
                 await _ensure_initialized()
-                db_history = await _voice_repo.get_conversation(
-                    simulation_id, agent_id
-                )
+                db_history = await _voice_repo.get_conversation(simulation_id, agent_id)
                 if db_history:
                     history = db_history
             except Exception as e:
@@ -184,9 +180,7 @@ async def voice_conversation(
         # Persist conversation to DB
         try:
             await _ensure_initialized()
-            await _voice_repo.save_conversation(
-                simulation_id, agent_id, history
-            )
+            await _voice_repo.save_conversation(simulation_id, agent_id, history)
         except Exception as e:
             logger.warning(f"Failed to persist conversation: {e}")
 
@@ -209,9 +203,7 @@ async def voice_conversation(
         return ConversationResponse(
             transcript=result["transcript"],
             response_text=result["agent_response"],
-            audio_url=(
-                f"/api/simulations/{simulation_id}/voice/audio/{audio_id}"
-            ),
+            audio_url=(f"/api/simulations/{simulation_id}/voice/audio/{audio_id}"),
         )
     except Exception as e:
         logger.error(f"Voice conversation failed: {e}")
@@ -261,9 +253,7 @@ async def get_audio(
     return StreamingResponse(
         BytesIO(audio_bytes),
         media_type="audio/mpeg",
-        headers={
-            "Content-Disposition": f"attachment; filename={audio_id}.mp3"
-        },
+        headers={"Content-Disposition": f"attachment; filename={audio_id}.mp3"},
     )
 
 
@@ -289,18 +279,12 @@ async def clear_conversation_history(
         try:
             await _ensure_initialized()
             await _voice_repo.delete_conversation(simulation_id, agent_id)
-            await _voice_repo.delete_audio_for_simulation(
-                simulation_id, agent_id
-            )
+            await _voice_repo.delete_audio_for_simulation(simulation_id, agent_id)
         except Exception as e:
             logger.warning(f"Failed to clear conversation from DB: {e}")
     else:
         # Clear all for this simulation
-        keys_to_remove = [
-            k
-            for k in _conversation_histories
-            if k.startswith(f"{simulation_id}:")
-        ]
+        keys_to_remove = [k for k in _conversation_histories if k.startswith(f"{simulation_id}:")]
         for key in keys_to_remove:
             _conversation_histories.pop(key, None)
             _agent_prompts.pop(key, None)

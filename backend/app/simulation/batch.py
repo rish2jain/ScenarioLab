@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 class BatchScenario(BaseModel):
     """A single scenario in a batch execution."""
+
     id: str
     name: str
     config: SimulationConfig
@@ -28,6 +29,7 @@ class BatchScenario(BaseModel):
 
 class BatchConfig(BaseModel):
     """Configuration for batch execution of multiple scenarios."""
+
     scenarios: list[BatchScenario]
     monte_carlo_iterations: int = 0  # 0 = single run per scenario
     compare_metrics: list[str] = [
@@ -39,6 +41,7 @@ class BatchConfig(BaseModel):
 
 class ScenarioComparison(BaseModel):
     """Comparison results across multiple scenarios."""
+
     scenarios: list[dict]  # [{id, name, metrics: SimulationMetrics}]
     comparative_summary: dict  # Side-by-side metric comparison
     best_scenario: str | None  # ID of best-performing scenario
@@ -52,22 +55,15 @@ class BatchRunner:
         self.analytics_agent = AnalyticsAgent()
         self.monte_carlo_runner = MonteCarloRunner(simulation_engine)
 
-    async def run_batch(
-        self, config: BatchConfig, on_progress=None
-    ) -> ScenarioComparison:
+    async def run_batch(self, config: BatchConfig, on_progress=None) -> ScenarioComparison:
         """Run all scenarios and produce comparison."""
-        logger.info(
-            f"Starting batch run with {len(config.scenarios)} scenarios"
-        )
+        logger.info(f"Starting batch run with {len(config.scenarios)} scenarios")
         start_time = time.time()
 
         scenario_results: list[dict] = []
 
         for i, scenario in enumerate(config.scenarios):
-            logger.info(
-                f"Running scenario {i + 1}/{len(config.scenarios)}: "
-                f"{scenario.name}"
-            )
+            logger.info(f"Running scenario {i + 1}/{len(config.scenarios)}: " f"{scenario.name}")
 
             try:
                 if config.monte_carlo_iterations > 0:
@@ -78,96 +74,97 @@ class BatchRunner:
                     )
                     mc_result = await self.monte_carlo_runner.run(
                         mc_config,
-                        on_progress=lambda p: on_progress({
-                            "scenario": scenario.name,
-                            "scenario_index": i + 1,
-                            "total_scenarios": len(config.scenarios),
-                            **p,
-                        }) if on_progress else None,
+                        on_progress=lambda p: (
+                            on_progress(
+                                {
+                                    "scenario": scenario.name,
+                                    "scenario_index": i + 1,
+                                    "total_scenarios": len(config.scenarios),
+                                    **p,
+                                }
+                            )
+                            if on_progress
+                            else None
+                        ),
                     )
 
                     # Aggregate metrics from Monte Carlo results
-                    aggregated_metrics = self._aggregate_mc_metrics(
-                        mc_result
-                    )
+                    aggregated_metrics = self._aggregate_mc_metrics(mc_result)
 
-                    scenario_results.append({
-                        "id": scenario.id,
-                        "name": scenario.name,
-                        "description": scenario.description,
-                        "metrics": aggregated_metrics,
-                        "monte_carlo_result": mc_result,
-                    })
+                    scenario_results.append(
+                        {
+                            "id": scenario.id,
+                            "name": scenario.name,
+                            "description": scenario.description,
+                            "metrics": aggregated_metrics,
+                            "monte_carlo_result": mc_result,
+                        }
+                    )
 
                 else:
                     # Single run
                     iter_config = scenario.config.model_copy()
                     iter_config.id = str(uuid.uuid4())
 
-                    sim_state = await self.engine.create_simulation(
-                        iter_config
-                    )
+                    sim_state = await self.engine.create_simulation(iter_config)
                     await self.engine.run_simulation(sim_state.config.id)
 
-                    final_state = await self.engine.get_simulation(
-                        sim_state.config.id
-                    )
+                    final_state = await self.engine.get_simulation(sim_state.config.id)
 
                     if final_state and final_state.status.value == "completed":
                         aa = self.analytics_agent
                         metrics = await aa.analyze_simulation(final_state)
 
-                        scenario_results.append({
-                            "id": scenario.id,
-                            "name": scenario.name,
-                            "description": scenario.description,
-                            "metrics": metrics,
-                        })
+                        scenario_results.append(
+                            {
+                                "id": scenario.id,
+                                "name": scenario.name,
+                                "description": scenario.description,
+                                "metrics": metrics,
+                            }
+                        )
                     else:
-                        scenario_results.append({
-                            "id": scenario.id,
-                            "name": scenario.name,
-                            "description": scenario.description,
-                            "metrics": None,
-                            "error": "Simulation did not complete",
-                        })
+                        scenario_results.append(
+                            {
+                                "id": scenario.id,
+                                "name": scenario.name,
+                                "description": scenario.description,
+                                "metrics": None,
+                                "error": "Simulation did not complete",
+                            }
+                        )
 
                 # Report progress
                 if on_progress:
-                    await on_progress({
-                        "scenario_index": i + 1,
-                        "total_scenarios": len(config.scenarios),
-                        "percentage": round(
-                            (i + 1) / len(config.scenarios) * 100, 1
-                        ),
-                        "current_scenario": scenario.name,
-                    })
+                    await on_progress(
+                        {
+                            "scenario_index": i + 1,
+                            "total_scenarios": len(config.scenarios),
+                            "percentage": round((i + 1) / len(config.scenarios) * 100, 1),
+                            "current_scenario": scenario.name,
+                        }
+                    )
 
             except Exception as e:
                 logger.error(f"Scenario {scenario.name} failed: {e}")
-                scenario_results.append({
-                    "id": scenario.id,
-                    "name": scenario.name,
-                    "description": scenario.description,
-                    "metrics": None,
-                    "error": str(e),
-                })
+                scenario_results.append(
+                    {
+                        "id": scenario.id,
+                        "name": scenario.name,
+                        "description": scenario.description,
+                        "metrics": None,
+                        "error": str(e),
+                    }
+                )
 
         # Generate comparative summary
-        comparative_summary = self.compare_scenarios(
-            scenario_results, config.compare_metrics
-        )
+        comparative_summary = self.compare_scenarios(scenario_results, config.compare_metrics)
 
         # Determine best scenario
-        best_scenario = self._determine_best_scenario(
-            scenario_results, config.compare_metrics
-        )
+        best_scenario = self._determine_best_scenario(scenario_results, config.compare_metrics)
 
         total_duration = time.time() - start_time
-        logger.info(
-            f"Batch run complete in {total_duration:.1f}s. "
-            f"Best scenario: {best_scenario}"
-        )
+        logger.info(f"Batch run complete in {total_duration:.1f}s. " f"Best scenario: {best_scenario}")
 
         return ScenarioComparison(
             scenarios=scenario_results,
@@ -175,24 +172,18 @@ class BatchRunner:
             best_scenario=best_scenario,
         )
 
-    def _aggregate_mc_metrics(
-        self, mc_result: MonteCarloResult
-    ) -> SimulationMetrics:
+    def _aggregate_mc_metrics(self, mc_result: MonteCarloResult) -> SimulationMetrics:
         """Aggregate metrics from Monte Carlo results."""
         # Use confidence interval means as aggregated values
         ci = mc_result.confidence_intervals
 
         return SimulationMetrics(
             simulation_id=f"mc_aggregate_{mc_result.config.base_config.id}",
-            compliance_violation_rate=ci.get(
-                "compliance_violation_rate", {}
-            ).get("mean", 0.0),
+            compliance_violation_rate=ci.get("compliance_violation_rate", {}).get("mean", 0.0),
             time_to_consensus=None,  # Aggregate doesn't have single value
             sentiment_trajectory=[],  # Not aggregated
             role_polarization_index={},  # Not aggregated
-            policy_adoption_rate=ci.get("policy_adoption_rate", {}).get(
-                "mean", 0.0
-            ),
+            policy_adoption_rate=ci.get("policy_adoption_rate", {}).get("mean", 0.0),
             coalition_formation_events=[],
             key_turning_points=[],
             agent_activity_scores={},
@@ -220,17 +211,17 @@ class BatchRunner:
                 if metrics:
                     value = getattr(metrics, metric, None)
                     if value is not None:
-                        metric_values.append({
-                            "scenario_id": result["id"],
-                            "scenario_name": result["name"],
-                            "value": value,
-                        })
+                        metric_values.append(
+                            {
+                                "scenario_id": result["id"],
+                                "scenario_name": result["name"],
+                                "value": value,
+                            }
+                        )
 
             if metric_values:
                 # Sort by value (lower is better for time, violations)
-                sorted_values = sorted(
-                    metric_values, key=lambda x: x["value"]
-                )
+                sorted_values = sorted(metric_values, key=lambda x: x["value"])
 
                 comparison["by_metric"][metric] = {
                     "values": metric_values,
@@ -249,9 +240,7 @@ class BatchRunner:
                     comparison["rankings"][item["scenario_id"]][metric] = rank
 
         # Overall summary
-        successful_runs = sum(
-            1 for r in results if r.get("metrics") is not None
-        )
+        successful_runs = sum(1 for r in results if r.get("metrics") is not None)
         comparison["summary"] = {
             "total_scenarios": len(results),
             "successful_runs": successful_runs,
@@ -277,16 +266,16 @@ class BatchRunner:
                 if metrics:
                     value = getattr(metrics, metric, None)
                     if value is not None:
-                        metric_values.append({
-                            "scenario_id": result["id"],
-                            "value": value,
-                        })
+                        metric_values.append(
+                            {
+                                "scenario_id": result["id"],
+                                "value": value,
+                            }
+                        )
 
             if metric_values:
                 # Sort by value (lower is better)
-                sorted_values = sorted(
-                    metric_values, key=lambda x: x["value"]
-                )
+                sorted_values = sorted(metric_values, key=lambda x: x["value"])
 
                 # Assign scores (inverse rank)
                 n = len(sorted_values)

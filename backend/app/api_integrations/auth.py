@@ -2,15 +2,17 @@
 
 import asyncio
 import logging
+import secrets
 import uuid
 from datetime import datetime
 from typing import Any
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 
 from app.api_integrations.database import api_key_repo, ensure_tables
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -19,14 +21,10 @@ class APIKey(BaseModel):
     """An API key with metadata."""
 
     key_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    key: str = Field(
-        default_factory=lambda: str(uuid.uuid4()).replace("-", "")
-    )
+    key: str = Field(default_factory=lambda: str(uuid.uuid4()).replace("-", ""))
     name: str
     permissions: list[str] = []  # e.g. ["read:simulations"]
-    created_at: str = Field(
-        default_factory=lambda: datetime.utcnow().isoformat()
-    )
+    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     last_used_at: str | None = None
     active: bool = True
     metadata: dict[str, Any] = {}
@@ -127,9 +125,7 @@ class APIKeyManager:
         api_key.last_used_at = datetime.utcnow().isoformat()
 
         # Update last used in DB (async fire-and-forget)
-        asyncio.create_task(
-            api_key_repo.update_last_used(api_key.key_id)
-        )
+        asyncio.create_task(api_key_repo.update_last_used(api_key.key_id))
 
         return api_key
 
@@ -167,20 +163,18 @@ class APIKeyManager:
         result = []
         for api_key in self._keys.values():
             # Mask the key value
-            masked_key = (
-                api_key.key[:4] + "..." + api_key.key[-4:]
-                if len(api_key.key) > 8
-                else "****"
+            masked_key = api_key.key[:4] + "..." + api_key.key[-4:] if len(api_key.key) > 8 else "****"
+            result.append(
+                {
+                    "key_id": api_key.key_id,
+                    "name": api_key.name,
+                    "key": masked_key,
+                    "permissions": api_key.permissions,
+                    "created_at": api_key.created_at,
+                    "last_used_at": api_key.last_used_at,
+                    "active": api_key.active,
+                }
             )
-            result.append({
-                "key_id": api_key.key_id,
-                "name": api_key.name,
-                "key": masked_key,
-                "permissions": api_key.permissions,
-                "created_at": api_key.created_at,
-                "last_used_at": api_key.last_used_at,
-                "active": api_key.active,
-            })
         return result
 
     async def get_key(self, key_id: str) -> APIKey | None:
@@ -201,6 +195,33 @@ api_key_manager = APIKeyManager()
 
 # API Key header scheme
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+async def require_admin_api_key(
+    authorization: str | None = Header(None),
+) -> None:
+    """Require ``Authorization: Bearer`` matching ``settings.admin_api_key``."""
+    expected = (settings.admin_api_key or "").strip()
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="API key management is disabled. Set ADMIN_API_KEY on the server.",
+        )
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization: Bearer <admin key> required for API key management.",
+        )
+    # Prefix length matches case-insensitive "bearer " (validated above).
+    token = authorization.removeprefix(authorization[:7]).strip()
+    if not secrets.compare_digest(
+        token.encode("utf-8"),
+        expected.encode("utf-8"),
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid admin API key.",
+        )
 
 
 async def verify_api_key(
@@ -264,6 +285,7 @@ def require_permission(permission: str):
     Returns:
         Dependency function
     """
+
     async def permission_checker(
         api_key: APIKey = Depends(verify_api_key),
     ) -> APIKey:

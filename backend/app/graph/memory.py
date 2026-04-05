@@ -59,12 +59,8 @@ class MemoryManager:
 
         try:
             # Ensure agent and simulation nodes exist
-            await self.db.execute_query(
-                create_agent_query, {"agent_id": entry.agent_id}
-            )
-            await self.db.execute_query(
-                create_sim_query, {"simulation_id": entry.simulation_id}
-            )
+            await self.db.execute_query(create_agent_query, {"agent_id": entry.agent_id})
+            await self.db.execute_query(create_sim_query, {"simulation_id": entry.simulation_id})
 
             # Create memory node
             await self.db.execute_query(
@@ -154,9 +150,7 @@ class MemoryManager:
             logger.error(f"Failed to get memories: {e}")
             return []
 
-    async def get_recent_memories(
-        self, agent_id: str, simulation_id: str, rounds: int = 3
-    ) -> list[MemoryEntry]:
+    async def get_recent_memories(self, agent_id: str, simulation_id: str, rounds: int = 3) -> list[MemoryEntry]:
         """Get memories from the last N rounds."""
         # First get the current round number
         query = """
@@ -166,9 +160,7 @@ class MemoryManager:
         """
 
         try:
-            result = await self.db.execute_query(
-                query, {"agent_id": agent_id, "simulation_id": simulation_id}
-            )
+            result = await self.db.execute_query(query, {"agent_id": agent_id, "simulation_id": simulation_id})
             max_round = result[0].get("max_round", 0) if result else 0
 
             min_round = max(0, max_round - rounds + 1)
@@ -211,9 +203,7 @@ class MemoryManager:
             logger.error(f"Failed to get recent memories: {e}")
             return []
 
-    async def search_memories(
-        self, agent_id: str, simulation_id: str, query: str
-    ) -> list[MemoryEntry]:
+    async def search_memories(self, agent_id: str, simulation_id: str, query: str) -> list[MemoryEntry]:
         """Search memories by content relevance."""
         # Simple keyword matching; can be enhanced with embeddings later
         keywords = query.lower().split()
@@ -221,7 +211,7 @@ class MemoryManager:
         query_cypher = """
         MATCH (agent:Agent {id: $agent_id})-[:HAS_MEMORY]->(m:Memory)
         MATCH (m)-[:IN_SIMULATION]->(sim:Simulation {id: $simulation_id})
-        WHERE ANY(keyword IN $keywords WHERE 
+        WHERE ANY(keyword IN $keywords WHERE
                   toLower(m.content) CONTAINS keyword)
         RETURN m
         ORDER BY m.importance DESC, m.round_number DESC
@@ -268,17 +258,13 @@ class MemoryManager:
         """
 
         try:
-            await self.db.execute_query(
-                query, {"memory_id": memory_id, "importance": importance}
-            )
+            await self.db.execute_query(query, {"memory_id": memory_id, "importance": importance})
             logger.info(f"Updated importance for memory {memory_id}")
         except Exception as e:
             logger.error(f"Failed to update memory importance: {e}")
             raise
 
-    async def get_shared_memories(
-        self, agent_ids: list[str], simulation_id: str
-    ) -> list[MemoryEntry]:
+    async def get_shared_memories(self, agent_ids: list[str], simulation_id: str) -> list[MemoryEntry]:
         """Get memories shared/visible to multiple agents."""
         # Find memories that are linked to multiple agents
         # This could be through shared observations or interactions
@@ -298,9 +284,7 @@ class MemoryManager:
         """
 
         try:
-            results = await self.db.execute_query(
-                query, {"agent_ids": agent_ids, "simulation_id": simulation_id}
-            )
+            results = await self.db.execute_query(query, {"agent_ids": agent_ids, "simulation_id": simulation_id})
 
             memories = []
             for record in results:
@@ -311,14 +295,8 @@ class MemoryManager:
                 RETURN agent.id as agent_id
                 LIMIT 1
                 """
-                agent_result = await self.db.execute_query(
-                    agent_query, {"memory_id": node.get("id")}
-                )
-                agent_id = (
-                    agent_result[0].get("agent_id", "unknown")
-                    if agent_result
-                    else "unknown"
-                )
+                agent_result = await self.db.execute_query(agent_query, {"memory_id": node.get("id")})
+                agent_id = agent_result[0].get("agent_id", "unknown") if agent_result else "unknown"
 
                 memories.append(
                     MemoryEntry(

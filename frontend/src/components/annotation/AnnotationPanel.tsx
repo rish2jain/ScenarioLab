@@ -28,7 +28,6 @@ export function AnnotationPanel({
     getAllAnnotations,
     removeAnnotation,
     loadAnnotations,
-    isLoading,
   } = useAnnotationStore();
 
   // Load annotations from backend on mount

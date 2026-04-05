@@ -12,6 +12,29 @@ from app.llm.provider import LLMMessage
 logger = logging.getLogger(__name__)
 
 
+def _format_type_entries(
+    items: list,
+    *,
+    max_items: int = 20,
+    desc_len: int = 120,
+) -> list[str]:
+    """Build formatted lines from ontology type entries (dict or str).
+
+    Dict entries use ``name`` and a truncated ``description``; the result is
+    ``name: description`` with trailing ``": "`` removed when description is empty.
+    """
+    parts: list[str] = []
+    for item in items[:max_items]:
+        if isinstance(item, dict):
+            n = item.get("name", "")
+            d = (item.get("description") or "")[:desc_len]
+            if n:
+                parts.append(f"{n}: {d}".strip(": "))
+        elif isinstance(item, str):
+            parts.append(item)
+    return parts
+
+
 class Entity(BaseModel):
     """Represents an extracted entity."""
 
@@ -75,22 +98,55 @@ class EntityExtractor:
         "related_to",
     ]
 
+    # Minimum SequenceMatcher ratio to treat two same-type entities as duplicates
+    # when merging chunk extraction results.
+    SIMILARITY_THRESHOLD: float = 0.85
+
     def __init__(self, llm_provider):
         self.llm = llm_provider
 
-    def _build_extraction_prompt(self, text: str) -> str:
+    def _ontology_prompt_block(self, ontology: dict | None) -> str:
+        """Optional block from GeneratedOntology (model_dump) for guided extraction."""
+        if not ontology:
+            return ""
+        et = ontology.get("entity_types") or []
+        ed = ontology.get("edge_types") or []
+        lines: list[str] = []
+        if et:
+            parts = _format_type_entries(et)
+            if parts:
+                lines.append(
+                    "ONTOLOGY ENTITY TYPES (prefer these labels when they fit; "
+                    "otherwise map to the standard entity types below):\n" + "\n".join(f"- {p}" for p in parts)
+                )
+        if ed:
+            eparts = _format_type_entries(ed)
+            if eparts:
+                lines.append(
+                    "ONTOLOGY RELATIONSHIP TYPES (prefer these labels when they fit):\n"
+                    + "\n".join(f"- {p}" for p in eparts)
+                )
+        summary = ontology.get("analysis_summary")
+        if isinstance(summary, str) and summary.strip():
+            lines.append(f"ONTOLOGY CONTEXT: {summary.strip()[:800]}")
+        if not lines:
+            return ""
+        return "\n\n".join(lines) + "\n\n"
+
+    def _build_extraction_prompt(self, text: str, *, ontology: dict | None = None) -> str:
         """Build the prompt for entity and relationship extraction."""
         entity_types_str = ", ".join(self.ENTITY_TYPES)
         rel_types_str = ", ".join(self.RELATIONSHIP_TYPES)
+        onto_block = self._ontology_prompt_block(ontology)
 
-        prompt = f"""You are an expert information extraction system for 
+        prompt = f"""You are an expert information extraction system for
 strategy consulting analysis.
 
-Extract entities and relationships from the following text. Focus on 
-entities relevant to business strategy, competitive analysis, and 
+Extract entities and relationships from the following text. Focus on
+entities relevant to business strategy, competitive analysis, and
 organizational dynamics.
 
-Entity Types to extract: {entity_types_str}
+{onto_block}Entity Types to extract: {entity_types_str}
 
 Relationship Types to extract: {rel_types_str}
 
@@ -102,7 +158,7 @@ For each entity, provide:
 
 For each relationship, provide:
 - source_entity_name: Name of the source entity
-- target_entity_name: Name of the target entity  
+- target_entity_name: Name of the target entity
 - relationship_type: One of the types listed above
 - description: Brief description of the relationship
 - weight: Importance score from 0.0 to 1.0
@@ -133,18 +189,17 @@ Respond with valid JSON in this exact format:
   ]
 }}
 
-Extract as many meaningful entities and relationships as possible. 
+Extract as many meaningful entities and relationships as possible.
 Ensure all relationship source/target names match extracted entity names.
 """
         return prompt
 
-    async def extract_from_text(self, text: str) -> ExtractionResult:
+    async def extract_from_text(self, text: str, *, ontology: dict | None = None) -> ExtractionResult:
         """Extract entities and relationships from a text chunk."""
-        prompt = self._build_extraction_prompt(text)
+        prompt = self._build_extraction_prompt(text, ontology=ontology)
 
         messages = [
-            LLMMessage(role="system", content="You are a precise "
-                       "information extraction system."),
+            LLMMessage(role="system", content="You are a precise " "information extraction system."),
             LLMMessage(role="user", content=prompt),
         ]
 
@@ -210,14 +265,9 @@ Ensure all relationship source/target names match extracted entity names.
                         f"{rel_data.get('target_entity_name')})"
                     )
 
-            logger.info(
-                f"Extracted {len(entities)} entities and "
-                f"{len(relationships)} relationships"
-            )
+            logger.info(f"Extracted {len(entities)} entities and " f"{len(relationships)} relationships")
 
-            return ExtractionResult(
-                entities=entities, relationships=relationships
-            )
+            return ExtractionResult(entities=entities, relationships=relationships)
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse LLM response as JSON: {e}")
@@ -227,15 +277,13 @@ Ensure all relationship source/target names match extracted entity names.
             logger.error(f"Entity extraction error: {e}")
             return ExtractionResult(entities=[], relationships=[])
 
-    async def extract_from_chunks(
-        self, chunks: list[str]
-    ) -> ExtractionResult:
+    async def extract_from_chunks(self, chunks: list[str], *, ontology: dict | None = None) -> ExtractionResult:
         """Extract from multiple chunks and merge/deduplicate."""
         results = []
 
         for i, chunk in enumerate(chunks):
             logger.info(f"Processing chunk {i + 1}/{len(chunks)}")
-            result = await self.extract_from_text(chunk)
+            result = await self.extract_from_text(chunk, ontology=ontology)
             results.append(result)
 
         return await self.merge_results(results)
@@ -244,18 +292,13 @@ Ensure all relationship source/target names match extracted entity names.
         """Calculate string similarity."""
         return SequenceMatcher(None, s1.lower(), s2.lower()).ratio()
 
-    async def merge_results(
-        self, results: list[ExtractionResult]
-    ) -> ExtractionResult:
+    async def merge_results(self, results: list[ExtractionResult]) -> ExtractionResult:
         """Merge multiple extraction results, deduplicating entities."""
         merged_entities: list[Entity] = []
         merged_relationships: list[Relationship] = []
 
         # Track entity IDs for relationship mapping
         name_to_merged_entity: dict[str, Entity] = {}
-
-        # Similarity threshold for deduplication
-        SIMILARITY_THRESHOLD = 0.85
 
         for result in results:
             # Merge entities
@@ -265,9 +308,7 @@ Ensure all relationship source/target names match extracted entity names.
                 for existing in merged_entities:
                     if (
                         entity.entity_type == existing.entity_type
-                        and self._similarity(
-                            entity.name, existing.name
-                        ) > SIMILARITY_THRESHOLD
+                        and self._similarity(entity.name, existing.name) > self.SIMILARITY_THRESHOLD
                     ):
                         is_duplicate = True
                         name_to_merged_entity[entity.name.lower()] = existing
@@ -295,10 +336,8 @@ Ensure all relationship source/target names match extracted entity names.
                     for existing in merged_relationships:
                         if (
                             rel.source_entity_id == existing.source_entity_id
-                            and rel.target_entity_id
-                            == existing.target_entity_id
-                            and rel.relationship_type
-                            == existing.relationship_type
+                            and rel.target_entity_id == existing.target_entity_id
+                            and rel.relationship_type == existing.relationship_type
                         ):
                             is_duplicate = True
                             break
@@ -306,11 +345,6 @@ Ensure all relationship source/target names match extracted entity names.
                     if not is_duplicate:
                         merged_relationships.append(rel)
 
-        logger.info(
-            f"Merged results: {len(merged_entities)} entities, "
-            f"{len(merged_relationships)} relationships"
-        )
+        logger.info(f"Merged results: {len(merged_entities)} entities, " f"{len(merged_relationships)} relationships")
 
-        return ExtractionResult(
-            entities=merged_entities, relationships=merged_relationships
-        )
+        return ExtractionResult(entities=merged_entities, relationships=merged_relationships)

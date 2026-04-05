@@ -49,6 +49,7 @@ yarn-error.log*
 # Next.js
 .next/
 out/
+*.tsbuildinfo
 
 # Neo4j
 neo4j_data/
@@ -75,3 +76,5 @@ coverage/
 # Build outputs
 dist/
 build/
+playwright-report/
+test-results/

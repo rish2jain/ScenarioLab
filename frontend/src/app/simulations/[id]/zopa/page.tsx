@@ -34,16 +34,24 @@ export default function ZOPAPage() {
     const loadZOPA = async () => {
       setIsLoading(true);
       setError(null);
-      const data = await api.analyzeZOPA(simulationId);
-      if (data) {
-        setZopaResult(data);
-      } else {
-        setError('Failed to analyze ZOPA. Make sure the simulation is a negotiation type.');
+      try {
+        const data = await api.analyzeZOPA(simulationId);
+        if (data) {
+          setZopaResult(data);
+        } else {
+          setError('Failed to analyze ZOPA. Make sure the simulation is a negotiation type.');
+        }
+      } catch (err) {
+        setZopaResult(null);
+        setError(
+          err instanceof Error ? err.message : 'Failed to analyze ZOPA.'
+        );
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
-    loadZOPA();
+    void loadZOPA();
   }, [simulationId]);
 
   if (isLoading) {
@@ -203,6 +211,23 @@ export default function ZOPAPage() {
           <div className="mt-4 p-4 bg-green-900/30 border border-green-700/50 rounded-lg">
             <div className="text-sm text-green-400 mb-1">Overlap Description</div>
             <div className="text-slate-200">{zopaResult.zopa_boundaries.overlap_description}</div>
+          </div>
+        </Card>
+      )}
+      {zopaResult.zopa_exists && !zopaResult.zopa_boundaries && (
+        <Card
+          padding="lg"
+          className="border-amber-500/30 bg-amber-950/10 shadow-amber-900/20"
+        >
+          <div className="flex flex-col items-center justify-center p-6 text-center">
+            <AlertTriangle
+              className="w-10 h-10 text-amber-400/80 mb-3"
+              aria-hidden
+            />
+            <h3 className="text-lg font-semibold text-amber-100/95">Boundaries Unavailable</h3>
+            <p className="text-sm text-slate-400 mt-2 max-w-md">
+              A Zone of Possible Agreement appears to exist, but numeric boundaries could not be derived from the current inputs. Try adding clearer reservation prices or constraints, or re-run after more negotiation rounds.
+            </p>
           </div>
         </Card>
       )}

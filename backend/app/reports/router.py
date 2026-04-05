@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel
 
 from app.config import settings
+from app.db.reports import ReportRepository
 from app.llm.factory import get_llm_provider
 from app.playbooks.manager import get_all_playbooks
 from app.reports.annotations import (
@@ -23,7 +24,6 @@ from app.reports.exporters import (
     export_to_pdf,
 )
 from app.reports.models import ReviewCheckpoint, SimulationReport
-from app.db.reports import ReportRepository
 from app.reports.report_agent import ReportAgent
 from app.simulation.engine import simulation_engine
 
@@ -109,9 +109,7 @@ async def _get_or_generate_report(
                 report.id,
                 exc_info=True,
             )
-        logger.info(
-            f"Report {report.id} done for sim {simulation_id}"
-        )
+        logger.info(f"Report {report.id} done for sim {simulation_id}")
         return report, True
     except Exception as e:
         logger.error(f"Error generating report: {e}")
@@ -160,9 +158,7 @@ async def generate_report(simulation_id: str, response: Response):
         simulation_id,
         generate_if_missing=True,
     )
-    response.status_code = (
-        status.HTTP_201_CREATED if was_created else status.HTTP_200_OK
-    )
+    response.status_code = status.HTTP_201_CREATED if was_created else status.HTTP_200_OK
     return report
 
 
@@ -195,13 +191,7 @@ async def get_dashboard_stats():
     playbooks = get_all_playbooks()
     return {
         "totalSimulations": len(simulations),
-        "activeSimulations": len(
-            [
-                sim
-                for sim in simulations
-                if sim.get("status") in {"running", "paused"}
-            ]
-        ),
+        "activeSimulations": len([sim for sim in simulations if sim.get("status") in {"running", "paused"}]),
         "reportsGenerated": len(_report_store),
         "playbooksAvailable": len(playbooks),
         "generatedAt": datetime.now(timezone.utc).isoformat(),
@@ -271,9 +261,7 @@ async def list_reports():
             if meta["id"] not in seen_ids:
                 db_data = await _report_repo.get(meta["id"])
                 if db_data:
-                    report = SimulationReport.model_validate(
-                        db_data
-                    )
+                    report = SimulationReport.model_validate(db_data)
                     _report_store[report.id] = report
                     results.append(report)
     except Exception:
@@ -359,10 +347,7 @@ async def export_report(report_id: str, format: str):
                     "mock_mode": True,
                     "note": result.get("note"),
                     "board_structure": result,
-                    "message": (
-                        "Miro export is in mock mode. "
-                        "Configure MIRO_API_TOKEN to create real boards."
-                    ),
+                    "message": ("Miro export is in mock mode. " "Configure MIRO_API_TOKEN to create real boards."),
                 }
             return {
                 "mock_mode": False,
@@ -379,8 +364,7 @@ async def export_report(report_id: str, format: str):
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported format: {format}. "
-                f"Supported formats: json, markdown, pdf, miro",
+                detail=f"Unsupported format: {format}. " f"Supported formats: json, markdown, pdf, miro",
             )
 
     except Exception as e:
@@ -423,9 +407,7 @@ async def export_interactive_deck(
 
     try:
         # Get simulation state for additional context
-        sim_state = await simulation_engine.get_simulation(
-            report.simulation_id
-        )
+        sim_state = await simulation_engine.get_simulation(report.simulation_id)
 
         html = await do_export(
             report=report,
@@ -536,9 +518,7 @@ async def update_checkpoint(
 
     # Update report status if all checkpoints approved
     if request.status == "approved":
-        all_approved = all(
-            cp.status == "approved" for cp in report.checkpoints
-        )
+        all_approved = all(cp.status == "approved" for cp in report.checkpoints)
         if all_approved and report.checkpoints:
             report.status = "final"
     elif request.status == "revision_requested":

@@ -47,9 +47,7 @@ class AugmentRequest(BaseModel):
 @router.post("/company")
 async def research_company(body: CompanyRequest) -> dict:
     """Research a company: web search + SEC filings + synthesis."""
-    return await research_service.research_company(
-        body.company_name, include_filings=body.include_filings
-    )
+    return await research_service.research_company(body.company_name, include_filings=body.include_filings)
 
 
 @router.post("/industry")
@@ -61,25 +59,19 @@ async def research_industry(body: IndustryRequest) -> dict:
 @router.post("/regulation")
 async def research_regulation(body: RegulationRequest) -> dict:
     """Research a regulation: text, requirements, enforcement precedent."""
-    return await research_service.research_regulation(
-        body.regulation_name, jurisdiction=body.jurisdiction
-    )
+    return await research_service.research_regulation(body.regulation_name, jurisdiction=body.jurisdiction)
 
 
 @router.post("/executive")
 async def research_executive(body: ExecutiveRequest) -> dict:
     """Research an executive's public behavior, statements, and decision patterns."""
-    return await research_service.research_executive(
-        body.name, company=body.company, role=body.role
-    )
+    return await research_service.research_executive(body.name, company=body.company, role=body.role)
 
 
 @router.post("/historical-case")
 async def research_historical_case(body: HistoricalCaseRequest) -> dict:
     """Research a historical business/regulatory case for backtesting."""
-    return await research_service.research_historical_case(
-        body.case_description, tags=body.tags
-    )
+    return await research_service.research_historical_case(body.case_description, tags=body.tags)
 
 
 @router.post("/augment")

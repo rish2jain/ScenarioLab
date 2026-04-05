@@ -1,5 +1,7 @@
 """Neo4j database client with connection pooling."""
 
+from __future__ import annotations
+
 import logging
 import re
 
@@ -19,11 +21,31 @@ def _validate_identifier(value: str, kind: str = "identifier") -> str:
     in Cypher, so they must be validated before interpolation.
     """
     if not _CYPHER_IDENTIFIER_RE.match(value):
-        raise ValueError(
-            f"Invalid Cypher {kind}: {value!r}. "
-            "Must match [A-Za-z_][A-Za-z0-9_]*"
-        )
+        raise ValueError(f"Invalid Cypher {kind}: {value!r}. " "Must match [A-Za-z_][A-Za-z0-9_]*")
     return value
+
+
+# Set by :func:`register_application_neo4j_client` from ``main`` lifespan so graph
+# code uses the same connected pool as startup — not a separate lazy singleton.
+_application_neo4j_client: Neo4jClient | None = None
+_application_neo4j_registered: bool = False
+
+
+def register_application_neo4j_client(client: Neo4jClient | None) -> None:
+    """Store the Neo4j client created at app startup (or None if unavailable)."""
+    global _application_neo4j_client, _application_neo4j_registered
+    _application_neo4j_client = client
+    _application_neo4j_registered = True
+
+
+def get_application_neo4j_client() -> Neo4jClient | None:
+    """Return the app-lifecycle Neo4j client, if startup registered one."""
+    return _application_neo4j_client
+
+
+def is_application_neo4j_registered() -> bool:
+    """True after :func:`register_application_neo4j_client` runs (e.g. lifespan)."""
+    return _application_neo4j_registered
 
 
 class Neo4jClient:
@@ -34,6 +56,10 @@ class Neo4jClient:
         self.user = user
         self.password = password
         self._driver: AsyncDriver | None = None
+
+    @property
+    def is_connected(self) -> bool:
+        return self._driver is not None
 
     async def connect(self):
         """Initialize connection pool."""
@@ -59,14 +85,10 @@ class Neo4jClient:
             self._driver = None
             logger.info("Neo4j connection closed")
 
-    async def execute_query(
-        self, query: str, parameters: dict = None
-    ) -> list[dict]:
+    async def execute_query(self, query: str, parameters: dict = None) -> list[dict]:
         """Execute a Cypher query and return results."""
         if not self._driver:
-            raise RuntimeError(
-                "Neo4j client not connected. Call connect() first."
-            )
+            raise RuntimeError("Neo4j client not connected. Call connect() first.")
 
         parameters = parameters or {}
         try:
@@ -75,9 +97,7 @@ class Neo4jClient:
                 records = await result.data()
                 return records
         except Neo4jError as e:
-            logger.error(
-                f"Query error: {e}. Query: {query[:80]}..."
-            )
+            logger.error(f"Query error: {e}. Query: {query[:80]}...")
             raise
 
     async def create_node(self, label: str, properties: dict) -> dict:
@@ -87,6 +107,7 @@ class Neo4jClient:
         # Add id if not present
         if "id" not in properties:
             import uuid
+
             properties["id"] = str(uuid.uuid4())
 
         # Validate property keys and build placeholders
@@ -101,9 +122,7 @@ class Neo4jClient:
             return dict(node)
         return {}
 
-    async def create_relationship(
-        self, from_id: str, to_id: str, rel_type: str, properties: dict = None
-    ) -> dict:
+    async def create_relationship(self, from_id: str, to_id: str, rel_type: str, properties: dict = None) -> dict:
         """Create a relationship between two nodes."""
         _validate_identifier(rel_type, "relationship type")
         properties = properties or {}
@@ -111,6 +130,7 @@ class Neo4jClient:
         # Add id if not present
         if "id" not in properties:
             import uuid
+
             properties["id"] = str(uuid.uuid4())
 
         # Validate property keys and build placeholders
@@ -142,9 +162,7 @@ class Neo4jClient:
             return dict(result[0]["n"])
         return None
 
-    async def get_neighbors(
-        self, node_id: str, rel_type: str = None, depth: int = 1
-    ) -> list[dict]:
+    async def get_neighbors(self, node_id: str, rel_type: str = None, depth: int = 1) -> list[dict]:
         """Get neighboring nodes with optional relationship filter."""
         if rel_type:
             _validate_identifier(rel_type, "relationship type")
@@ -173,9 +191,7 @@ class Neo4jClient:
         result = await self.execute_query(query, {"node_id": node_id})
         return [dict(record["neighbor"]) for record in result]
 
-    async def search_nodes(
-        self, label: str = None, properties: dict = None, limit: int = 50
-    ) -> list[dict]:
+    async def search_nodes(self, label: str = None, properties: dict = None, limit: int = 50) -> list[dict]:
         """Search nodes by label and/or properties."""
         conditions = []
         # Cap limit to prevent unbounded queries
@@ -228,9 +244,7 @@ class Neo4jClient:
                collect(DISTINCT rel) as relationships
         """
 
-        result = await self.execute_query(
-            query, {"center_id": center_node_id}
-        )
+        result = await self.execute_query(query, {"center_id": center_node_id})
 
         if not result:
             return {"nodes": [], "relationships": []}
@@ -243,16 +257,14 @@ class Neo4jClient:
     async def clear_graph(self, seed_id: str = None):
         """Clear graph data, optionally scoped to a seed_id."""
         if seed_id:
-            # Delete nodes and relationships associated with a specific seed
             query = """
             MATCH (n {seed_id: $seed_id})
-            OPTIONAL MATCH (n)-[r]-()
-            DELETE r, n
+            DETACH DELETE n
             """
             await self.execute_query(query, {"seed_id": seed_id})
             logger.info(f"Cleared graph data for seed_id: {seed_id}")
         else:
             # Clear all graph data (use with caution)
-            query = "MATCH (n) OPTIONAL MATCH (n)-[r]-() DELETE r, n"
+            query = "MATCH (n) DETACH DELETE n"
             await self.execute_query(query)
             logger.info("Cleared all graph data")

@@ -1,16 +1,55 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { FileText, Loader2, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { DropZone } from '@/components/ui/DropZone';
 import { useUploadStore } from '@/lib/store';
 import { api } from '@/lib/api';
+import type { UploadedFile } from '@/lib/types';
+
+/** Client-only placeholder ids from the drop handler; never sent to /api/seeds/process. */
+function isPersistedSeedId(id: string): boolean {
+  return id.length > 0 && !id.startsWith('file-');
+}
+
+function seedStatusToUiStatus(status: string): UploadedFile['status'] {
+  if (status === 'processed') return 'completed';
+  if (status === 'failed') return 'error';
+  if (status === 'processing') return 'processing';
+  return 'processing';
+}
+
+/** Seeds that can be sent to POST /api/seeds/process (persisted id + terminal/stuck UI status). */
+function isProcessableFile(f: UploadedFile): boolean {
+  return (
+    (f.status === 'completed' ||
+      f.status === 'error' ||
+      f.status === 'processing') &&
+    isPersistedSeedId(f.id)
+  );
+}
 
 export default function UploadPage() {
-  const { files, addFile, updateFile, removeFile, setIsUploading, isUploading } = useUploadStore();
+  const { files, addFile, updateFile, removeFile, setIsUploading, mergeSeedsFromApi } =
+    useUploadStore();
   const [isProcessing, setIsProcessing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const seeds = await api.listSeeds();
+        if (!cancelled && seeds.length > 0) mergeSeedsFromApi(seeds);
+      } catch {
+        /* offline */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mergeSeedsFromApi]);
 
   const handleFilesDrop = useCallback(
     async (newFiles: File[]) => {
@@ -31,13 +70,22 @@ export default function UploadPage() {
         setIsUploading(true);
 
         try {
-          // Upload file with progress
-          await api.uploadFile(file, (progress) => {
+          const uploaded = await api.uploadFile(file, (progress) => {
             updateFile(fileId, { progress });
           });
 
-          updateFile(fileId, { status: 'completed', progress: 100 });
-        } catch (error) {
+          const existing = useUploadStore.getState().files.find((f) => f.id === fileId);
+          updateFile(fileId, {
+            id: uploaded.id,
+            name: uploaded.name,
+            size: uploaded.size,
+            type: uploaded.type,
+            status: uploaded.status,
+            progress: uploaded.progress,
+            uploadedAt: existing?.uploadedAt ?? uploaded.uploadedAt,
+            errorMessage: uploaded.errorMessage,
+          });
+        } catch {
           updateFile(fileId, {
             status: 'error',
             errorMessage: 'Upload failed',
@@ -50,26 +98,46 @@ export default function UploadPage() {
     [addFile, updateFile, setIsUploading]
   );
 
+  const processableFiles = useMemo(
+    () => files.filter(isProcessableFile),
+    [files]
+  );
+
   const handleProcessSeeds = async () => {
-    const completedFiles = files.filter((f) => f.status === 'completed');
-    if (completedFiles.length === 0) return;
+    // Include `processing` so stuck seeds (lost background task / restart) can hit
+    // POST /api/seeds/process, which re-queues entity extraction per graph router.
+    if (isProcessing) return;
+    if (processableFiles.length === 0) return;
 
     setIsProcessing(true);
 
-    // Update all files to processing
-    completedFiles.forEach((file) => {
-      updateFile(file.id, { status: 'processing' });
-    });
-
     try {
-      await api.processSeeds(completedFiles.map((f) => f.id));
+      const data = await api.processSeeds(processableFiles.map((f) => f.id));
+      const processed = data.processed ?? [];
+      const requeued = data.requeued ?? [];
+      const notFound = data.not_found ?? [];
 
-      // Mark all as completed
-      completedFiles.forEach((file) => {
-        updateFile(file.id, { status: 'completed' });
-      });
-    } catch (error) {
-      completedFiles.forEach((file) => {
+      for (const row of [...processed, ...requeued]) {
+        const ui = seedStatusToUiStatus(row.status);
+        updateFile(row.id, {
+          status: ui,
+          progress: ui === 'completed' ? 100 : ui === 'error' ? 0 : 90,
+          errorMessage:
+            ui === 'error'
+              ? row.error_message ?? 'Graph extraction failed'
+              : undefined,
+        });
+      }
+
+      for (const id of notFound) {
+        updateFile(id, {
+          status: 'error',
+          errorMessage: 'Seed not found on server. Re-upload the document.',
+          progress: 0,
+        });
+      }
+    } catch {
+      processableFiles.forEach((file) => {
         updateFile(file.id, {
           status: 'error',
           errorMessage: 'Processing failed',
@@ -91,7 +159,16 @@ export default function UploadPage() {
       case 'completed':
         return <CheckCircle className="w-5 h-5 text-green-400" />;
       case 'error':
-        return <AlertCircle className="w-5 h-5 text-red-400" />;
+        return (
+          <span
+            data-testid="upload-error-indicator"
+            role="img"
+            aria-label="Upload error"
+            className="inline-flex"
+          >
+            <AlertCircle className="w-5 h-5 text-red-400" aria-hidden="true" />
+          </span>
+        );
       case 'processing':
         return <Loader2 className="w-5 h-5 text-amber-400 animate-spin" />;
       case 'uploading':
@@ -101,7 +178,7 @@ export default function UploadPage() {
     }
   };
 
-  const completedCount = files.filter((f) => f.status === 'completed').length;
+  const processableCount = processableFiles.length;
 
   return (
     <div className="space-y-4 md:space-y-6 animate-fade-in">
@@ -166,14 +243,22 @@ export default function UploadPage() {
         )}
 
         {/* Process Button */}
-        {completedCount > 0 && (
+        {processableCount > 0 && (
           <div className="mt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-slate-800/50 rounded-lg border border-slate-700">
             <div>
               <p className="text-sm font-medium text-slate-200">
-                {completedCount} file{completedCount !== 1 ? 's' : ''} ready to process
+                {processableCount} file{processableCount !== 1 ? 's' : ''} ready to process
+                {(files.some((f) => f.status === 'error') ||
+                  files.some((f) => f.status === 'processing')) && (
+                  <span className="text-slate-400 font-normal">
+                    {' '}
+                    (retries or re-queue stuck processing)
+                  </span>
+                )}
               </p>
               <p className="text-xs text-slate-400 mt-1">
-                This will extract entities and build the knowledge graph
+                Extracts entities and builds the graph; use again if a file stays stuck
+                on &quot;processing&quot; after upload or a server restart.
               </p>
             </div>
             <Button

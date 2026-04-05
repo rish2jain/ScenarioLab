@@ -23,44 +23,46 @@ import {
   Mic,
   Target,
   Users,
-  Gavel,
-  Lightbulb,
   Settings,
 } from "lucide-react";
 import { clsx } from "clsx";
+import { getSimulationIdFromPath } from "@/lib/simulationRoutes";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Upload", href: "/upload", icon: Upload },
   { name: "Simulations", href: "/simulations", icon: Play },
+  { name: "Compare", href: "/simulations/compare", icon: Scale },
   { name: "Playbooks", href: "/playbooks", icon: BookOpen },
   { name: "Reports", href: "/reports", icon: FileText },
 ];
 
 const analyticsNav = [
-  { name: "Attribution Analysis", href: "/analytics/attribution", icon: PieChart },
-  { name: "Fairness Audit", href: "/analytics/fairness", icon: Scale },
   { name: "Cross-Simulation", href: "/analytics/cross-simulation", icon: Brain },
 ];
 
 const toolsNav = [
   { name: "Fine-Tuning", href: "/fine-tuning", icon: Settings },
-  { name: "API Keys", href: "/api-keys", icon: Key },
-  { name: "Market Intelligence", href: "/market-intel", icon: TrendingUp },
+  ...(process.env.NODE_ENV === "development" ||
+  process.env.NEXT_PUBLIC_ENABLE_API_KEYS_UI === "true"
+    ? [{ name: "API Keys", href: "/api-keys", icon: Key }]
+    : []),
 ];
 
-// Helper to check if a nav item is active
-function isNavItemActive(pathname: string, href: string): boolean {
-  if (href === "/") {
-    return pathname === "/";
-  }
-  return pathname.startsWith(href);
-}
-
-// Extract simulation ID from pathname if viewing a simulation
-function getSimulationIdFromPath(pathname: string): string | null {
-  const match = pathname.match(/\/simulations\/([^/]+)/);
-  return match ? match[1] : null;
+/** Pick the longest matching href so e.g. /simulations/compare wins over /simulations. */
+function isNavItemActive(
+  pathname: string,
+  href: string,
+  sectionHrefs: string[],
+): boolean {
+  const candidates = sectionHrefs.filter((h) =>
+    h === "/"
+      ? pathname === "/"
+      : pathname === h || pathname.startsWith(`${h}/`),
+  );
+  if (candidates.length === 0) return false;
+  const best = candidates.reduce((a, b) => (a.length >= b.length ? a : b));
+  return href === best;
 }
 
 interface SidebarProps {
@@ -72,7 +74,6 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const pathname = usePathname();
   const simulationId = getSimulationIdFromPath(pathname);
   const isInSimulation = simulationId !== null;
-  const isVisualizationPage = pathname.includes('/network') || pathname.includes('/timeline') || pathname.includes('/sensitivity') || pathname.includes('/chat') || pathname.includes('/voice') || pathname.includes('/zopa') || pathname.includes('/rehearsal') || pathname.includes('/audit-trail') || pathname.includes('/attribution') || pathname.includes('/fairness') || pathname.includes('/market-intel');
 
   const handleLinkClick = () => {
     if (onClose) {
@@ -91,7 +92,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
         />
       )}
       <aside className={clsx(
-        "fixed md:static inset-y-0 left-0 z-50 w-64 bg-background-secondary border-r border-border flex flex-col transition-transform duration-300 ease-in-out",
+        "fixed md:static inset-y-0 left-0 z-50 w-[80vw] sm:w-64 max-w-sm bg-background-secondary border-r border-border flex flex-col transition-transform duration-300 ease-in-out",
         isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
       )}>
       {/* Logo */}
@@ -117,7 +118,11 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navigation.map((item) => {
-          const isActive = isNavItemActive(pathname, item.href);
+          const isActive = isNavItemActive(
+            pathname,
+            item.href,
+            navigation.map((n) => n.href),
+          );
           const Icon = item.icon;
 
           return (
@@ -125,8 +130,9 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
               key={item.name}
               href={item.href}
               onClick={handleLinkClick}
+              aria-current={isActive && !isInSimulation ? "page" : undefined}
               className={clsx(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                 isActive && !isInSimulation
                   ? "bg-accent/10 text-accent border border-accent/20"
                   : "text-foreground-muted hover:text-foreground hover:bg-background-tertiary"
@@ -145,11 +151,15 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
 
         {/* Analytics Section */}
         <div className="pt-4 mt-4 border-t border-border">
-          <div className="px-3 mb-2 text-xs font-medium text-foreground-subtle uppercase tracking-wider">
+          <h3 className="px-3 mb-2 text-xs font-medium text-foreground-subtle uppercase tracking-wider">
             Analytics
-          </div>
+          </h3>
           {analyticsNav.map((item) => {
-            const isActive = isNavItemActive(pathname, item.href);
+            const isActive = isNavItemActive(
+              pathname,
+              item.href,
+              analyticsNav.map((n) => n.href),
+            );
             const Icon = item.icon;
 
             return (
@@ -157,8 +167,9 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 key={item.name}
                 href={item.href}
                 onClick={handleLinkClick}
+                aria-current={isActive ? "page" : undefined}
                 className={clsx(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                   isActive
                     ? "bg-accent/10 text-accent border border-accent/20"
                     : "text-foreground-muted hover:text-foreground hover:bg-background-tertiary"
@@ -178,11 +189,15 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
 
         {/* Tools Section */}
         <div className="pt-4 mt-4 border-t border-border">
-          <div className="px-3 mb-2 text-xs font-medium text-foreground-subtle uppercase tracking-wider">
+          <h3 className="px-3 mb-2 text-xs font-medium text-foreground-subtle uppercase tracking-wider">
             Tools
-          </div>
+          </h3>
           {toolsNav.map((item) => {
-            const isActive = isNavItemActive(pathname, item.href);
+            const isActive = isNavItemActive(
+              pathname,
+              item.href,
+              toolsNav.map((n) => n.href),
+            );
             const Icon = item.icon;
 
             return (
@@ -190,8 +205,9 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 key={item.name}
                 href={item.href}
                 onClick={handleLinkClick}
+                aria-current={isActive ? "page" : undefined}
                 className={clsx(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                   isActive
                     ? "bg-accent/10 text-accent border border-accent/20"
                     : "text-foreground-muted hover:text-foreground hover:bg-background-tertiary"
@@ -213,15 +229,15 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
         {isInSimulation && (
           <>
             <div className="pt-4 mt-4 border-t border-border">
-              <div className="px-3 mb-2 text-xs font-medium text-foreground-subtle uppercase tracking-wider">
+              <h3 className="px-3 mb-2 text-xs font-medium text-foreground-subtle uppercase tracking-wider">
                 Current Simulation
-              </div>
+              </h3>
               
               <Link
                 href={`/simulations/${simulationId}`}
                 onClick={handleLinkClick}
                 className={clsx(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                   pathname === `/simulations/${simulationId}`
                     ? "bg-accent/10 text-accent border border-accent/20"
                     : "text-foreground-muted hover:text-foreground hover:bg-background-tertiary"
@@ -238,7 +254,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 href={`/simulations/${simulationId}/chat`}
                 onClick={handleLinkClick}
                 className={clsx(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                   pathname.includes('/chat')
                     ? "bg-accent/10 text-accent border border-accent/20"
                     : "text-foreground-muted hover:text-foreground hover:bg-background-tertiary"
@@ -251,15 +267,15 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 Chat
               </Link>
 
-              <div className="px-3 mt-3 mb-2 text-xs font-medium text-foreground-subtle uppercase tracking-wider">
+              <h3 className="px-3 mt-3 mb-2 text-xs font-medium text-foreground-subtle uppercase tracking-wider">
                 Visualizations
-              </div>
+              </h3>
 
               <Link
                 href={`/simulations/${simulationId}/network`}
                 onClick={handleLinkClick}
                 className={clsx(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                   pathname.includes('/network')
                     ? "bg-accent/10 text-accent border border-accent/20"
                     : "text-foreground-muted hover:text-foreground hover:bg-background-tertiary"
@@ -276,7 +292,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 href={`/simulations/${simulationId}/timeline`}
                 onClick={handleLinkClick}
                 className={clsx(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                   pathname.includes('/timeline')
                     ? "bg-accent/10 text-accent border border-accent/20"
                     : "text-foreground-muted hover:text-foreground hover:bg-background-tertiary"
@@ -293,7 +309,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 href={`/simulations/${simulationId}/sensitivity`}
                 onClick={handleLinkClick}
                 className={clsx(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                   pathname.includes('/sensitivity')
                     ? "bg-accent/10 text-accent border border-accent/20"
                     : "text-foreground-muted hover:text-foreground hover:bg-background-tertiary"
@@ -306,15 +322,15 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 Sensitivity
               </Link>
 
-              <div className="px-3 mt-3 mb-2 text-xs font-medium text-foreground-subtle uppercase tracking-wider">
+              <h3 className="px-3 mt-3 mb-2 text-xs font-medium text-foreground-subtle uppercase tracking-wider">
                 Advanced
-              </div>
+              </h3>
 
               <Link
                 href={`/simulations/${simulationId}/voice`}
                 onClick={handleLinkClick}
                 className={clsx(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                   pathname.includes('/voice')
                     ? "bg-accent/10 text-accent border border-accent/20"
                     : "text-foreground-muted hover:text-foreground hover:bg-background-tertiary"
@@ -331,7 +347,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 href={`/simulations/${simulationId}/zopa`}
                 onClick={handleLinkClick}
                 className={clsx(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                   pathname.includes('/zopa')
                     ? "bg-accent/10 text-accent border border-accent/20"
                     : "text-foreground-muted hover:text-foreground hover:bg-background-tertiary"
@@ -348,7 +364,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 href={`/simulations/${simulationId}/rehearsal`}
                 onClick={handleLinkClick}
                 className={clsx(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                   pathname.includes('/rehearsal')
                     ? "bg-accent/10 text-accent border border-accent/20"
                     : "text-foreground-muted hover:text-foreground hover:bg-background-tertiary"
@@ -365,7 +381,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 href={`/simulations/${simulationId}/audit-trail`}
                 onClick={handleLinkClick}
                 className={clsx(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                   pathname.includes('/audit-trail')
                     ? "bg-accent/10 text-accent border border-accent/20"
                     : "text-foreground-muted hover:text-foreground hover:bg-background-tertiary"
@@ -382,7 +398,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 href={`/simulations/${simulationId}/attribution`}
                 onClick={handleLinkClick}
                 className={clsx(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                   pathname.includes('/attribution')
                     ? "bg-accent/10 text-accent border border-accent/20"
                     : "text-foreground-muted hover:text-foreground hover:bg-background-tertiary"
@@ -399,7 +415,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 href={`/simulations/${simulationId}/fairness`}
                 onClick={handleLinkClick}
                 className={clsx(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                   pathname.includes('/fairness')
                     ? "bg-accent/10 text-accent border border-accent/20"
                     : "text-foreground-muted hover:text-foreground hover:bg-background-tertiary"
@@ -416,7 +432,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 href={`/simulations/${simulationId}/market-intel`}
                 onClick={handleLinkClick}
                 className={clsx(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                   pathname.includes('/market-intel')
                     ? "bg-accent/10 text-accent border border-accent/20"
                     : "text-foreground-muted hover:text-foreground hover:bg-background-tertiary"

@@ -18,7 +18,8 @@ import json
 import logging
 from typing import TYPE_CHECKING
 
-from app.db.connection import get_db, utc_now_iso as _utc_now_iso
+from app.db.connection import get_db
+from app.db.connection import utc_now_iso as _utc_now_iso
 
 if TYPE_CHECKING:
     from app.simulation.models import SimulationState
@@ -78,24 +79,33 @@ class SimulationRepository:
         """List summary info for all simulations."""
         db = await get_db()
         cursor = await db.execute(
-            "SELECT id, name, status, config, created_at, updated_at FROM simulations"
-            " ORDER BY updated_at DESC"
+            "SELECT id, name, status, config, state, created_at, updated_at "
+            "FROM simulations ORDER BY updated_at DESC"
         )
         rows = await cursor.fetchall()
         summaries: list[dict] = []
         for row in rows:
             config = json.loads(row[3])
+            state_raw = row[4]
+            try:
+                state = json.loads(state_raw) if state_raw else {}
+            except json.JSONDecodeError:
+                logger.warning("Invalid state JSON for simulation %s", row[0])
+                state = {}
+            # Progress from persisted state; config.total_rounds is only the cap.
+            current_round = int(state.get("current_round", 0) or 0)
+            total_rounds = int(config.get("total_rounds", 0) or 0)
             summaries.append(
                 {
                     "id": row[0],
                     "name": row[1],
                     "status": row[2],
                     "environment_type": config.get("environment_type", ""),
-                    "current_round": config.get("total_rounds", 0),
-                    "total_rounds": config.get("total_rounds", 0),
+                    "current_round": current_round,
+                    "total_rounds": total_rounds,
                     "agent_count": len(config.get("agents", [])),
-                    "created_at": row[4],
-                    "updated_at": row[5],
+                    "created_at": row[5],
+                    "updated_at": row[6],
                 }
             )
         return summaries
@@ -111,7 +121,7 @@ class SimulationRepository:
         return cursor.rowcount > 0
 
     async def update_status(self, simulation_id: str, status: str) -> None:
-        """Quick status update — updates both the status column and the state JSON."""
+        """Quick status update: status column and state JSON."""
         db = await get_db()
         now = _utc_now_iso()
         await db.execute(

@@ -1,79 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, Upload, Brain, CheckCircle, AlertTriangle, FileText, Sparkles } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { useToast } from '@/components/ui/Toast';
 import { api } from '@/lib/api';
-
-interface ExtractedAxiom {
-  id: string;
-  statement: string;
-  confidence: number;
-  source: string;
-  category: string;
-}
-
-interface ValidationResult {
-  axiom_id: string;
-  validated: boolean;
-  holdout_accuracy: number;
-  conflicts: string[];
-}
-
-// Mock data
-const mockAxioms: ExtractedAxiom[] = [
-  {
-    id: 'axiom-1',
-    statement: 'Always prioritize shareholder value in strategic decisions',
-    confidence: 0.92,
-    source: 'Board minutes Q4 2023',
-    category: 'decision_making',
-  },
-  {
-    id: 'axiom-2',
-    statement: 'Risk tolerance decreases when market volatility exceeds 20%',
-    confidence: 0.87,
-    source: 'Earnings call Q3 2023',
-    category: 'risk_assessment',
-  },
-  {
-    id: 'axiom-3',
-    statement: 'Prefer consensus-building over unilateral decisions',
-    confidence: 0.78,
-    source: 'War game outputs 2023',
-    category: 'collaboration',
-  },
-  {
-    id: 'axiom-4',
-    statement: 'Data-driven arguments carry more weight than intuition',
-    confidence: 0.85,
-    source: 'Board minutes Q1 2024',
-    category: 'communication',
-  },
-];
-
-const mockValidations: ValidationResult[] = [
-  {
-    axiom_id: 'axiom-1',
-    validated: true,
-    holdout_accuracy: 0.89,
-    conflicts: [],
-  },
-  {
-    axiom_id: 'axiom-2',
-    validated: true,
-    holdout_accuracy: 0.82,
-    conflicts: [],
-  },
-  {
-    axiom_id: 'axiom-3',
-    validated: false,
-    holdout_accuracy: 0.64,
-    conflicts: ['Contradicts observed behavior in crisis scenarios'],
-  },
-];
+import type { ExtractedAxiom, ValidationResult } from '@/lib/types';
 
 const dataTypes = [
   { value: 'board_minutes', label: 'Board Minutes', icon: FileText },
@@ -82,50 +16,99 @@ const dataTypes = [
 ];
 
 export default function BehavioralAxiomsPage() {
+  const { addToast } = useToast();
   const [historicalData, setHistoricalData] = useState('');
   const [dataType, setDataType] = useState('board_minutes');
   const [isExtracting, setIsExtracting] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [axioms, setAxioms] = useState<ExtractedAxiom[]>([]);
   const [validations, setValidations] = useState<ValidationResult[]>([]);
-  const [showValidation, setShowValidation] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const handleExtract = async () => {
     setIsExtracting(true);
+    setLoadError(null);
     try {
-      // Mock API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      setAxioms(mockAxioms);
-      setShowValidation(false);
+      const extracted = await api.extractAxioms({
+        historical_data: historicalData,
+        data_type: dataType,
+      });
+      setAxioms(extracted);
       setValidations([]);
-    } catch {
-      // Handle error
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Could not extract axioms.';
+      setAxioms([]);
+      setValidations([]);
+      setLoadError(message);
+      addToast(message, 'error');
+    } finally {
+      setIsExtracting(false);
     }
-    setIsExtracting(false);
   };
 
   const handleValidate = async () => {
     setIsValidating(true);
+    setLoadError(null);
     try {
-      // Mock API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      setValidations(mockValidations);
-      setShowValidation(true);
-    } catch {
-      // Handle error
+      const validationsData = await api.validateAxioms(
+        axioms.map((axiom) => {
+          const sourceReferences =
+            axiom.sourceReferences && axiom.sourceReferences.length > 0
+              ? axiom.sourceReferences
+              : [axiom.source].filter((s) => s && String(s).trim().length > 0);
+          const evidenceCount =
+            typeof axiom.evidenceCount === 'number' && Number.isFinite(axiom.evidenceCount)
+              ? axiom.evidenceCount
+              : sourceReferences.length;
+          return {
+            axiom_id: axiom.id,
+            role: axiom.category,
+            axiom_text: axiom.statement,
+            confidence: axiom.confidence,
+            evidence_count: evidenceCount,
+            source_references: sourceReferences,
+          };
+        }),
+        historicalData
+      );
+      setValidations(validationsData);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Could not validate axioms.';
+      setValidations([]);
+      setLoadError(message);
+      addToast(message, 'error');
+    } finally {
+      setIsValidating(false);
     }
-    setIsValidating(false);
   };
 
+  const axiomsById = useMemo(
+    () => new Map(axioms.map((a) => [a.id, a])),
+    [axioms],
+  );
+
+  /** API may return `axiom_id` as canonical id or (legacy) as statement text — O(1) lookups. */
+  const validationsByKey = useMemo(() => {
+    const m = new Map<string, ValidationResult>();
+    for (const v of validations) {
+      m.set(v.axiom_id, v);
+    }
+    return m;
+  }, [validations]);
+
   const getAxiomValidation = (axiomId: string) => {
-    return validations.find(v => v.axiom_id === axiomId);
+    const axiom = axiomsById.get(axiomId);
+    if (!axiom) return undefined;
+    return validationsByKey.get(axiomId) ?? validationsByKey.get(axiom.statement);
   };
 
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link href="/personas">
+        <Link href="/">
           <Button variant="ghost" size="sm" leftIcon={<ChevronLeft className="w-4 h-4" />}>
             Back
           </Button>
@@ -141,6 +124,11 @@ export default function BehavioralAxiomsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Input Section */}
         <div className="space-y-6">
+          {loadError && (
+            <Card>
+              <div className="text-sm text-red-400">{loadError}</div>
+            </Card>
+          )}
           <Card
             header={
               <div className="flex items-center gap-2">

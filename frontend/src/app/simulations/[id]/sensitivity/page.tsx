@@ -1,21 +1,33 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { clsx } from 'clsx';
 import { ChevronLeft, BarChart3, Download, Info } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { TornadoChart } from '@/components/visualization/TornadoChart';
+import dynamic from 'next/dynamic';
 import { useSimulationStore } from '@/lib/store';
 import { api } from '@/lib/api';
 import type {
-  Simulation,
   SensitivityParameter as ApiSensitivityParameter,
   TornadoChartData as ApiTornadoChartData,
   SensitivityParameterLegacy,
   TornadoChartDataLegacy,
 } from '@/lib/types';
+
+const TornadoChart = dynamic(
+  () => import('@/components/visualization/TornadoChart').then(mod => ({ default: mod.TornadoChart })),
+  { ssr: false, loading: () => <div className="h-[500px] animate-pulse bg-zinc-800/50 rounded-lg" /> }
+);
+
+const backToSimulationLinkClass = clsx(
+  'inline-flex items-center justify-center gap-2 font-medium rounded-lg border transition-all duration-200',
+  'focus:outline-none focus:ring-2 focus:ring-accent/50 focus:ring-offset-2 focus:ring-offset-background',
+  'bg-transparent hover:bg-background-tertiary text-foreground-muted border-transparent',
+  'px-3 py-1.5 text-sm'
+);
 
 // Convert API response to chart format
 function convertApiDataToChart(
@@ -49,113 +61,50 @@ function convertApiDataToChart(
   };
 }
 
-// Mock data generator (fallback)
-function generateMockSensitivityData(): TornadoChartDataLegacy {
-  const parameters: SensitivityParameterLegacy[] = [
-    {
-      id: 'param-1',
-      name: 'Market Growth Rate',
-      description: 'Annual growth rate of the target market',
-      baseValue: 5.0,
-      lowValue: 2.5,
-      highValue: 8.5,
-      impact: 15.2,
-      impactDirection: 'positive',
-      unit: '%',
-    },
-    {
-      id: 'param-2',
-      name: 'Integration Cost',
-      description: 'Total cost of merging operations and systems',
-      baseValue: 50.0,
-      lowValue: 35.0,
-      highValue: 75.0,
-      impact: 12.8,
-      impactDirection: 'negative',
-      unit: 'M$',
-    },
-    {
-      id: 'param-3',
-      name: 'Synergy Realization',
-      description: 'Percentage of projected synergies achieved',
-      baseValue: 70.0,
-      lowValue: 40.0,
-      highValue: 95.0,
-      impact: 18.5,
-      impactDirection: 'positive',
-      unit: '%',
-    },
-    {
-      id: 'param-4',
-      name: 'Employee Retention',
-      description: 'Percentage of key employees retained post-merger',
-      baseValue: 85.0,
-      lowValue: 60.0,
-      highValue: 95.0,
-      impact: 10.3,
-      impactDirection: 'positive',
-      unit: '%',
-    },
-    {
-      id: 'param-5',
-      name: 'Customer Churn',
-      description: 'Percentage of customers lost during transition',
-      baseValue: 8.0,
-      lowValue: 3.0,
-      highValue: 15.0,
-      impact: 14.7,
-      impactDirection: 'negative',
-      unit: '%',
-    },
-    {
-      id: 'param-6',
-      name: 'Regulatory Delay',
-      description: 'Additional months for regulatory approval',
-      baseValue: 3.0,
-      lowValue: 0.0,
-      highValue: 9.0,
-      impact: 8.9,
-      impactDirection: 'negative',
-      unit: 'months',
-    },
-    {
-      id: 'param-7',
-      name: 'Technology Integration',
-      description: 'Success rate of systems integration',
-      baseValue: 75.0,
-      lowValue: 50.0,
-      highValue: 95.0,
-      impact: 11.4,
-      impactDirection: 'positive',
-      unit: '%',
-    },
-    {
-      id: 'param-8',
-      name: 'Cultural Alignment',
-      description: 'Degree of cultural compatibility between organizations',
-      baseValue: 65.0,
-      lowValue: 30.0,
-      highValue: 90.0,
-      impact: 9.6,
-      impactDirection: 'positive',
-      unit: '%',
-    },
-  ];
-
-  return {
-    parameters,
-    outcomeMetric: 'Net Present Value (NPV)',
-    outcomeUnit: 'M$',
-    baselineValue: 125.5,
-  };
-}
-
 const outcomeMetrics = [
   { id: 'npv', name: 'Net Present Value (NPV)', unit: 'M$' },
   { id: 'roi', name: 'Return on Investment (ROI)', unit: '%' },
   { id: 'payback', name: 'Payback Period', unit: 'years' },
   { id: 'irr', name: 'Internal Rate of Return', unit: '%' },
 ];
+
+const LOAD_FALLBACK = 'Failed to load sensitivity analysis.';
+
+function sensitivityLoadErrorMessage(error: unknown): string {
+  if (error == null) return LOAD_FALLBACK;
+
+  const msg = error instanceof Error ? error.message : String(error);
+  const lower = msg.toLowerCase();
+
+  const isNetworkFailure =
+    (typeof DOMException !== 'undefined' &&
+      error instanceof DOMException &&
+      error.name === 'NetworkError') ||
+    error instanceof TypeError ||
+    lower.includes('failed to fetch') ||
+    lower.includes('networkerror') ||
+    lower.includes('load failed') ||
+    lower.includes('net::err_') ||
+    lower.includes('err_network_changed');
+
+  if (isNetworkFailure) {
+    return 'Network error: failed to connect';
+  }
+
+  const httpInText = msg.match(/\bHTTP\s+(\d{3})\b/i);
+  const parenThreeDigits = msg.match(/\((\d{3})\)/);
+  const status = httpInText?.[1] ?? parenThreeDigits?.[1];
+
+  if (status !== undefined) {
+    return `API error ${status}: ${msg}`;
+  }
+
+  if (msg.trim().length > 0) {
+    return `API error: ${msg}`;
+  }
+
+  return LOAD_FALLBACK;
+}
 
 export default function SensitivityPage() {
   const params = useParams();
@@ -165,32 +114,58 @@ export default function SensitivityPage() {
   const { currentSimulation, setCurrentSimulation } = useSimulationStore();
   
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [chartData, setChartData] = useState<TornadoChartDataLegacy | null>(null);
   const [selectedMetric, setSelectedMetric] = useState('npv');
   const [selectedParam, setSelectedParam] = useState<SensitivityParameterLegacy | null>(null);
+  const chartContainerRef = useRef<HTMLDivElement | null>(null);
+  const [chartWidth, setChartWidth] = useState(900);
 
   useEffect(() => {
-    const loadSimulation = async () => {
-      setIsLoading(true);
+    const el = chartContainerRef.current;
+    if (!el) return;
+
+    const updateSize = () => {
+      const next = Math.max(760, Math.floor(el.clientWidth));
+      setChartWidth(next);
+    };
+
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const loadSimulation = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
       const simulationData = await api.getSimulation(simulationId);
 
-      if (simulationData) {
+      if (simulationData === null) {
+        setCurrentSimulation(null);
+        setChartData(null);
+      } else {
         setCurrentSimulation(simulationData);
 
-        // Try to get real sensitivity analysis from API
         const sensitivityData = await api.getSensitivityAnalysis(simulationId);
         if (sensitivityData) {
           setChartData(convertApiDataToChart(sensitivityData));
         } else {
-          // Fall back to mock data if API fails
-          setChartData(generateMockSensitivityData());
+          setChartData(null);
         }
       }
-      setIsLoading(false);
-    };
-
-    loadSimulation();
+    } catch (error) {
+      setCurrentSimulation(null);
+      setChartData(null);
+      setLoadError(sensitivityLoadErrorMessage(error));
+    }
+    setIsLoading(false);
   }, [simulationId, setCurrentSimulation]);
+
+  useEffect(() => {
+    void loadSimulation();
+  }, [loadSimulation]);
 
   const handleExportData = () => {
     if (!chartData) return;
@@ -222,10 +197,47 @@ export default function SensitivityPage() {
     );
   }
 
-  if (!currentSimulation || !chartData) {
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 gap-4 px-4 text-center">
+        <div className="text-red-400 max-w-md">{loadError}</div>
+        <Button
+          variant="secondary"
+          size="sm"
+          type="button"
+          onClick={() => void loadSimulation()}
+        >
+          Retry
+        </Button>
+        <Link
+          href={`/simulations/${simulationId}`}
+          className={backToSimulationLinkClass}
+        >
+          <ChevronLeft className="w-4 h-4 shrink-0" aria-hidden />
+          Back to simulation
+        </Link>
+      </div>
+    );
+  }
+
+  if (!currentSimulation) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-slate-400">Simulation not found</div>
+      </div>
+    );
+  }
+
+  if (!chartData) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="flex flex-col items-center justify-center p-8 text-center max-w-md">
+          <BarChart3 className="w-12 h-12 text-slate-500 mb-4" />
+          <h2 className="text-xl font-bold text-slate-200">Insufficient Data</h2>
+          <p className="text-slate-400 mt-2">
+            Sensitivity analysis requires sufficient simulation rounds to be completed in order to measure parameter variance.
+          </p>
+        </div>
       </div>
     );
   }
@@ -236,10 +248,9 @@ export default function SensitivityPage() {
       <div className="px-4 md:px-6 py-3 md:py-4 border-b border-slate-700 bg-slate-800/50">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3 md:gap-4">
-            <Link href={`/simulations/${simulationId}`}>
-              <Button variant="ghost" size="sm" leftIcon={<ChevronLeft className="w-4 h-4" />}>
-                Back
-              </Button>
+            <Link href={`/simulations/${simulationId}`} className={backToSimulationLinkClass}>
+              <ChevronLeft className="w-4 h-4 shrink-0" aria-hidden />
+              Back
             </Link>
             <div className="min-w-0">
               <h1 className="text-lg md:text-xl font-bold text-slate-100 truncate">
@@ -301,11 +312,11 @@ export default function SensitivityPage() {
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <div className="min-w-[600px]">
+              <div ref={chartContainerRef} className="overflow-x-auto">
+                <div style={{ minWidth: `${chartWidth}px` }}>
                   <TornadoChart
                     data={chartData}
-                    width={900}
+                    width={chartWidth}
                     height={500}
                     onParameterClick={setSelectedParam}
                   />
@@ -416,40 +427,22 @@ export default function SensitivityPage() {
                 Interpretation Guide
               </h2>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 text-sm text-slate-300">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 md:gap-6 text-sm text-slate-300">
                 <div>
                   <h3 className="font-medium text-slate-200 mb-2">Reading the Chart</h3>
-                  <ul className="space-y-2 text-slate-400">
-                    <li className="flex items-start gap-2">
-                      <span className="text-accent">•</span>
-                      Bars extending to the <strong>right</strong> indicate parameters that increase the outcome when their values increase
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-accent">•</span>
-                      Bars extending to the <strong>left</strong> indicate parameters that decrease the outcome when their values decrease
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-accent">•</span>
-                      Longer bars represent higher sensitivity (greater impact on the outcome)
-                    </li>
+                  <ul className="list-disc pl-5 space-y-2 text-slate-400 marker:text-accent">
+                    <li>Bars extending right show upside when the parameter increases.</li>
+                    <li>Bars extending left show downside when the parameter decreases.</li>
+                    <li>Longer bars indicate higher sensitivity and more scenario leverage.</li>
                   </ul>
                 </div>
                 
                 <div>
                   <h3 className="font-medium text-slate-200 mb-2">Key Insights</h3>
-                  <ul className="space-y-2 text-slate-400">
-                    <li className="flex items-start gap-2">
-                      <span className="text-accent">•</span>
-                      Focus risk management efforts on parameters with the longest bars
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-accent">•</span>
-                      Parameters near the top of the chart drive the most variance in outcomes
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-accent">•</span>
-                      Consider scenario planning around high-impact parameters
-                    </li>
+                  <ul className="list-disc pl-5 space-y-2 text-slate-400 marker:text-accent">
+                    <li>Prioritize risk controls around the longest bars first.</li>
+                    <li>Top-ranked parameters contribute the most outcome volatility.</li>
+                    <li>Use the highest-impact parameters as the core of scenario planning.</li>
                   </ul>
                 </div>
               </div>

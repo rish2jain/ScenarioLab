@@ -5,9 +5,8 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-from app.llm.factory import get_llm_provider
 from app.research.service import research_service
-from app.simulation.engine import SimulationEngine, simulation_engine
+from app.simulation.engine import simulation_engine
 from app.simulation.models import (
     AgentConfig,
     EnvironmentType,
@@ -384,9 +383,7 @@ class BacktestingEngine:
             },
         }
 
-    def compare_results(
-        self, simulated: dict, actual: dict
-    ) -> dict[str, Any]:
+    def compare_results(self, simulated: dict, actual: dict) -> dict[str, Any]:
         """Compare simulated results against actual outcomes.
 
         Args:
@@ -441,17 +438,12 @@ class BacktestingEngine:
             "timeline_accuracy": 0.25,
             "outcome_direction_accuracy": 0.40,
         }
-        overall = sum(
-            comparison["rubric_scores"].get(k, 0) * v
-            for k, v in weights.items()
-        )
+        overall = sum(comparison["rubric_scores"].get(k, 0) * v for k, v in weights.items())
         comparison["overall_accuracy"] = round(overall, 3)
 
         return comparison
 
-    def _score_stance_accuracy(
-        self, simulated: dict, actual: dict
-    ) -> float:
+    def _score_stance_accuracy(self, simulated: dict, actual: dict) -> float:
         """Score how well simulated stances match actual stances."""
         if not simulated or not actual:
             return 0.5
@@ -482,19 +474,19 @@ class BacktestingEngine:
 
         return round(sum(scores) / len(scores), 3) if scores else 0.5
 
-    def _detail_stance_comparison(
-        self, simulated: dict, actual: dict
-    ) -> list[dict]:
+    def _detail_stance_comparison(self, simulated: dict, actual: dict) -> list[dict]:
         """Create detailed stance comparison."""
         comparison = []
         for stakeholder, actual_stance in actual.items():
             sim_stance = simulated.get(stakeholder, "Not simulated")
-            comparison.append({
-                "stakeholder": stakeholder,
-                "simulated": sim_stance,
-                "actual": actual_stance,
-                "match": self._stance_matches(sim_stance, actual_stance),
-            })
+            comparison.append(
+                {
+                    "stakeholder": stakeholder,
+                    "simulated": sim_stance,
+                    "actual": actual_stance,
+                    "match": self._stance_matches(sim_stance, actual_stance),
+                }
+            )
         return comparison
 
     def _stance_matches(self, simulated: str, actual: str) -> str:
@@ -516,9 +508,7 @@ class BacktestingEngine:
             return "mismatch"
         return "unclear"
 
-    def _score_timeline_accuracy(
-        self, simulated: dict, actual: dict
-    ) -> float:
+    def _score_timeline_accuracy(self, simulated: dict, actual: dict) -> float:
         """Score timeline prediction accuracy."""
         if not simulated or not actual:
             return 0.5
@@ -542,9 +532,7 @@ class BacktestingEngine:
 
         return score
 
-    def _detail_timeline_comparison(
-        self, simulated: dict, actual: dict
-    ) -> dict:
+    def _detail_timeline_comparison(self, simulated: dict, actual: dict) -> dict:
         """Create detailed timeline comparison."""
         return {
             "simulated_rounds": simulated.get("rounds_completed", "N/A"),
@@ -552,17 +540,18 @@ class BacktestingEngine:
             "actual_key_milestones": actual.get("key_milestones", []),
         }
 
-    def _score_outcome_accuracy(
-        self, simulated: dict, actual: dict
-    ) -> float:
+    def _score_outcome_accuracy(self, simulated: dict, actual: dict) -> float:
         """Score outcome direction prediction accuracy."""
         if not simulated or not actual:
             return 0.5
 
         scores = []
         bool_fields = [
-            "deal_completed", "bank_failed", "consensus_reached",
-            "aircraft_recertified", "comprehensive_regulation",
+            "deal_completed",
+            "bank_failed",
+            "consensus_reached",
+            "aircraft_recertified",
+            "comprehensive_regulation",
         ]
 
         for field in bool_fields:
@@ -579,9 +568,7 @@ class BacktestingEngine:
 
         return round(sum(scores) / len(scores), 3) if scores else 0.5
 
-    def _detail_outcome_comparison(
-        self, simulated: dict, actual: dict
-    ) -> dict:
+    def _detail_outcome_comparison(self, simulated: dict, actual: dict) -> dict:
         """Create detailed outcome comparison."""
         comparison = {}
         for key, actual_val in actual.items():
@@ -593,9 +580,7 @@ class BacktestingEngine:
             }
         return comparison
 
-    async def auto_populate_case(
-        self, case_description: str, tags: list[str] | None = None
-    ) -> dict[str, Any]:
+    async def auto_populate_case(self, case_description: str, tags: list[str] | None = None) -> dict[str, Any]:
         """Auto-populate a backtest case from a natural-language description using autoresearch.
 
         Calls the research service to gather historical data, then transforms the
@@ -609,9 +594,7 @@ class BacktestingEngine:
         Returns:
             A dict matching the ``BUNDLED_CASES`` entry format.
         """
-        research_result = await research_service.research_historical_case(
-            case_description, tags=tags
-        )
+        research_result = await research_service.research_historical_case(case_description, tags=tags)
         synthesis = research_result["synthesis"]
 
         # Slugify the case name for a stable case_id
@@ -620,17 +603,12 @@ class BacktestingEngine:
 
         # Build a narrative seed from the synthesis fields
         stakeholder_lines = "\n".join(
-            f"- {name}: {stance}"
-            for name, stance in synthesis.get("stakeholder_stances", {}).items()
+            f"- {name}: {stance}" for name, stance in synthesis.get("stakeholder_stances", {}).items()
         )
         timeline = synthesis.get("timeline", {})
-        milestone_lines = "\n".join(
-            f"- {m}" for m in timeline.get("key_milestones", [])
-        )
+        milestone_lines = "\n".join(f"- {m}" for m in timeline.get("key_milestones", []))
         outcome = synthesis.get("outcome", {})
-        decision_lines = "\n".join(
-            f"- {d}" for d in outcome.get("key_decisions", [])
-        )
+        decision_lines = "\n".join(f"- {d}" for d in outcome.get("key_decisions", []))
         seed_material = (
             f"{synthesis.get('description', case_description)}\n\n"
             f"Key stakeholders:\n{stakeholder_lines}\n\n"
@@ -662,9 +640,7 @@ class BacktestingEngine:
             },
         }
 
-    async def run_backtest_auto(
-        self, case_description: str, tags: list[str] | None = None
-    ) -> dict[str, Any]:
+    async def run_backtest_auto(self, case_description: str, tags: list[str] | None = None) -> dict[str, Any]:
         """Convenience method: auto-populate a case from research, then backtest it.
 
         Combines ``auto_populate_case`` and ``run_backtest`` into a single call

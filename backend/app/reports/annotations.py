@@ -97,10 +97,7 @@ class AnnotationManager:
         except Exception as e:
             logger.warning(f"Failed to save annotation to DB: {e}")
 
-        logger.info(
-            f"Created annotation {annotation_id} for "
-            f"simulation {simulation_id}"
-        )
+        logger.info(f"Created annotation {annotation_id} for " f"simulation {simulation_id}")
         return annotation
 
     async def get_annotations(
@@ -114,18 +111,14 @@ class AnnotationManager:
         # Try loading from DB first
         if simulation_id not in self._by_simulation:
             try:
-                db_annotations = await self._repo.get_annotations(
-                    simulation_id, tag, annotator, round
-                )
+                db_annotations = await self._repo.get_annotations(simulation_id, tag, annotator, round)
                 if db_annotations:
                     for a in db_annotations:
                         annotation = Annotation(**a)
                         self._annotations[a["id"]] = annotation
                         if a["simulation_id"] not in self._by_simulation:
                             self._by_simulation[a["simulation_id"]] = []
-                        self._by_simulation[a["simulation_id"]].append(
-                            a["id"]
-                        )
+                        self._by_simulation[a["simulation_id"]].append(a["id"])
             except Exception as e:
                 logger.warning(f"Failed to load annotations from DB: {e}")
 
@@ -149,9 +142,7 @@ class AnnotationManager:
             annotations.append(annotation)
 
         # Sort by timestamp (newest first)
-        annotations.sort(
-            key=lambda a: a.timestamp, reverse=True
-        )
+        annotations.sort(key=lambda a: a.timestamp, reverse=True)
         return annotations
 
     def get_annotation(self, annotation_id: str) -> Annotation | None:
@@ -172,9 +163,7 @@ class AnnotationManager:
         # Remove from index
         if simulation_id in self._by_simulation:
             self._by_simulation[simulation_id] = [
-                aid
-                for aid in self._by_simulation[simulation_id]
-                if aid != annotation_id
+                aid for aid in self._by_simulation[simulation_id] if aid != annotation_id
             ]
 
         # Delete from DB
@@ -206,9 +195,7 @@ class AnnotationManager:
             self._annotations.pop(aid, None)
 
         del self._by_simulation[simulation_id]
-        logger.info(
-            f"Cleared {count} annotations for simulation {simulation_id}"
-        )
+        logger.info(f"Cleared {count} annotations for simulation {simulation_id}")
         return count
 
 

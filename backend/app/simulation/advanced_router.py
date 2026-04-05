@@ -26,10 +26,19 @@ from app.playbooks.copilot import CopilotSuggestions, PlaybookCopilot
 from app.reports.narrative import NarrativeGenerator, SimulationNarrative
 from app.seed.multilanguage import MultiLanguageProcessor
 from app.simulation.assumptions import AssumptionRegister, AssumptionTracker
+from app.simulation.audit_trail import (
+    AuditTrail,
+    audit_manager,
+)
+from app.simulation.backtesting import backtesting_engine
 from app.simulation.branching import (
     ScenarioBranch,
     ScenarioBranchManager,
     ScenarioTree,
+)
+from app.simulation.confidence_decay import (
+    DecayCurveResult,
+    confidence_decay_model,
 )
 from app.simulation.engine import simulation_engine
 from app.simulation.gamification import (
@@ -37,27 +46,16 @@ from app.simulation.gamification import (
     GamificationEngine,
     Leaderboard,
 )
-from app.simulation.audit_trail import (
-    AuditEventType,
-    AuditTrail,
-    audit_manager,
-)
-from app.simulation.confidence_decay import (
-    ConfidenceDecayModel,
-    DecayCurveResult,
-    confidence_decay_model,
-)
 from app.simulation.hallucination import (
     HallucinationDetector,
     HallucinationReport,
 )
+from app.simulation.market_intelligence import market_intelligence_service
 from app.simulation.regulatory_generator import (
     RegulatoryGeneratorResult,
     RegulatoryScenarioGenerator,
 )
 from app.simulation.zopa import ZOPAAnalyzer, ZOPAResult
-from app.simulation.backtesting import backtesting_engine
-from app.simulation.market_intelligence import market_intelligence_service
 
 logger = logging.getLogger(__name__)
 
@@ -168,9 +166,7 @@ async def extract_assumptions(simulation_id: str):
     llm = get_llm_provider()
     tracker = AssumptionTracker(llm_provider=llm)
 
-    result = await tracker.extract_assumptions(
-        sim_state.config, sim_state
-    )
+    result = await tracker.extract_assumptions(sim_state.config, sim_state)
     return result
 
 
@@ -191,9 +187,7 @@ async def what_if_analysis(
         assumptions=[],
     )
 
-    result = await tracker.what_if_analysis(
-        assumption_id, request.new_value, register
-    )
+    result = await tracker.what_if_analysis(assumption_id, request.new_value, register)
     return result
 
 
@@ -261,11 +255,13 @@ async def list_verticals():
             try:
                 with open(json_file, "r") as f:
                     data = json.load(f)
-                verticals.append({
-                    "id": data.get("vertical", json_file.stem),
-                    "name": data.get("vertical", json_file.stem).replace("_", " ").title(),
-                    "scenario_count": len(data.get("scenarios", [])),
-                })
+                verticals.append(
+                    {
+                        "id": data.get("vertical", json_file.stem),
+                        "name": data.get("vertical", json_file.stem).replace("_", " ").title(),
+                        "scenario_count": len(data.get("scenarios", [])),
+                    }
+                )
             except Exception as e:
                 logger.error(f"Failed to load vertical {json_file}: {e}")
 
@@ -275,16 +271,12 @@ async def list_verticals():
 @router.get("/playbooks/verticals/{vertical}")
 async def get_vertical_scenarios(vertical: str):
     """Get scenarios for a specific vertical."""
-    verticals_dir = (
-        Path(__file__).parent.parent / "playbooks" / "vertical_libraries"
-    ).resolve()
+    verticals_dir = (Path(__file__).parent.parent / "playbooks" / "vertical_libraries").resolve()
     json_file = (verticals_dir / f"{vertical}.json").resolve()
 
     # Prevent path traversal — ensure resolved path stays within verticals_dir
     if not str(json_file).startswith(str(verticals_dir)):
-        raise HTTPException(
-            status_code=400, detail="Invalid vertical identifier"
-        )
+        raise HTTPException(status_code=400, detail="Invalid vertical identifier")
 
     if not json_file.exists():
         raise HTTPException(status_code=404, detail="Vertical not found")
@@ -422,9 +414,7 @@ async def update_leaderboard(simulation_id: str):
     gamification_data = sim_state.config.parameters.get("gamification", {})
     config = GamificationConfig(**gamification_data)
 
-    result = await gamification_engine.update_leaderboard(
-        simulation_id, current_round, config
-    )
+    result = await gamification_engine.update_leaderboard(simulation_id, current_round, config)
     return result
 
 
@@ -462,6 +452,7 @@ async def process_multilanguage_seed(content: str):
 # Regulatory Scenario Generator Endpoints
 class RegulatoryGenerateRequest(BaseModel):
     """Request for regulatory scenario generation."""
+
     regulatory_text: str
     industry: str = "general"
     organization_context: str = ""
@@ -523,7 +514,7 @@ async def get_audit_trail(simulation_id: str):
     if not sim_state:
         raise HTTPException(status_code=404, detail="Simulation not found")
 
-    return audit_manager.get_trail(simulation_id)
+    return await audit_manager.get_trail(simulation_id)
 
 
 @router.get("/simulations/{simulation_id}/audit-trail/verify")
@@ -533,7 +524,7 @@ async def verify_audit_trail(simulation_id: str):
     if not sim_state:
         raise HTTPException(status_code=404, detail="Simulation not found")
 
-    is_valid, message = audit_manager.verify_integrity(simulation_id)
+    is_valid, message = await audit_manager.verify_integrity(simulation_id)
     return {"valid": is_valid, "message": message}
 
 
@@ -548,25 +539,17 @@ async def export_audit_trail(
         raise HTTPException(status_code=404, detail="Simulation not found")
 
     try:
-        data = audit_manager.export_trail(simulation_id, format)
+        data = await audit_manager.export_trail(simulation_id, format)
         if format == "csv":
             return PlainTextResponse(
                 content=data,
                 media_type="text/csv",
-                headers={
-                    "Content-Disposition": (
-                        f"attachment; filename=audit_trail_{simulation_id}.csv"
-                    )
-                },
+                headers={"Content-Disposition": (f"attachment; filename=audit_trail_{simulation_id}.csv")},
             )
         return PlainTextResponse(
             content=data,
             media_type="application/json",
-            headers={
-                "Content-Disposition": (
-                    f"attachment; filename=audit_trail_{simulation_id}.json"
-                )
-            },
+            headers={"Content-Disposition": (f"attachment; filename=audit_trail_{simulation_id}.json")},
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -593,6 +576,7 @@ async def analyze_zopa(simulation_id: str):
 # Market Intelligence Endpoints
 class MarketIntelligenceConfigRequest(BaseModel):
     """Request for market intelligence configuration."""
+
     simulation_id: str
     stock_symbols: list[str] | None = None
     news_queries: list[str] | None = None
@@ -609,9 +593,7 @@ async def configure_market_intelligence(
         "news_queries": request.news_queries or [],
         "refresh_interval": request.refresh_interval,
     }
-    result = await market_intelligence_service.configure_sources(
-        request.simulation_id, config
-    )
+    result = await market_intelligence_service.configure_sources(request.simulation_id, config)
     return result
 
 
@@ -626,15 +608,14 @@ async def get_market_intelligence_feed(simulation_id: str):
 async def inject_market_intelligence(simulation_id: str):
     """Inject market intelligence into agent worldviews."""
     feed = await market_intelligence_service.get_market_feed(simulation_id)
-    result = await market_intelligence_service.update_agent_worldview(
-        simulation_id, feed
-    )
+    result = await market_intelligence_service.update_agent_worldview(simulation_id, feed)
     return result
 
 
 # Backtesting Endpoints
 class BacktestRequest(BaseModel):
     """Request for running a backtest."""
+
     case_id: str | None = None
     seed_material: str | None = None
     actual_outcomes: dict | None = None

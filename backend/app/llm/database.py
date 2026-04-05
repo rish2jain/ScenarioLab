@@ -5,11 +5,71 @@ Connection management and DDL are delegated to ``app.db.connection``.
 
 import json
 import logging
+from typing import Any
 
 from app.db.connection import LLM_DDL, get_fresh_db
 from app.db.connection import utc_now_iso as _utc_now_iso
 
 logger = logging.getLogger(__name__)
+
+
+def _json_or(value: str | None, default: Any) -> Any:
+    """Parse a JSON column or return ``default`` when empty/None."""
+    if not value:
+        return default
+    return json.loads(value)
+
+
+def _row_to_job(row: Any) -> dict[str, Any]:
+    # ``num_examples`` is not a column on ``fine_tuning_jobs`` (see LLM_DDL);
+    # ``FineTuningJob.num_examples`` is filled lazily via
+    # ``fine_tuning.FineTuningService._with_dataset_examples`` after loading.
+    return {
+        "job_id": row["job_id"],
+        "dataset_id": row["dataset_id"],
+        "base_model": row["base_model"],
+        "lora_config": _json_or(row["lora_config"], {}),
+        "status": row["status"],
+        "progress": row["progress"],
+        "created_at": row["created_at"],
+        "completed_at": row["completed_at"],
+        "metrics": _json_or(row["metrics"], {}),
+        "error_message": row["error_message"],
+    }
+
+
+def _row_to_dataset(row: Any) -> dict[str, Any]:
+    return {
+        "dataset_id": row["dataset_id"],
+        "data_type": row["data_type"],
+        "num_examples": row["num_examples"],
+        "format": row["format"],
+        "preview_samples": _json_or(row["preview_samples"], []),
+        "created_at": row["created_at"],
+    }
+
+
+def _row_to_adapter(row: Any) -> dict[str, Any]:
+    return {
+        "adapter_id": row["adapter_id"],
+        "job_id": row["job_id"],
+        "base_model": row["base_model"],
+        "domain": row["domain"],
+        "size_mb": row["size_mb"],
+        "created_at": row["created_at"],
+        "performance_metrics": _json_or(row["performance_metrics"], {}),
+        "active": bool(row["active"]),
+    }
+
+
+def _row_to_benchmark(row: Any) -> dict[str, Any]:
+    return {
+        "benchmark_id": row["benchmark_id"],
+        "domain": row["domain"],
+        "questions": _json_or(row["questions"], []),
+        "evaluation_criteria": _json_or(row["evaluation_criteria"], []),
+        "created_at": row["created_at"],
+    }
 
 
 async def get_db():
@@ -31,14 +91,13 @@ async def init_llm_tables() -> None:
         await db.close()
 
 
-
 class FineTuningRepository:
     """CRUD operations for fine-tuning persistence."""
 
     async def save_job(self, job: dict) -> None:
         """Save a fine-tuning job to the database."""
+        db = await get_db()
         try:
-            db = await get_db()
             await db.execute(
                 """
                 INSERT INTO fine_tuning_jobs
@@ -65,80 +124,52 @@ class FineTuningRepository:
                     job.get("progress", 0.0),
                     job.get("created_at", _utc_now_iso()),
                     job.get("completed_at"),
-                    json.dumps(job.get("metrics", {}))
-                    if job.get("metrics") else None,
+                    json.dumps(job.get("metrics", {})),
                     job.get("error_message"),
                 ),
             )
             await db.commit()
-            await db.close()
         except Exception as e:
             logger.error(f"Failed to save job: {e}")
+            raise
+        finally:
+            await db.close()
 
     async def get_job(self, job_id: str) -> dict | None:
         """Retrieve a fine-tuning job by ID."""
+        db = await get_db()
         try:
-            db = await get_db()
             cursor = await db.execute(
                 "SELECT * FROM fine_tuning_jobs WHERE job_id = ?",
                 (job_id,),
             )
             row = await cursor.fetchone()
-            await db.close()
             if row is None:
                 return None
-            return {
-                "job_id": row["job_id"],
-                "dataset_id": row["dataset_id"],
-                "base_model": row["base_model"],
-                "lora_config": json.loads(row["lora_config"])
-                if row["lora_config"] else {},
-                "status": row["status"],
-                "progress": row["progress"],
-                "created_at": row["created_at"],
-                "completed_at": row["completed_at"],
-                "metrics": json.loads(row["metrics"])
-                if row["metrics"] else {},
-                "error_message": row["error_message"],
-            }
+            return _row_to_job(row)
         except Exception as e:
             logger.error(f"Failed to get job: {e}")
             return None
+        finally:
+            await db.close()
 
     async def list_jobs(self) -> list[dict]:
         """List all fine-tuning jobs."""
+        db = await get_db()
         try:
-            db = await get_db()
-            cursor = await db.execute(
-                "SELECT * FROM fine_tuning_jobs ORDER BY created_at DESC"
-            )
+            cursor = await db.execute("SELECT * FROM fine_tuning_jobs ORDER BY created_at DESC")
             rows = await cursor.fetchall()
-            await db.close()
-            return [
-                {
-                    "job_id": row["job_id"],
-                    "dataset_id": row["dataset_id"],
-                    "base_model": row["base_model"],
-                    "lora_config": json.loads(row["lora_config"])
-                    if row["lora_config"] else {},
-                    "status": row["status"],
-                    "progress": row["progress"],
-                    "created_at": row["created_at"],
-                    "completed_at": row["completed_at"],
-                    "metrics": json.loads(row["metrics"])
-                    if row["metrics"] else {},
-                    "error_message": row["error_message"],
-                }
-                for row in rows
-            ]
+            return [_row_to_job(r) for r in rows]
         except Exception as e:
             logger.error(f"Failed to list jobs: {e}")
             return []
+        finally:
+            await db.close()
 
     async def save_dataset(self, dataset: dict) -> None:
         """Save a dataset to the database."""
+        db = await get_db()
         try:
-            db = await get_db()
             await db.execute(
                 """
                 INSERT INTO fine_tuning_datasets
@@ -161,64 +192,47 @@ class FineTuningRepository:
                 ),
             )
             await db.commit()
-            await db.close()
         except Exception as e:
             logger.error(f"Failed to save dataset: {e}")
+            raise
+        finally:
+            await db.close()
 
     async def get_dataset(self, dataset_id: str) -> dict | None:
         """Retrieve a dataset by ID."""
+        db = await get_db()
         try:
-            db = await get_db()
             cursor = await db.execute(
                 "SELECT * FROM fine_tuning_datasets WHERE dataset_id = ?",
                 (dataset_id,),
             )
             row = await cursor.fetchone()
-            await db.close()
             if row is None:
                 return None
-            return {
-                "dataset_id": row["dataset_id"],
-                "data_type": row["data_type"],
-                "num_examples": row["num_examples"],
-                "format": row["format"],
-                "preview_samples": json.loads(row["preview_samples"])
-                if row["preview_samples"] else [],
-                "created_at": row["created_at"],
-            }
+            return _row_to_dataset(row)
         except Exception as e:
             logger.error(f"Failed to get dataset: {e}")
             return None
+        finally:
+            await db.close()
 
     async def list_datasets(self) -> list[dict]:
         """List all datasets."""
+        db = await get_db()
         try:
-            db = await get_db()
-            cursor = await db.execute(
-                "SELECT * FROM fine_tuning_datasets ORDER BY created_at DESC"
-            )
+            cursor = await db.execute("SELECT * FROM fine_tuning_datasets ORDER BY created_at DESC")
             rows = await cursor.fetchall()
-            await db.close()
-            return [
-                {
-                    "dataset_id": row["dataset_id"],
-                    "data_type": row["data_type"],
-                    "num_examples": row["num_examples"],
-                    "format": row["format"],
-                    "preview_samples": json.loads(row["preview_samples"])
-                    if row["preview_samples"] else [],
-                    "created_at": row["created_at"],
-                }
-                for row in rows
-            ]
+            return [_row_to_dataset(r) for r in rows]
         except Exception as e:
             logger.error(f"Failed to list datasets: {e}")
             return []
+        finally:
+            await db.close()
 
     async def save_adapter(self, adapter: dict) -> None:
         """Save a LoRA adapter to the database."""
+        db = await get_db()
         try:
-            db = await get_db()
             await db.execute(
                 """
                 INSERT INTO lora_adapters
@@ -245,69 +259,47 @@ class FineTuningRepository:
                 ),
             )
             await db.commit()
-            await db.close()
         except Exception as e:
             logger.error(f"Failed to save adapter: {e}")
+            raise
+        finally:
+            await db.close()
 
     async def get_adapter(self, adapter_id: str) -> dict | None:
         """Retrieve an adapter by ID."""
+        db = await get_db()
         try:
-            db = await get_db()
             cursor = await db.execute(
                 "SELECT * FROM lora_adapters WHERE adapter_id = ?",
                 (adapter_id,),
             )
             row = await cursor.fetchone()
-            await db.close()
             if row is None:
                 return None
-            return {
-                "adapter_id": row["adapter_id"],
-                "job_id": row["job_id"],
-                "base_model": row["base_model"],
-                "domain": row["domain"],
-                "size_mb": row["size_mb"],
-                "created_at": row["created_at"],
-                "performance_metrics": json.loads(row["performance_metrics"])
-                if row["performance_metrics"] else {},
-                "active": bool(row["active"]),
-            }
+            return _row_to_adapter(row)
         except Exception as e:
             logger.error(f"Failed to get adapter: {e}")
             return None
+        finally:
+            await db.close()
 
     async def list_adapters(self) -> list[dict]:
         """List all adapters."""
+        db = await get_db()
         try:
-            db = await get_db()
-            cursor = await db.execute(
-                "SELECT * FROM lora_adapters ORDER BY created_at DESC"
-            )
+            cursor = await db.execute("SELECT * FROM lora_adapters ORDER BY created_at DESC")
             rows = await cursor.fetchall()
-            await db.close()
-            return [
-                {
-                    "adapter_id": row["adapter_id"],
-                    "job_id": row["job_id"],
-                    "base_model": row["base_model"],
-                    "domain": row["domain"],
-                    "size_mb": row["size_mb"],
-                    "created_at": row["created_at"],
-                    "performance_metrics": json.loads(
-                        row["performance_metrics"]
-                    ) if row["performance_metrics"] else {},
-                    "active": bool(row["active"]),
-                }
-                for row in rows
-            ]
+            return [_row_to_adapter(r) for r in rows]
         except Exception as e:
             logger.error(f"Failed to list adapters: {e}")
             return []
+        finally:
+            await db.close()
 
     async def set_active_adapter(self, adapter_id: str | None) -> None:
         """Set the active adapter (deactivate all others)."""
+        db = await get_db()
         try:
-            db = await get_db()
             # Deactivate all
             await db.execute("UPDATE lora_adapters SET active = 0")
             # Activate the specified one
@@ -317,40 +309,31 @@ class FineTuningRepository:
                     (adapter_id,),
                 )
             await db.commit()
-            await db.close()
         except Exception as e:
             logger.error(f"Failed to set active adapter: {e}")
+            raise
+        finally:
+            await db.close()
 
     async def get_active_adapter(self) -> dict | None:
         """Get the currently active adapter."""
+        db = await get_db()
         try:
-            db = await get_db()
-            cursor = await db.execute(
-                "SELECT * FROM lora_adapters WHERE active = 1 LIMIT 1"
-            )
+            cursor = await db.execute("SELECT * FROM lora_adapters WHERE active = 1 LIMIT 1")
             row = await cursor.fetchone()
-            await db.close()
             if row is None:
                 return None
-            return {
-                "adapter_id": row["adapter_id"],
-                "job_id": row["job_id"],
-                "base_model": row["base_model"],
-                "domain": row["domain"],
-                "size_mb": row["size_mb"],
-                "created_at": row["created_at"],
-                "performance_metrics": json.loads(row["performance_metrics"])
-                if row["performance_metrics"] else {},
-                "active": bool(row["active"]),
-            }
+            return _row_to_adapter(row)
         except Exception as e:
             logger.error(f"Failed to get active adapter: {e}")
             return None
+        finally:
+            await db.close()
 
     async def save_benchmark(self, benchmark: dict) -> None:
         """Save a benchmark to the database."""
+        db = await get_db()
         try:
-            db = await get_db()
             await db.execute(
                 """
                 INSERT INTO fine_tuning_benchmarks
@@ -371,60 +354,42 @@ class FineTuningRepository:
                 ),
             )
             await db.commit()
-            await db.close()
         except Exception as e:
             logger.error(f"Failed to save benchmark: {e}")
+            raise
+        finally:
+            await db.close()
 
     async def get_benchmark(self, benchmark_id: str) -> dict | None:
         """Retrieve a benchmark by ID."""
+        db = await get_db()
         try:
-            db = await get_db()
             cursor = await db.execute(
                 "SELECT * FROM fine_tuning_benchmarks WHERE benchmark_id = ?",
                 (benchmark_id,),
             )
             row = await cursor.fetchone()
-            await db.close()
             if row is None:
                 return None
-            return {
-                "benchmark_id": row["benchmark_id"],
-                "domain": row["domain"],
-                "questions": json.loads(row["questions"])
-                if row["questions"] else [],
-                "evaluation_criteria": json.loads(row["evaluation_criteria"])
-                if row["evaluation_criteria"] else [],
-                "created_at": row["created_at"],
-            }
+            return _row_to_benchmark(row)
         except Exception as e:
             logger.error(f"Failed to get benchmark: {e}")
             return None
+        finally:
+            await db.close()
 
     async def list_benchmarks(self) -> list[dict]:
         """List all benchmarks."""
+        db = await get_db()
         try:
-            db = await get_db()
-            cursor = await db.execute(
-                "SELECT * FROM fine_tuning_benchmarks ORDER BY created_at DESC"
-            )
+            cursor = await db.execute("SELECT * FROM fine_tuning_benchmarks ORDER BY created_at DESC")
             rows = await cursor.fetchall()
-            await db.close()
-            return [
-                {
-                    "benchmark_id": row["benchmark_id"],
-                    "domain": row["domain"],
-                    "questions": json.loads(row["questions"])
-                    if row["questions"] else [],
-                    "evaluation_criteria": json.loads(
-                        row["evaluation_criteria"]
-                    ) if row["evaluation_criteria"] else [],
-                    "created_at": row["created_at"],
-                }
-                for row in rows
-            ]
+            return [_row_to_benchmark(r) for r in rows]
         except Exception as e:
             logger.error(f"Failed to list benchmarks: {e}")
             return []
+        finally:
+            await db.close()
 
 
 class MarketIntelligenceRepository:
@@ -432,8 +397,8 @@ class MarketIntelligenceRepository:
 
     async def save_config(self, simulation_id: str, config: dict) -> None:
         """Save market intelligence config for a simulation."""
+        db = await get_db()
         try:
-            db = await get_db()
             await db.execute(
                 """
                 INSERT INTO market_intelligence_configs
@@ -446,32 +411,34 @@ class MarketIntelligenceRepository:
                 (simulation_id, json.dumps(config), _utc_now_iso()),
             )
             await db.commit()
-            await db.close()
         except Exception as e:
             logger.error(f"Failed to save market config: {e}")
+            raise
+        finally:
+            await db.close()
 
     async def get_config(self, simulation_id: str) -> dict | None:
         """Retrieve market intelligence config for a simulation."""
+        db = await get_db()
         try:
-            db = await get_db()
             cursor = await db.execute(
-                "SELECT config FROM market_intelligence_configs "
-                "WHERE simulation_id = ?",
+                "SELECT config FROM market_intelligence_configs " "WHERE simulation_id = ?",
                 (simulation_id,),
             )
             row = await cursor.fetchone()
-            await db.close()
             if row is None:
                 return None
             return json.loads(row["config"])
         except Exception as e:
             logger.error(f"Failed to get market config: {e}")
             return None
+        finally:
+            await db.close()
 
     async def save_cache(self, simulation_id: str, data: dict) -> None:
         """Save market intelligence cache for a simulation."""
+        db = await get_db()
         try:
-            db = await get_db()
             await db.execute(
                 """
                 INSERT INTO market_intelligence_cache
@@ -484,38 +451,38 @@ class MarketIntelligenceRepository:
                 (simulation_id, json.dumps(data), _utc_now_iso()),
             )
             await db.commit()
-            await db.close()
         except Exception as e:
             logger.error(f"Failed to save market cache: {e}")
+            raise
+        finally:
+            await db.close()
 
     async def get_cache(self, simulation_id: str) -> dict | None:
         """Retrieve market intelligence cache for a simulation."""
+        db = await get_db()
         try:
-            db = await get_db()
             cursor = await db.execute(
-                "SELECT data FROM market_intelligence_cache "
-                "WHERE simulation_id = ?",
+                "SELECT data FROM market_intelligence_cache " "WHERE simulation_id = ?",
                 (simulation_id,),
             )
             row = await cursor.fetchone()
-            await db.close()
             if row is None:
                 return None
             return json.loads(row["data"])
         except Exception as e:
             logger.error(f"Failed to get market cache: {e}")
             return None
+        finally:
+            await db.close()
 
 
 class VoiceRepository:
     """CRUD operations for voice conversation persistence."""
 
-    async def save_conversation(
-        self, simulation_id: str, agent_id: str, messages: list[dict]
-    ) -> None:
+    async def save_conversation(self, simulation_id: str, agent_id: str, messages: list[dict]) -> None:
         """Save conversation history for a simulation/agent."""
+        db = await get_db()
         try:
-            db = await get_db()
             conversation_id = f"{simulation_id}:{agent_id}"
             await db.execute(
                 """
@@ -535,40 +502,37 @@ class VoiceRepository:
                 ),
             )
             await db.commit()
-            await db.close()
         except Exception as e:
             logger.error(f"Failed to save conversation: {e}")
+            raise
+        finally:
+            await db.close()
 
-    async def get_conversation(
-        self, simulation_id: str, agent_id: str
-    ) -> list[dict] | None:
+    async def get_conversation(self, simulation_id: str, agent_id: str) -> list[dict] | None:
         """Retrieve conversation history for a simulation/agent."""
+        db = await get_db()
         try:
-            db = await get_db()
             cursor = await db.execute(
-                "SELECT messages FROM voice_conversations "
-                "WHERE simulation_id = ? AND agent_id = ?",
+                "SELECT messages FROM voice_conversations " "WHERE simulation_id = ? AND agent_id = ?",
                 (simulation_id, agent_id),
             )
             row = await cursor.fetchone()
-            await db.close()
             if row is None:
                 return None
             return json.loads(row["messages"])
         except Exception as e:
             logger.error(f"Failed to get conversation: {e}")
             return None
+        finally:
+            await db.close()
 
-    async def delete_conversation(
-        self, simulation_id: str, agent_id: str | None = None
-    ) -> None:
+    async def delete_conversation(self, simulation_id: str, agent_id: str | None = None) -> None:
         """Delete conversation history."""
+        db = await get_db()
         try:
-            db = await get_db()
             if agent_id:
                 await db.execute(
-                    "DELETE FROM voice_conversations "
-                    "WHERE simulation_id = ? AND agent_id = ?",
+                    "DELETE FROM voice_conversations " "WHERE simulation_id = ? AND agent_id = ?",
                     (simulation_id, agent_id),
                 )
             else:
@@ -577,9 +541,11 @@ class VoiceRepository:
                     (simulation_id,),
                 )
             await db.commit()
-            await db.close()
         except Exception as e:
             logger.error(f"Failed to delete conversation: {e}")
+            raise
+        finally:
+            await db.close()
 
     async def save_audio(
         self,
@@ -589,8 +555,8 @@ class VoiceRepository:
         audio_data: bytes,
     ) -> None:
         """Save audio data to the database."""
+        db = await get_db()
         try:
-            db = await get_db()
             await db.execute(
                 """
                 INSERT INTO voice_audio_cache
@@ -609,37 +575,37 @@ class VoiceRepository:
                 ),
             )
             await db.commit()
-            await db.close()
         except Exception as e:
             logger.error(f"Failed to save audio: {e}")
+            raise
+        finally:
+            await db.close()
 
     async def get_audio(self, audio_id: str) -> bytes | None:
         """Retrieve audio data by ID."""
+        db = await get_db()
         try:
-            db = await get_db()
             cursor = await db.execute(
                 "SELECT audio_data FROM voice_audio_cache WHERE audio_id = ?",
                 (audio_id,),
             )
             row = await cursor.fetchone()
-            await db.close()
             if row is None:
                 return None
             return row["audio_data"]
         except Exception as e:
             logger.error(f"Failed to get audio: {e}")
             return None
+        finally:
+            await db.close()
 
-    async def delete_audio_for_simulation(
-        self, simulation_id: str, agent_id: str | None = None
-    ) -> None:
+    async def delete_audio_for_simulation(self, simulation_id: str, agent_id: str | None = None) -> None:
         """Delete audio cache for a simulation."""
+        db = await get_db()
         try:
-            db = await get_db()
             if agent_id:
                 await db.execute(
-                    "DELETE FROM voice_audio_cache "
-                    "WHERE simulation_id = ? AND agent_id = ?",
+                    "DELETE FROM voice_audio_cache " "WHERE simulation_id = ? AND agent_id = ?",
                     (simulation_id, agent_id),
                 )
             else:
@@ -648,6 +614,8 @@ class VoiceRepository:
                     (simulation_id,),
                 )
             await db.commit()
-            await db.close()
         except Exception as e:
             logger.error(f"Failed to delete audio: {e}")
+            raise
+        finally:
+            await db.close()

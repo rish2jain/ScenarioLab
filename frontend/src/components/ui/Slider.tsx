@@ -1,7 +1,6 @@
 'use client';
 
 import { clsx } from 'clsx';
-import { useState, useCallback } from 'react';
 
 interface SliderProps {
   label?: string;

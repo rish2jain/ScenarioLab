@@ -67,45 +67,33 @@ class RegulatoryScenarioGenerator:
     # Industry-specific role mappings
     INDUSTRY_ROLES: dict[str, list[dict[str, str]]] = {
         "financial_services": [
-            {"role": "Chief Compliance Officer",
-             "archetype_id": "general_counsel"},
-            {"role": "Head of Trading",
-             "archetype_id": "operations_head"},
+            {"role": "Chief Compliance Officer", "archetype_id": "general_counsel"},
+            {"role": "Head of Trading", "archetype_id": "operations_head"},
             {"role": "Treasury Manager", "archetype_id": "cfo"},
         ],
         "healthcare": [
             {"role": "Chief Medical Officer", "archetype_id": "cro"},
-            {"role": "Patient Safety Director",
-             "archetype_id": "operations_head"},
-            {"role": "HIPAA Compliance Officer",
-             "archetype_id": "general_counsel"},
+            {"role": "Patient Safety Director", "archetype_id": "operations_head"},
+            {"role": "HIPAA Compliance Officer", "archetype_id": "general_counsel"},
         ],
         "technology": [
             {"role": "CTO", "archetype_id": "ceo"},
             {"role": "Data Privacy Officer", "archetype_id": "cro"},
-            {"role": "Product Security Lead",
-             "archetype_id": "operations_head"},
+            {"role": "Product Security Lead", "archetype_id": "operations_head"},
         ],
         "energy": [
-            {"role": "Environmental Compliance Director",
-             "archetype_id": "cro"},
-            {"role": "Operations Director",
-             "archetype_id": "operations_head"},
-            {"role": "Government Affairs Lead",
-             "archetype_id": "strategy_vp"},
+            {"role": "Environmental Compliance Director", "archetype_id": "cro"},
+            {"role": "Operations Director", "archetype_id": "operations_head"},
+            {"role": "Government Affairs Lead", "archetype_id": "strategy_vp"},
         ],
         "manufacturing": [
-            {"role": "Supply Chain Director",
-             "archetype_id": "operations_head"},
+            {"role": "Supply Chain Director", "archetype_id": "operations_head"},
             {"role": "Quality Assurance Head", "archetype_id": "cro"},
-            {"role": "Environmental Health & Safety Manager",
-             "archetype_id": "general_counsel"},
+            {"role": "Environmental Health & Safety Manager", "archetype_id": "general_counsel"},
         ],
         "general": [
-            {"role": "Compliance Director",
-             "archetype_id": "general_counsel"},
-            {"role": "Operations Lead",
-             "archetype_id": "operations_head"},
+            {"role": "Compliance Director", "archetype_id": "general_counsel"},
+            {"role": "Operations Lead", "archetype_id": "operations_head"},
         ],
     }
 
@@ -143,27 +131,18 @@ class RegulatoryScenarioGenerator:
             raise ValueError("LLM provider required for scenario generation")
 
         logger.info(
-            f"Auto-fetching regulation: {regulation_name} "
-            f"(jurisdiction={jurisdiction}, industry={industry})"
+            f"Auto-fetching regulation: {regulation_name} " f"(jurisdiction={jurisdiction}, industry={industry})"
         )
 
         # Step 1: Research the regulation
-        research_data = await research_service.research_regulation(
-            regulation_name, jurisdiction=jurisdiction
-        )
+        research_data = await research_service.research_regulation(regulation_name, jurisdiction=jurisdiction)
         synthesis = research_data.get("synthesis", {})
 
         # Step 2: Map synthesis to RegulatoryExtraction
         extraction = RegulatoryExtraction(
-            regulation_name=synthesis.get(
-                "regulation_name", regulation_name
-            ),
-            key_requirements=synthesis.get(
-                "key_requirements", ["Compliance required"]
-            ),
-            affected_parties=synthesis.get(
-                "affected_parties", ["Organization"]
-            ),
+            regulation_name=synthesis.get("regulation_name", regulation_name),
+            key_requirements=synthesis.get("key_requirements", ["Compliance required"]),
+            affected_parties=synthesis.get("affected_parties", ["Organization"]),
             compliance_deadlines=synthesis.get("compliance_deadlines", []),
             penalties=synthesis.get("penalties", []),
         )
@@ -172,29 +151,21 @@ class RegulatoryScenarioGenerator:
         roster = self._generate_agent_roster(industry, extraction)
 
         # Step 4: Build scenario config
-        scenario_config = self._build_scenario_config(
-            extraction, roster, industry
-        )
+        scenario_config = self._build_scenario_config(extraction, roster, industry)
 
         # Step 5: Build regulatory text from synthesis for impact analysis
         synthesis_text_parts = [
             f"Regulation: {extraction.regulation_name}",
             f"Jurisdiction: {synthesis.get('jurisdiction', jurisdiction)}",
-            "Key Requirements: "
-            + "; ".join(extraction.key_requirements),
-            "Affected Parties: "
-            + ", ".join(extraction.affected_parties),
+            "Key Requirements: " + "; ".join(extraction.key_requirements),
+            "Affected Parties: " + ", ".join(extraction.affected_parties),
         ]
         enforcement = synthesis.get("enforcement_precedents", [])
         if enforcement:
-            synthesis_text_parts.append(
-                "Enforcement Precedents: " + "; ".join(enforcement)
-            )
+            synthesis_text_parts.append("Enforcement Precedents: " + "; ".join(enforcement))
         implications = synthesis.get("practical_implications", [])
         if implications:
-            synthesis_text_parts.append(
-                "Practical Implications: " + "; ".join(implications)
-            )
+            synthesis_text_parts.append("Practical Implications: " + "; ".join(implications))
         synthesized_text = "\n".join(synthesis_text_parts)
 
         # Step 6: Identify impacts
@@ -209,9 +180,7 @@ class RegulatoryScenarioGenerator:
                 "regulation_name": extraction.regulation_name,
                 "requirements_count": len(extraction.key_requirements),
                 "source": "autoresearch",
-                "eurlex_results_count": len(
-                    research_data.get("eurlex_results", [])
-                ),
+                "eurlex_results_count": len(research_data.get("eurlex_results", [])),
             },
         )
 
@@ -251,9 +220,7 @@ class RegulatoryScenarioGenerator:
         roster = self._generate_agent_roster(industry, extraction)
 
         # Step 3: Generate simulation config
-        scenario_config = self._build_scenario_config(
-            extraction, roster, industry
-        )
+        scenario_config = self._build_scenario_config(extraction, roster, industry)
 
         # Step 4: Identify impacts
         impacts = await self.identify_impacts(regulatory_text, industry)
@@ -268,9 +235,7 @@ class RegulatoryScenarioGenerator:
             },
         )
 
-    async def _extract_regulatory_info(
-        self, regulatory_text: str
-    ) -> RegulatoryExtraction:
+    async def _extract_regulatory_info(self, regulatory_text: str) -> RegulatoryExtraction:
         """Use LLM to parse and extract regulatory information."""
         prompt = f"""Analyze the following regulatory text and extract key information.
 
@@ -343,46 +308,56 @@ Respond with valid JSON only, no markdown formatting."""
 
         # Add core roles
         for role_info in self.CORE_ROLES:
-            roster.append(AgentRosterEntry(
-                role=role_info["role"],
-                archetype_id=role_info["archetype_id"],
-            ))
+            roster.append(
+                AgentRosterEntry(
+                    role=role_info["role"],
+                    archetype_id=role_info["archetype_id"],
+                )
+            )
 
         # Add industry-specific roles
         industry_key = industry.lower().replace("-", "_").replace(" ", "_")
-        industry_roles = self.INDUSTRY_ROLES.get(
-            industry_key, self.INDUSTRY_ROLES["general"]
-        )
+        industry_roles = self.INDUSTRY_ROLES.get(industry_key, self.INDUSTRY_ROLES["general"])
         for role_info in industry_roles:
-            roster.append(AgentRosterEntry(
-                role=role_info["role"],
-                archetype_id=role_info["archetype_id"],
-            ))
+            roster.append(
+                AgentRosterEntry(
+                    role=role_info["role"],
+                    archetype_id=role_info["archetype_id"],
+                )
+            )
 
         # Add regulation-specific roles based on affected parties
         for party in extraction.affected_parties[:3]:
             party_lower = party.lower()
             if "board" in party_lower:
-                roster.append(AgentRosterEntry(
-                    role="Board Member",
-                    archetype_id="board_member",
-                ))
+                roster.append(
+                    AgentRosterEntry(
+                        role="Board Member",
+                        archetype_id="board_member",
+                    )
+                )
             elif "investor" in party_lower or "shareholder" in party_lower:
-                roster.append(AgentRosterEntry(
-                    role="Investor Representative",
-                    archetype_id="activist_investor",
-                ))
+                roster.append(
+                    AgentRosterEntry(
+                        role="Investor Representative",
+                        archetype_id="activist_investor",
+                    )
+                )
             elif "union" in party_lower or "employee" in party_lower:
-                roster.append(AgentRosterEntry(
-                    role="Employee Representative",
-                    archetype_id="union_rep",
-                ))
+                roster.append(
+                    AgentRosterEntry(
+                        role="Employee Representative",
+                        archetype_id="union_rep",
+                    )
+                )
             elif "customer" in party_lower:
-                roster.append(AgentRosterEntry(
-                    role="Customer Advocate",
-                    archetype_id="media_stakeholder",
-                    customization={"focus": "customer-perspective"},
-                ))
+                roster.append(
+                    AgentRosterEntry(
+                        role="Customer Advocate",
+                        archetype_id="media_stakeholder",
+                        customization={"focus": "customer-perspective"},
+                    )
+                )
 
         return roster
 
@@ -405,14 +380,10 @@ Respond with valid JSON only, no markdown formatting."""
         round_structure = {
             "total_rounds": total_rounds,
             "phases": [
-                {"name": "assessment",
-                 "description": "Assess regulatory impact"},
-                {"name": "planning",
-                 "description": "Develop compliance strategy"},
-                {"name": "deliberation",
-                 "description": "Debate implementation approach"},
-                {"name": "decision",
-                 "description": "Finalize compliance plan"},
+                {"name": "assessment", "description": "Assess regulatory impact"},
+                {"name": "planning", "description": "Develop compliance strategy"},
+                {"name": "deliberation", "description": "Debate implementation approach"},
+                {"name": "decision", "description": "Finalize compliance plan"},
             ],
             "decision_points": [
                 {"round": total_rounds // 2, "type": "mid-course review"},
@@ -436,10 +407,7 @@ Respond with valid JSON only, no markdown formatting."""
 
         return SimulationScenarioConfig(
             name=f"{extraction.regulation_name} Compliance War Game",
-            description=(
-                f"Strategic war game for {industry} industry "
-                f"responding to {extraction.regulation_name}"
-            ),
+            description=(f"Strategic war game for {industry} industry " f"responding to {extraction.regulation_name}"),
             environment_type="war_room",
             regulation_summary=extraction,
             agent_roster=roster,
@@ -471,9 +439,7 @@ Respond with valid JSON only, no markdown formatting."""
 
         context_section = ""
         if organization_context:
-            context_section = (
-                f"\n\nORGANIZATION CONTEXT:\n{organization_context}"
-            )
+            context_section = f"\n\nORGANIZATION CONTEXT:\n{organization_context}"
 
         prompt = f"""Analyze the following regulatory text and identify
 expected organizational impacts.

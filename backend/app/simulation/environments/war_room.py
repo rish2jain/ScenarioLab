@@ -58,25 +58,15 @@ class WarRoomEnvironment(BaseEnvironment):
         participants = turn_manager.get_phase_participants(phase)
 
         if phase == "intel_briefing":
-            await self._run_intel_briefing(
-                agents, speaking_order, round_state, visibility
-            )
+            await self._run_intel_briefing(agents, speaking_order, round_state, visibility)
         elif phase == "threat_assessment":
-            await self._run_threat_assessment(
-                agents, speaking_order, participants, round_state, visibility
-            )
+            await self._run_threat_assessment(agents, speaking_order, participants, round_state, visibility)
         elif phase == "response_options":
-            await self._run_response_options(
-                agents, speaking_order, participants, round_state, visibility
-            )
+            await self._run_response_options(agents, speaking_order, participants, round_state, visibility)
         elif phase == "decision":
-            await self._run_decision_phase(
-                agents, speaking_order, round_state, visibility
-            )
+            await self._run_decision_phase(agents, speaking_order, round_state, visibility)
         elif phase == "action_assignment":
-            await self._run_action_assignment(
-                agents, speaking_order, round_state, visibility
-            )
+            await self._run_action_assignment(agents, speaking_order, round_state, visibility)
 
         round_state.phase = phase
         round_state.phase_complete = True
@@ -104,9 +94,7 @@ class WarRoomEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context=(
-                    "Share intelligence relevant to the current situation."
-                ),
+                context=("Share intelligence relevant to the current situation."),
             )
             if message:
                 round_state.messages.append(message)
@@ -198,9 +186,7 @@ class WarRoomEnvironment(BaseEnvironment):
 
         # Only key decision makers
         decision_makers = [
-            aid for aid in speaking_order
-            if aid in [a.id for a in agents
-                       if a.archetype.id in ["ceo", "cfo", "cro"]]
+            aid for aid in speaking_order if aid in [a.id for a in agents if a.archetype.id in ["ceo", "cfo", "cro"]]
         ]
 
         for agent_id in decision_makers[:3]:
@@ -220,11 +206,13 @@ class WarRoomEnvironment(BaseEnvironment):
                 round_state.messages.append(message)
 
         # Record the decision
-        round_state.decisions.append({
-            "type": "decision",
-            "makers": decision_makers,
-            "compliance_escalation": self._compliance_flag,
-        })
+        round_state.decisions.append(
+            {
+                "type": "decision",
+                "makers": decision_makers,
+                "compliance_escalation": self._compliance_flag,
+            }
+        )
 
     async def _run_action_assignment(
         self,
@@ -238,11 +226,9 @@ class WarRoomEnvironment(BaseEnvironment):
 
         # Operations and functional heads
         assigners = [
-            aid for aid in speaking_order
-            if aid in [a.id for a in agents
-                       if a.archetype.id in [
-                           "operations_head", "hr_head", "strategy_vp"
-                       ]]
+            aid
+            for aid in speaking_order
+            if aid in [a.id for a in agents if a.archetype.id in ["operations_head", "hr_head", "strategy_vp"]]
         ]
 
         for agent_id in assigners[:3]:
@@ -274,8 +260,7 @@ class WarRoomEnvironment(BaseEnvironment):
         # Extract key themes from messages
         threat_keywords = ["risk", "threat", "danger", "critical", "urgent"]
         threat_count = sum(
-            1 for msg in round_state.messages
-            if any(kw in msg.content.lower() for kw in threat_keywords)
+            1 for msg in round_state.messages if any(kw in msg.content.lower() for kw in threat_keywords)
         )
 
         evaluation["threat_mentions"] = threat_count
@@ -293,27 +278,17 @@ class WarRoomEnvironment(BaseEnvironment):
 
         return evaluation
 
-    def get_phase_instruction(self, phase: str, agent_role: str) -> str:
+    def _resolve_phase_instruction(self, phase: str, agent_role: str) -> str:
         """Get phase-specific instruction for an agent."""
         instructions = {
-            "intel_briefing": (
-                "Share relevant intelligence or situational updates. "
-                "Be concise and factual."
-            ),
+            "intel_briefing": ("Share relevant intelligence or situational updates. " "Be concise and factual."),
             "threat_assessment": (
-                "Assess the severity of threats. If you're the CRO, "
-                "escalate compliance issues immediately."
+                "Assess the severity of threats. If you're the CRO, " "escalate compliance issues immediately."
             ),
             "response_options": (
-                "Propose concrete response options. Consider feasibility "
-                "and resource requirements."
+                "Propose concrete response options. Consider feasibility " "and resource requirements."
             ),
-            "decision": (
-                "Make a clear decision on the response strategy. "
-                "Consider risks and benefits."
-            ),
-            "action_assignment": (
-                "Assign specific actions with clear owners and timelines."
-            ),
+            "decision": ("Make a clear decision on the response strategy. " "Consider risks and benefits."),
+            "action_assignment": ("Assign specific actions with clear owners and timelines."),
         }
         return instructions.get(phase, "Contribute to the discussion.")

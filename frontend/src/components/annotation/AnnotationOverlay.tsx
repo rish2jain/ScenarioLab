@@ -7,10 +7,6 @@ import { AnnotationMarker } from './AnnotationMarker';
 import { AnnotationPanel } from './AnnotationPanel';
 import type { AgentMessage } from '@/lib/types';
 
-interface AnnotatedMessage extends AgentMessage {
-  annotationCount?: number;
-}
-
 interface AnnotationOverlayProps {
   simulationId: string;
   messages: AgentMessage[];

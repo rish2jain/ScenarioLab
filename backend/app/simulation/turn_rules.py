@@ -81,6 +81,7 @@ class TurnManager:
 
     def _war_room_order(self, phase: str, round_number: int) -> list[str]:
         """Dynamic turn-taking based on authority/urgency (war room)."""
+
         # Priority: CRO for compliance, then by authority
         def priority_key(agent: AgentState) -> tuple:
             authority = self._get_authority_level(agent)
@@ -125,14 +126,8 @@ class TurnManager:
     def _integration_order(self, phase: str, round_number: int) -> list[str]:
         """Parallel workstreams with sync points (integration)."""
         # Group by functional area
-        workstream_leads = [
-            a for a in self.agents
-            if a.archetype_id in ["hr_head", "operations_head", "cfo"]
-        ]
-        execs = [
-            a for a in self.agents
-            if a.archetype_id in ["ceo", "strategy_vp"]
-        ]
+        workstream_leads = [a for a in self.agents if a.archetype_id in ["hr_head", "operations_head", "cfo"]]
+        execs = [a for a in self.agents if a.archetype_id in ["ceo", "strategy_vp"]]
 
         if phase in ["current_state_mapping", "gap_analysis"]:
             # Workstream leads provide input
@@ -167,12 +162,7 @@ class TurnManager:
             return [self.agents[0].id] if self.agents else []
         elif phase == "vote":
             # Board members and executives vote
-            return [
-                a.id for a in self.agents
-                if a.archetype_id in [
-                    "board_member", "ceo", "cfo", "activist_investor"
-                ]
-            ]
+            return [a.id for a in self.agents if a.archetype_id in ["board_member", "ceo", "cfo", "activist_investor"]]
         else:
             return [a.id for a in self.agents]
 
@@ -183,32 +173,16 @@ class TurnManager:
             return [a.id for a in self.agents]
         elif phase == "threat_assessment":
             # CRO and relevant executives
-            return [
-                a.id for a in self.agents
-                if a.archetype_id in ["cro", "ceo", "cfo", "general_counsel"]
-            ]
+            return [a.id for a in self.agents if a.archetype_id in ["cro", "ceo", "cfo", "general_counsel"]]
         elif phase == "response_options":
             # Strategy and operations
-            return [
-                a.id for a in self.agents
-                if a.archetype_id in [
-                    "strategy_vp", "operations_head", "ceo", "cfo"
-                ]
-            ]
+            return [a.id for a in self.agents if a.archetype_id in ["strategy_vp", "operations_head", "ceo", "cfo"]]
         elif phase == "decision":
             # Decision makers
-            return [
-                a.id for a in self.agents
-                if a.archetype_id in ["ceo", "cfo", "cro"]
-            ]
+            return [a.id for a in self.agents if a.archetype_id in ["ceo", "cfo", "cro"]]
         elif phase == "action_assignment":
             # Operations and function heads
-            return [
-                a.id for a in self.agents
-                if a.archetype_id in [
-                    "operations_head", "hr_head", "strategy_vp"
-                ]
-            ]
+            return [a.id for a in self.agents if a.archetype_id in ["operations_head", "hr_head", "strategy_vp"]]
         else:
             return [a.id for a in self.agents]
 
@@ -216,9 +190,7 @@ class TurnManager:
         """Get participants for negotiation phases."""
         if phase == "private_caucus":
             # Only mediator participates actively
-            mediators = [
-                a for a in self.agents if a.archetype_id == "mediator"
-            ]
+            mediators = [a for a in self.agents if a.archetype_id == "mediator"]
             return [m.id for m in mediators]
         else:
             # All parties participate
@@ -228,39 +200,23 @@ class TurnManager:
         """Get participants for integration phases."""
         if phase == "current_state_mapping":
             # Workstream leads
-            return [
-                a.id for a in self.agents
-                if a.archetype_id in [
-                    "hr_head", "operations_head", "cfo", "strategy_vp"
-                ]
-            ]
+            return [a.id for a in self.agents if a.archetype_id in ["hr_head", "operations_head", "cfo", "strategy_vp"]]
         elif phase == "future_state_vision":
             # Executives and strategy
-            return [
-                a.id for a in self.agents
-                if a.archetype_id in ["ceo", "strategy_vp", "board_member"]
-            ]
+            return [a.id for a in self.agents if a.archetype_id in ["ceo", "strategy_vp", "board_member"]]
         elif phase == "gap_analysis":
             # All functional leads
             return [
-                a.id for a in self.agents
-                if a.archetype_id in [
-                    "hr_head", "operations_head", "cfo", "strategy_vp",
-                    "general_counsel"
-                ]
+                a.id
+                for a in self.agents
+                if a.archetype_id in ["hr_head", "operations_head", "cfo", "strategy_vp", "general_counsel"]
             ]
         elif phase == "initiative_prioritization":
             # Strategy and executives
-            return [
-                a.id for a in self.agents
-                if a.archetype_id in ["ceo", "strategy_vp", "operations_head"]
-            ]
+            return [a.id for a in self.agents if a.archetype_id in ["ceo", "strategy_vp", "operations_head"]]
         elif phase == "resource_allocation":
             # CFO and executives
-            return [
-                a.id for a in self.agents
-                if a.archetype_id in ["cfo", "ceo", "operations_head"]
-            ]
+            return [a.id for a in self.agents if a.archetype_id in ["cfo", "ceo", "operations_head"]]
         else:
             return [a.id for a in self.agents]
 

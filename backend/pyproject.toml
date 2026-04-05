@@ -39,14 +39,25 @@ build-backend = "hatchling.build"
 packages = ["app"]
 
 [tool.black]
-line-length = 88
+line-length = 120
 target-version = ['py312']
 
 [tool.ruff]
-line-length = 88
+line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
+# E501 is not ignored globally: line-length matches [tool.black] (120) so formatter + Ruff agree.
+# Long unbroken strings (prompts, MCP tool schemas, interview questions) stay readable without reflow:
+[tool.ruff.lint.per-file-ignores]
+"app/mcp/server.py" = ["E501"]
+"app/personas/archetypes.py" = ["E501"]
+"app/personas/counterpart.py" = ["E501"]
+"app/personas/interview_extractor.py" = ["E501"]
+"app/reports/narrative.py" = ["E501"]
+"app/simulation/backtesting.py" = ["E501"]
+"app/simulation/market_intelligence.py" = ["E501"]
+"tests/test_analytics_agent.py" = ["E402"]
 
 [tool.mypy]
 python_version = "3.12"

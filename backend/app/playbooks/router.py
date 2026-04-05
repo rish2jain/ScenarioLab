@@ -23,28 +23,33 @@ router = APIRouter(prefix="/api/playbooks", tags=["playbooks"])
 
 class PlaybookListResponse(BaseModel):
     """Response containing list of playbooks."""
+
     playbooks: list[PlaybookSummary]
     count: int
 
 
 class PlaybookDetailResponse(BaseModel):
     """Response containing full playbook details."""
+
     playbook: PlaybookConfig
 
 
 class RosterResponse(BaseModel):
     """Response containing pre-filled roster."""
+
     playbook_id: str
     roster: list[AgentRosterEntry]
 
 
 class ValidationRequest(BaseModel):
     """Request to validate a playbook configuration."""
+
     config: dict[str, Any]
 
 
 class ValidationResponse(BaseModel):
     """Response from playbook validation."""
+
     is_valid: bool
     errors: list[str]
 
@@ -57,10 +62,7 @@ async def list_playbooks() -> PlaybookListResponse:
         List of all playbook summaries
     """
     playbooks = get_all_playbooks()
-    return PlaybookListResponse(
-        playbooks=playbooks,
-        count=len(playbooks)
-    )
+    return PlaybookListResponse(playbooks=playbooks, count=len(playbooks))
 
 
 @router.get("/{playbook_id}", response_model=PlaybookDetailResponse)
@@ -78,10 +80,7 @@ async def get_single_playbook(playbook_id: str) -> PlaybookDetailResponse:
     """
     playbook = get_playbook(playbook_id)
     if not playbook:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Playbook not found: {playbook_id}"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Playbook not found: {playbook_id}")
     return PlaybookDetailResponse(playbook=playbook)
 
 
@@ -100,14 +99,8 @@ async def get_playbook_roster(playbook_id: str) -> RosterResponse:
     """
     roster = prefill_roster(playbook_id)
     if roster is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Playbook not found: {playbook_id}"
-        )
-    return RosterResponse(
-        playbook_id=playbook_id,
-        roster=roster
-    )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Playbook not found: {playbook_id}")
+    return RosterResponse(playbook_id=playbook_id, roster=roster)
 
 
 @router.post("/validate", response_model=ValidationResponse)
@@ -121,7 +114,4 @@ async def validate_playbook(request: ValidationRequest) -> ValidationResponse:
         Validation result with any errors
     """
     is_valid, errors = validate_playbook_config(request.config)
-    return ValidationResponse(
-        is_valid=is_valid,
-        errors=errors
-    )
+    return ValidationResponse(is_valid=is_valid, errors=errors)

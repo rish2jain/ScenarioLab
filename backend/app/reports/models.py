@@ -24,9 +24,7 @@ class RiskRegister(BaseModel):
 
     simulation_id: str
     items: list[RiskItem]
-    generated_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    generated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class ScenarioOutcome(BaseModel):
@@ -46,9 +44,7 @@ class ScenarioMatrix(BaseModel):
     simulation_id: str
     scenarios: list[ScenarioOutcome]  # 3-5 scenarios
     outcome_dimensions: list[str]  # 4-6 dimensions
-    generated_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    generated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class StakeholderPosition(BaseModel):
@@ -56,9 +52,7 @@ class StakeholderPosition(BaseModel):
 
     stakeholder: str
     role: str
-    position: Literal[
-        "strongly_support", "support", "neutral", "oppose", "strongly_oppose"
-    ]
+    position: Literal["strongly_support", "support", "neutral", "oppose", "strongly_oppose"]
     influence: float = Field(ge=0.0, le=1.0)
     support_level: float = Field(ge=-1.0, le=1.0)
     key_concerns: list[str]
@@ -69,9 +63,7 @@ class StakeholderHeatmap(BaseModel):
 
     simulation_id: str
     stakeholders: list[StakeholderPosition]
-    generated_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    generated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class KeyRecommendation(BaseModel):
@@ -90,9 +82,7 @@ class ExecutiveSummary(BaseModel):
     summary_text: str  # Max 2 pages worth of text
     key_findings: list[str]
     recommendations: list[KeyRecommendation]  # Max 3
-    generated_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    generated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class ObjectiveAssessment(BaseModel):
@@ -103,9 +93,7 @@ class ObjectiveAssessment(BaseModel):
     success_metrics_addressed: list[str] = Field(default_factory=list)
     gaps: list[str] = Field(default_factory=list)
     conclusion: str = ""
-    generated_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    generated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class ReviewCheckpoint(BaseModel):
@@ -115,9 +103,7 @@ class ReviewCheckpoint(BaseModel):
     stage: Literal["draft", "risk_review", "scenario_review", "final"]
     status: Literal["pending", "approved", "revision_requested"]
     reviewer_notes: str = ""
-    timestamp: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class ReportToolContextAgent(BaseModel):
@@ -208,12 +194,8 @@ class SimulationReport(BaseModel):
         ),
     )
     status: Literal["generating", "draft", "in_review", "final"] = "generating"
-    created_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
-    updated_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     @field_serializer("tool_context")
     def _serialize_tool_context(self, ctx: ReportToolContext) -> dict[str, Any]:

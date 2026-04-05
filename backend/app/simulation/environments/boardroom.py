@@ -47,21 +47,13 @@ class BoardroomEnvironment(BaseEnvironment):
         participants = turn_manager.get_phase_participants(phase)
 
         if phase == "presentation":
-            await self._run_presentation_phase(
-                agents, speaking_order, round_state, visibility
-            )
+            await self._run_presentation_phase(agents, speaking_order, round_state, visibility)
         elif phase == "qa":
-            await self._run_qa_phase(
-                agents, speaking_order, participants, round_state, visibility
-            )
+            await self._run_qa_phase(agents, speaking_order, participants, round_state, visibility)
         elif phase == "objection":
-            await self._run_objection_phase(
-                agents, speaking_order, round_state, visibility
-            )
+            await self._run_objection_phase(agents, speaking_order, round_state, visibility)
         elif phase == "rebuttal":
-            await self._run_rebuttal_phase(
-                agents, speaking_order, round_state, visibility
-            )
+            await self._run_rebuttal_phase(agents, speaking_order, round_state, visibility)
         elif phase == "vote":
             await self._run_vote_phase(agents, round_state)
 
@@ -201,11 +193,13 @@ class BoardroomEnvironment(BaseEnvironment):
         votes = await self._run_voting_phase(proposal, agents, round_state)
         vote_result = self._count_votes(votes)
 
-        round_state.decisions.append({
-            "type": "vote",
-            "result": vote_result,
-            "votes": votes,
-        })
+        round_state.decisions.append(
+            {
+                "type": "vote",
+                "result": vote_result,
+                "votes": votes,
+            }
+        )
 
         logger.info(f"Vote result: {vote_result['result']}")
 
@@ -240,32 +234,21 @@ class BoardroomEnvironment(BaseEnvironment):
     # Matched via substring so "CFO" matches "Chief Financial Officer".
     _ROLE_OVERLAYS: dict[tuple[str, str], str] = {
         ("qa", "cfo"): (
-            "Probe the financial assumptions: margins, payback "
-            "period, capital requirements, and downside scenarios."
+            "Probe the financial assumptions: margins, payback " "period, capital requirements, and downside scenarios."
         ),
-        ("qa", "cro"): (
-            "Assess risk exposure: regulatory, operational, and "
-            "reputational. Quantify where possible."
-        ),
-        ("qa", "analyst"): (
-            "Challenge with data: market sizing, competitive "
-            "benchmarks, and customer evidence."
-        ),
+        ("qa", "cro"): ("Assess risk exposure: regulatory, operational, and " "reputational. Quantify where possible."),
+        ("qa", "analyst"): ("Challenge with data: market sizing, competitive " "benchmarks, and customer evidence."),
         ("qa", "competitor"): (
-            "Identify how competitors would respond and what "
-            "defensive gaps the proposal creates."
+            "Identify how competitors would respond and what " "defensive gaps the proposal creates."
         ),
         ("objection", "cfo"): (
-            "Object on financial grounds: insufficient ROI, "
-            "unquantified risk, or missing budget detail."
+            "Object on financial grounds: insufficient ROI, " "unquantified risk, or missing budget detail."
         ),
         ("objection", "cro"): (
-            "Object on risk grounds: compliance gaps, "
-            "unmitigated exposure, or missing controls."
+            "Object on risk grounds: compliance gaps, " "unmitigated exposure, or missing controls."
         ),
         ("objection", "operations"): (
-            "Object on execution grounds: capacity "
-            "constraints, timeline risks, or dependencies."
+            "Object on execution grounds: capacity " "constraints, timeline risks, or dependencies."
         ),
         ("presentation", "ceo"): (
             "Present the strategic vision. Frame the "
@@ -280,7 +263,9 @@ class BoardroomEnvironment(BaseEnvironment):
     }
 
     def _resolve_phase_instruction(
-        self, phase: str, agent_role: str,
+        self,
+        phase: str,
+        agent_role: str,
     ) -> str:
         """Get phase-specific instruction, enriched by role."""
         base = {
@@ -290,25 +275,17 @@ class BoardroomEnvironment(BaseEnvironment):
                 "rationale and expected outcomes."
             ),
             "qa": (
-                "Ask a clarifying question about the "
-                "proposal. Focus on understanding "
-                "implications and risks."
+                "Ask a clarifying question about the " "proposal. Focus on understanding " "implications and risks."
             ),
             "objection": (
-                "Raise any objections or concerns about "
-                "the proposal. Be specific about your "
-                "concerns."
+                "Raise any objections or concerns about " "the proposal. Be specific about your " "concerns."
             ),
             "rebuttal": (
-                "Address the objections raised. Provide "
-                "counter-arguments or acknowledge valid "
-                "concerns."
+                "Address the objections raised. Provide " "counter-arguments or acknowledge valid " "concerns."
             ),
             "vote": "Cast your vote on the proposal.",
         }
-        instruction = base.get(
-            phase, "Participate in the discussion."
-        )
+        instruction = base.get(phase, "Participate in the discussion.")
 
         # Look for a role-specific overlay
         role_lower = (agent_role or "").lower()

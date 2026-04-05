@@ -9,9 +9,7 @@ class TestSanitizeLlmResponse:
         assert sanitize_llm_response(raw) == "The actual response."
 
     def test_strips_multiline_think_block(self):
-        raw = (
-            "<think>line1\nline2\n</think>\nVisible answer."
-        )
+        raw = "<think>line1\nline2\n</think>\nVisible answer."
         assert sanitize_llm_response(raw) == "Visible answer."
 
     def test_strips_closing_think_tag_only(self):
@@ -41,26 +39,18 @@ class TestSanitizeLlmResponse:
 
 class TestParseVoteFromResponse:
     def test_explicit_vote_line_wins(self):
-        assert (
-            parse_vote_from_response("VOTE: against\nREASONING: too risky")
-            == "against"
-        )
+        assert parse_vote_from_response("VOTE: against\nREASONING: too risky") == "against"
 
     def test_vote_line_case_insensitive(self):
         assert parse_vote_from_response("vote: FOR\nreasoning: ok") == "for"
 
     def test_abstain_explicit(self):
-        assert parse_vote_from_response("VOTE: abstain\nREASONING: unclear") == (
-            "abstain"
-        )
+        assert parse_vote_from_response("VOTE: abstain\nREASONING: unclear") == ("abstain")
 
     def test_no_false_positive_information(self):
         """'for' must not match inside unrelated words via word boundaries."""
         assert (
-            parse_vote_from_response(
-                "REASONING: See information and data before deciding.\n"
-                "VOTE: abstain"
-            )
+            parse_vote_from_response("REASONING: See information and data before deciding.\n" "VOTE: abstain")
             == "abstain"
         )
 
@@ -79,10 +69,7 @@ class TestParseVoteFromResponse:
         assert parse_vote_from_response(text) == "against"
 
     def test_against_in_complex_sentence(self):
-        text = (
-            "The proposal is still not board-ready for capital release. "
-            "I vote against further authorization."
-        )
+        text = "The proposal is still not board-ready for capital release. " "I vote against further authorization."
         assert parse_vote_from_response(text) == "against"
 
     def test_support_keyword(self):

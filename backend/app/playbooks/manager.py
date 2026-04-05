@@ -15,6 +15,7 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 class AgentRosterEntry(BaseModel):
     """An entry in the playbook agent roster."""
+
     role: str
     archetype_id: str
     count: int = 1
@@ -23,17 +24,20 @@ class AgentRosterEntry(BaseModel):
 
 class SeedMaterialTemplate(BaseModel):
     """Template for required and optional seed materials."""
+
     required: list[str]
     optional: list[str]
 
 
 class VisibilityRules(BaseModel):
     """Visibility rules for the simulation environment."""
+
     information_asymmetry: bool = False
 
 
 class EnvironmentConfig(BaseModel):
     """Environment configuration for the simulation."""
+
     visibility_rules: dict[str, Any] = Field(default_factory=dict)
     decision_mechanism: str = ""
     escalation_trigger: str = ""
@@ -44,6 +48,7 @@ class EnvironmentConfig(BaseModel):
 
 class PlaybookConfig(BaseModel):
     """Complete playbook configuration."""
+
     id: str
     name: str
     description: str
@@ -70,6 +75,7 @@ class PlaybookConfig(BaseModel):
 
 class PlaybookSummary(BaseModel):
     """Summary of a playbook for listing."""
+
     id: str
     name: str
     description: str

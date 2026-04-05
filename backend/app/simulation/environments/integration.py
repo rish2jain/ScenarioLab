@@ -54,33 +54,21 @@ class IntegrationEnvironment(BaseEnvironment):
         round_state: RoundState,
     ) -> RoundState:
         """Execute a single phase of an integration round."""
-        logger.info(
-            f"Running integration phase: {phase} (round {round_number})"
-        )
+        logger.info(f"Running integration phase: {phase} (round {round_number})")
 
         speaking_order = turn_manager.get_speaking_order(phase, round_number)
         participants = turn_manager.get_phase_participants(phase)
 
         if phase == "current_state_mapping":
-            await self._run_current_state_mapping(
-                agents, speaking_order, participants, round_state, visibility
-            )
+            await self._run_current_state_mapping(agents, speaking_order, participants, round_state, visibility)
         elif phase == "future_state_vision":
-            await self._run_future_state_vision(
-                agents, speaking_order, participants, round_state, visibility
-            )
+            await self._run_future_state_vision(agents, speaking_order, participants, round_state, visibility)
         elif phase == "gap_analysis":
-            await self._run_gap_analysis(
-                agents, speaking_order, participants, round_state, visibility
-            )
+            await self._run_gap_analysis(agents, speaking_order, participants, round_state, visibility)
         elif phase == "initiative_prioritization":
-            await self._run_initiative_prioritization(
-                agents, speaking_order, participants, round_state, visibility
-            )
+            await self._run_initiative_prioritization(agents, speaking_order, participants, round_state, visibility)
         elif phase == "resource_allocation":
-            await self._run_resource_allocation(
-                agents, speaking_order, round_state, visibility
-            )
+            await self._run_resource_allocation(agents, speaking_order, round_state, visibility)
 
         round_state.phase = phase
         round_state.phase_complete = True
@@ -172,10 +160,7 @@ class IntegrationEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context=(
-                    "Identify gaps between current and future state "
-                    "in your area."
-                ),
+                context=("Identify gaps between current and future state " "in your area."),
             )
             if message:
                 round_state.messages.append(message)
@@ -206,8 +191,7 @@ class IntegrationEnvironment(BaseEnvironment):
                 visibility=visibility,
                 round_state=round_state,
                 context=(
-                    "Propose integration initiatives and prioritize by "
-                    "impact and effort (High/Medium/Low for each)."
+                    "Propose integration initiatives and prioritize by " "impact and effort (High/Medium/Low for each)."
                 ),
             )
             if message:
@@ -242,9 +226,9 @@ class IntegrationEnvironment(BaseEnvironment):
 
         # First, let executives propose allocations
         allocators = [
-            aid for aid in speaking_order
-            if aid in [a.id for a in agents
-                       if a.archetype.id in ["ceo", "operations_head"]]
+            aid
+            for aid in speaking_order
+            if aid in [a.id for a in agents if a.archetype.id in ["ceo", "operations_head"]]
         ]
 
         for agent_id in allocators[:2]:
@@ -271,24 +255,22 @@ class IntegrationEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context=(
-                    "Review proposed allocations. You have veto power "
-                    "if budget is exceeded."
-                ),
+                context=("Review proposed allocations. You have veto power " "if budget is exceeded."),
             )
             if message:
                 round_state.messages.append(message)
 
                 # Check for veto
-                if ("veto" in message.content.lower()
-                        or "exceed" in message.content.lower()):
+                if "veto" in message.content.lower() or "exceed" in message.content.lower():
                     self._cfo_veto_used = True
 
-        round_state.decisions.append({
-            "type": "resource_allocation",
-            "cfo_veto_used": self._cfo_veto_used,
-            "initiatives_count": len(self._initiatives),
-        })
+        round_state.decisions.append(
+            {
+                "type": "resource_allocation",
+                "cfo_veto_used": self._cfo_veto_used,
+                "initiatives_count": len(self._initiatives),
+            }
+        )
 
     def _extract_impact_level(self, content: str) -> str:
         """Extract impact level from content."""
@@ -324,18 +306,9 @@ class IntegrationEnvironment(BaseEnvironment):
         }
 
         # Categorize initiatives by impact/effort
-        quick_wins = [
-            i for i in self._initiatives
-            if i["impact"] == "high" and i["effort"] == "low"
-        ]
-        major_projects = [
-            i for i in self._initiatives
-            if i["impact"] == "high" and i["effort"] == "high"
-        ]
-        fill_ins = [
-            i for i in self._initiatives
-            if i["impact"] == "low"
-        ]
+        quick_wins = [i for i in self._initiatives if i["impact"] == "high" and i["effort"] == "low"]
+        major_projects = [i for i in self._initiatives if i["impact"] == "high" and i["effort"] == "high"]
+        fill_ins = [i for i in self._initiatives if i["impact"] == "low"]
 
         evaluation["priority_matrix"] = {
             "quick_wins": len(quick_wins),
@@ -345,7 +318,7 @@ class IntegrationEnvironment(BaseEnvironment):
 
         return evaluation
 
-    def get_phase_instruction(self, phase: str, agent_role: str) -> str:
+    def _resolve_phase_instruction(self, phase: str, agent_role: str) -> str:
         """Get phase-specific instruction for an agent."""
         instructions = {
             "current_state_mapping": (
@@ -353,13 +326,9 @@ class IntegrationEnvironment(BaseEnvironment):
                 "Be specific about processes, systems, and people."
             ),
             "future_state_vision": (
-                "Describe the desired future state. What should this "
-                "area look like post-integration?"
+                "Describe the desired future state. What should this " "area look like post-integration?"
             ),
-            "gap_analysis": (
-                "Identify specific gaps between current and future state. "
-                "What needs to change?"
-            ),
+            "gap_analysis": ("Identify specific gaps between current and future state. " "What needs to change?"),
             "initiative_prioritization": (
                 "Propose integration initiatives. Rate each by impact "
                 "(High/Medium/Low) and effort (High/Medium/Low)."

@@ -243,9 +243,7 @@ class MirofishMCPServer:
         # Start simulation in background
         import asyncio
 
-        asyncio.create_task(
-            self.simulation_engine.run_simulation(sim_state.config.id)
-        )
+        asyncio.create_task(self.simulation_engine.run_simulation(sim_state.config.id))
 
         return MCPToolResult(
             tool_name="mirofish/simulate",
@@ -383,14 +381,10 @@ class MirofishMCPServer:
             export_data = self._export_to_markdown(sim_state)
         elif format_type == "pdf":
             # PDF export would require additional libraries
-            export_data = {
-                "error": "PDF export not implemented. Use markdown or json."
-            }
+            export_data = {"error": "PDF export not implemented. Use markdown or json."}
         elif format_type == "miro":
             # Miro board export would require Miro API integration
-            export_data = {
-                "error": "Miro export not implemented. Use markdown or json."
-            }
+            export_data = {"error": "Miro export not implemented. Use markdown or json."}
         else:
             return MCPToolResult(
                 tool_name="mirofish/export",
@@ -460,12 +454,14 @@ class MirofishMCPServer:
                 content_lower = msg.content.lower()
                 for keyword in risk_keywords:
                     if keyword in content_lower:
-                        risks.append({
-                            "round": round_state.round_number,
-                            "identified_by": msg.agent_name,
-                            "description": msg.content[:200] + "..." if len(msg.content) > 200 else msg.content,
-                            "category": "strategic",
-                        })
+                        risks.append(
+                            {
+                                "round": round_state.round_number,
+                                "identified_by": msg.agent_name,
+                                "description": (msg.content[:200] + "..." if len(msg.content) > 200 else msg.content),
+                                "category": "strategic",
+                            }
+                        )
                         break
 
         return risks[:20]  # Limit to top 20 risks
@@ -478,12 +474,14 @@ class MirofishMCPServer:
             for decision in round_state.decisions:
                 if "evaluation" in decision:
                     eval_data = decision["evaluation"]
-                    scenarios.append({
-                        "round": round_state.round_number,
-                        "scenario": eval_data.get("scenario", "Unknown"),
-                        "outcome": eval_data.get("outcome", "pending"),
-                        "confidence": eval_data.get("confidence", "medium"),
-                    })
+                    scenarios.append(
+                        {
+                            "round": round_state.round_number,
+                            "scenario": eval_data.get("scenario", "Unknown"),
+                            "outcome": eval_data.get("outcome", "pending"),
+                            "confidence": eval_data.get("confidence", "medium"),
+                        }
+                    )
 
         return {
             "scenarios": scenarios,
@@ -518,14 +516,16 @@ class MirofishMCPServer:
 
         for round_state in sim_state.rounds:
             for msg in round_state.messages:
-                transcript.append({
-                    "round": msg.round_number,
-                    "phase": msg.phase,
-                    "agent": msg.agent_name,
-                    "role": msg.agent_role,
-                    "content": msg.content,
-                    "timestamp": msg.timestamp,
-                })
+                transcript.append(
+                    {
+                        "round": msg.round_number,
+                        "phase": msg.phase,
+                        "agent": msg.agent_name,
+                        "role": msg.agent_role,
+                        "content": msg.content,
+                        "timestamp": msg.timestamp,
+                    }
+                )
 
         return transcript
 
@@ -550,10 +550,12 @@ class MirofishMCPServer:
                 lines.append(f"  - Final stance: {agent.current_stance}")
             lines.append("")
 
-        lines.extend([
-            "## Simulation Transcript",
-            "",
-        ])
+        lines.extend(
+            [
+                "## Simulation Transcript",
+                "",
+            ]
+        )
 
         for round_state in sim_state.rounds:
             lines.append(f"### Round {round_state.round_number} - {round_state.phase}")

@@ -22,9 +22,7 @@ class ResearchService:
 
     # ---- High-level research methods used by other modules ----
 
-    async def research_company(
-        self, company_name: str, *, include_filings: bool = True
-    ) -> dict[str, Any]:
+    async def research_company(self, company_name: str, *, include_filings: bool = True) -> dict[str, Any]:
         """Research a company: web search + SEC filings + synthesis.
 
         Returns:
@@ -81,8 +79,7 @@ class ResearchService:
             Dict with keys: synthesis, raw_results.
         """
         results = await self.web.search(
-            f"{industry} industry overview market size "
-            f"key players trends regulations 2024 2025",
+            f"{industry} industry overview market size " f"key players trends regulations 2024 2025",
             max_results=10,
         )
 
@@ -102,9 +99,7 @@ class ResearchService:
 
         return {"synthesis": synthesis, "raw_results": results[:5]}
 
-    async def research_regulation(
-        self, regulation_name: str, *, jurisdiction: str = ""
-    ) -> dict[str, Any]:
+    async def research_regulation(self, regulation_name: str, *, jurisdiction: str = "") -> dict[str, Any]:
         """Research a regulation: text, requirements, enforcement precedent.
 
         Returns:
@@ -112,8 +107,7 @@ class ResearchService:
         """
         # Web search for regulation overview and enforcement
         web_results = await self.web.search(
-            f"{regulation_name} regulation requirements compliance penalties "
-            f"{jurisdiction}".strip(),
+            f"{regulation_name} regulation requirements compliance penalties " f"{jurisdiction}".strip(),
             max_results=10,
         )
 
@@ -154,9 +148,7 @@ class ResearchService:
             "raw_web_results": web_results[:5],
         }
 
-    async def research_executive(
-        self, name: str, *, company: str = "", role: str = ""
-    ) -> dict[str, Any]:
+    async def research_executive(self, name: str, *, company: str = "", role: str = "") -> dict[str, Any]:
         """Research an executive's public behavior, statements, and decision patterns.
 
         Returns:
@@ -197,9 +189,7 @@ class ResearchService:
 
         return {"synthesis": synthesis, "raw_results": all_results[:5]}
 
-    async def research_historical_case(
-        self, case_description: str, *, tags: list[str] | None = None
-    ) -> dict[str, Any]:
+    async def research_historical_case(self, case_description: str, *, tags: list[str] | None = None) -> dict[str, Any]:
         """Research a historical business/regulatory case for backtesting.
 
         Returns:
@@ -239,9 +229,7 @@ class ResearchService:
 
         return {"synthesis": synthesis, "raw_results": all_results[:5]}
 
-    async def augment_text(
-        self, text: str, *, purpose: str = "simulation seed material"
-    ) -> dict[str, Any]:
+    async def augment_text(self, text: str, *, purpose: str = "simulation seed material") -> dict[str, Any]:
         """Identify entities in text and research them to augment context.
 
         Returns:
@@ -268,10 +256,7 @@ class ResearchService:
         )
 
         try:
-            sys_msg = (
-                "Extract researchable entities. "
-                "Respond with valid JSON only."
-            )
+            sys_msg = "Extract researchable entities. " "Respond with valid JSON only."
             response = await llm.generate(
                 messages=[
                     LLMMessage(role="system", content=sys_msg),

@@ -2,7 +2,9 @@
 
 import asyncio
 import logging
+import math
 import random
+import threading
 from collections import defaultdict
 from typing import Any
 
@@ -20,7 +22,20 @@ _opted_in_simulations: set[str] = set()
 # pattern_type -> list of patterns
 _aggregate_patterns: dict[str, list] = defaultdict(list)
 _initialized = False
-_init_lock = asyncio.Lock()
+# Lazily created so the lock is not bound to an arbitrary event loop at import time
+# (tests / teardown can replace the loop; see app.db.connection._get_db_init_lock).
+_init_lock: asyncio.Lock | None = None
+_init_lock_guard = threading.Lock()
+
+
+def _get_cross_sim_init_lock() -> asyncio.Lock:
+    """Return the module init lock, creating it on first use (thread-safe)."""
+    global _init_lock  # noqa: PLW0603
+    if _init_lock is None:
+        with _init_lock_guard:
+            if _init_lock is None:
+                _init_lock = asyncio.Lock()
+    return _init_lock
 
 
 async def _ensure_loaded() -> None:
@@ -28,7 +43,7 @@ async def _ensure_loaded() -> None:
     global _initialized, _opted_in_simulations  # noqa: PLW0603
     if _initialized:
         return
-    async with _init_lock:
+    async with _get_cross_sim_init_lock():
         if _initialized:
             return
         try:
@@ -36,14 +51,9 @@ async def _ensure_loaded() -> None:
             opted_in_ids = await cross_simulation_repo.list_opted_in()
             _opted_in_simulations.update(opted_in_ids)
             _initialized = True
-            logger.info(
-                f"Loaded {len(_opted_in_simulations)} opted-in simulations "
-                f"from database"
-            )
+            logger.info(f"Loaded {len(_opted_in_simulations)} opted-in simulations " f"from database")
         except Exception as e:
-            logger.warning(
-                f"Failed to load cross-sim data from DB: {e}"
-            )
+            logger.warning(f"Failed to load cross-sim data from DB: {e}")
 
 
 class CrossSimulationLearner:
@@ -64,13 +74,8 @@ class CrossSimulationLearner:
         await _ensure_loaded()
         _opted_in_simulations.add(simulation_id)
         # Save to database
-        asyncio.get_event_loop().create_task(
-            self._save_opt_in(simulation_id, True)
-        )
-        logger.info(
-            f"Simulation {simulation_id} opted in for "
-            f"cross-simulation learning"
-        )
+        asyncio.create_task(self._save_opt_in(simulation_id, True))
+        logger.info(f"Simulation {simulation_id} opted in for " f"cross-simulation learning")
         return True
 
     async def _save_opt_in(self, simulation_id: str, opted_in: bool) -> None:
@@ -78,9 +83,7 @@ class CrossSimulationLearner:
         try:
             await cross_simulation_repo.save_opt_in(simulation_id, opted_in)
         except Exception as e:
-            logger.warning(
-                f"Failed to save opt-in status to DB: {e}"
-            )
+            logger.warning(f"Failed to save opt-in status to DB: {e}")
 
     def extract_patterns(self, simulation_state: SimulationState) -> list[dict]:
         """Extract anonymized behavioral patterns from a simulation.
@@ -94,9 +97,7 @@ class CrossSimulationLearner:
         patterns = []
 
         # Extract archetype decision frequencies
-        archetype_decisions: dict[str, dict[str, int]] = defaultdict(
-            lambda: {"support": 0, "oppose": 0, "neutral": 0}
-        )
+        archetype_decisions: dict[str, dict[str, int]] = defaultdict(lambda: {"support": 0, "oppose": 0, "neutral": 0})
 
         for agent in simulation_state.agents:
             archetype_id = agent.archetype_id
@@ -144,26 +145,18 @@ class CrossSimulationLearner:
         }
 
         # Save to database
-        asyncio.get_event_loop().create_task(
-            self._save_patterns(simulation_state.config.id, patterns)
-        )
+        asyncio.get_event_loop().create_task(self._save_patterns(simulation_state.config.id, patterns))
 
         return patterns
 
-    async def _save_patterns(
-        self, simulation_id: str, patterns: list[dict]
-    ) -> None:
+    async def _save_patterns(self, simulation_id: str, patterns: list[dict]) -> None:
         """Save patterns to database."""
         try:
-            await cross_simulation_repo.save_patterns(
-                simulation_id, patterns, None
-            )
+            await cross_simulation_repo.save_patterns(simulation_id, patterns, None)
         except Exception as e:
             logger.warning(f"Failed to save patterns to DB: {e}")
 
-    def _extract_coalition_patterns(
-        self, simulation_state: SimulationState
-    ) -> list[dict]:
+    def _extract_coalition_patterns(self, simulation_state: SimulationState) -> list[dict]:
         """Extract coalition formation patterns."""
         patterns = []
 
@@ -178,7 +171,7 @@ class CrossSimulationLearner:
         for coalition_id, members in coalition_map.items():
             if len(members) >= 2:
                 for i, a1 in enumerate(members):
-                    for a2 in members[i + 1:]:
+                    for a2 in members[i + 1 :]:
                         pair = tuple(sorted([a1, a2]))
                         archetype_pairs[f"{pair[0]}-{pair[1]}"] += 1
 
@@ -197,9 +190,7 @@ class CrossSimulationLearner:
 
         return patterns
 
-    def _extract_outcome_patterns(
-        self, simulation_state: SimulationState
-    ) -> list[dict]:
+    def _extract_outcome_patterns(self, simulation_state: SimulationState) -> list[dict]:
         """Extract environment-specific outcome patterns."""
         patterns = []
 
@@ -237,11 +228,12 @@ class CrossSimulationLearner:
         # Laplace distribution: scale = 1/epsilon
         scale = 1.0 / epsilon
         u = random.uniform(-0.5, 0.5)
-        return -scale * random.choice([1, -1]) * math.log(1 - 2 * abs(u)) if hasattr(math, 'log') else random.gauss(0, scale)
+        return -scale * random.choice([1, -1]) * math.log(1 - 2 * abs(u))
 
     def _get_timestamp(self) -> str:
         """Get current UTC timestamp."""
         from datetime import datetime, timezone
+
         return datetime.now(timezone.utc).isoformat()
 
     def get_aggregate_patterns(self, min_simulations: int = 10) -> dict[str, Any]:
@@ -260,7 +252,9 @@ class CrossSimulationLearner:
 
         # Check if we have enough simulations
         if len(_opted_in_simulations) < min_simulations:
-            result["warning"] = f"Insufficient simulations ({len(_opted_in_simulations)}/{min_simulations}) for reliable patterns"
+            result["warning"] = (
+                f"Insufficient simulations ({len(_opted_in_simulations)}/{min_simulations}) for reliable patterns"
+            )
             return result
 
         # Aggregate archetype decision patterns
@@ -285,9 +279,7 @@ class CrossSimulationLearner:
 
         result["patterns"]["coalition_formations"] = {
             pair: {"frequency": freq}
-            for pair, freq in sorted(
-                coalition_stats.items(), key=lambda x: x[1], reverse=True
-            )[:10]  # Top 10
+            for pair, freq in sorted(coalition_stats.items(), key=lambda x: x[1], reverse=True)[:10]  # Top 10
         }
 
         # Aggregate environment outcomes
@@ -304,7 +296,7 @@ class CrossSimulationLearner:
             if stats["rounds"]:
                 result["patterns"]["environment_outcomes"][env] = {
                     "average_rounds": round(sum(stats["rounds"]) / len(stats["rounds"]), 1),
-                    "consensus_rate": round(stats["consensus"] / stats["total"], 3) if stats["total"] > 0 else 0,
+                    "consensus_rate": (round(stats["consensus"] / stats["total"], 3) if stats["total"] > 0 else 0),
                     "sample_size": stats["total"],
                 }
 
@@ -383,9 +375,6 @@ class CrossSimulationLearner:
 
         return suggestions
 
-
-# Import math module for log function
-import math
 
 # Global instance
 cross_simulation_learner = CrossSimulationLearner()

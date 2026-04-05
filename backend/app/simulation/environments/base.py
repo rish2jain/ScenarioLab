@@ -108,32 +108,21 @@ class BaseEnvironment(ABC):
         """Process a single agent's turn."""
         try:
             # Get visible messages for this agent
-            visible_messages = visibility.filter_messages_for_agent(
-                agent.state, round_state.messages
-            )
+            visible_messages = visibility.filter_messages_for_agent(agent.state, round_state.messages)
 
             # Enrich context with agent's cross-round memories
             enriched_context = context
             if self._memory_manager and round_number > 1:
-                sim_id = getattr(
-                    self._sim_config, "id", ""
-                )
+                sim_id = getattr(self._sim_config, "id", "")
                 if sim_id:
                     try:
-                        mem_ctx = (
-                            await self._memory_manager
-                            .get_agent_context(
-                                agent_id=agent.id,
-                                simulation_id=sim_id,
-                                current_round=round_number,
-                            )
+                        mem_ctx = await self._memory_manager.get_agent_context(
+                            agent_id=agent.id,
+                            simulation_id=sim_id,
+                            current_round=round_number,
                         )
                         if mem_ctx:
-                            enriched_context = (
-                                f"{context}\n\n{mem_ctx}"
-                                if context
-                                else mem_ctx
-                            )
+                            enriched_context = f"{context}\n\n{mem_ctx}" if context else mem_ctx
                     except Exception:
                         logger.debug(
                             "Memory retrieval failed for %s",
@@ -160,9 +149,7 @@ class BaseEnvironment(ABC):
             return message
 
         except Exception as e:
-            logger.error(
-                f"Error processing turn for agent {agent.name}: {e}"
-            )
+            logger.error(f"Error processing turn for agent {agent.name}: {e}")
             return None
 
     async def _run_voting_phase(
@@ -190,22 +177,21 @@ class BaseEnvironment(ABC):
                     agent_id=agent.id,
                     agent_name=agent.name,
                     agent_role=agent.archetype.role,
-                    content=(
-                        f"Vote: {vote_result['vote']}. "
-                        f"{vote_result['reasoning']}"
-                    ),
+                    content=(f"Vote: {vote_result['vote']}. " f"{vote_result['reasoning']}"),
                     message_type="vote",
                 )
                 round_state.messages.append(vote_message)
 
             except Exception as e:
                 logger.error(f"Error collecting vote from {agent.name}: {e}")
-                votes.append({
-                    "agent_id": agent.id,
-                    "agent_name": agent.name,
-                    "vote": "abstain",
-                    "reasoning": f"Error: {str(e)}",
-                })
+                votes.append(
+                    {
+                        "agent_id": agent.id,
+                        "agent_name": agent.name,
+                        "vote": "abstain",
+                        "reasoning": f"Error: {str(e)}",
+                    }
+                )
 
         return votes
 
@@ -219,7 +205,9 @@ class BaseEnvironment(ABC):
         if total == 0:
             return {
                 "result": "no_quorum",
-                "for": 0, "against": 0, "abstain": 0,
+                "for": 0,
+                "against": 0,
+                "abstain": 0,
             }
 
         # Simple majority (51%)

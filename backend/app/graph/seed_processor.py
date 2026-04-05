@@ -44,9 +44,7 @@ class SeedProcessor:
         """Get the seed material store."""
         return self._store
 
-    async def process_file(
-        self, filename: str, content: bytes, content_type: str
-    ) -> SeedMaterial:
+    async def process_file(self, filename: str, content: bytes, content_type: str) -> SeedMaterial:
         """Process an uploaded file into a SeedMaterial."""
         seed = SeedMaterial(
             filename=filename,
@@ -67,19 +65,14 @@ class SeedProcessor:
                 try:
                     raw_text = content.decode("utf-8", errors="ignore")
                 except Exception:
-                    raise ValueError(
-                        f"Unsupported content type: {content_type}"
-                    )
+                    raise ValueError(f"Unsupported content type: {content_type}")
 
             seed.raw_content = raw_text
             # Can add additional processing later
             seed.processed_content = raw_text
             seed.status = "processed"
 
-            logger.info(
-                f"Processed {filename} ({content_type}) -> "
-                f"{len(raw_text)} chars"
-            )
+            logger.info(f"Processed {filename} ({content_type}) -> " f"{len(raw_text)} chars")
 
         except Exception as e:
             seed.status = "failed"
@@ -111,7 +104,7 @@ class SeedProcessor:
             decoded = content.decode("utf-8", errors="ignore")
 
             # Look for text in parentheses (common PDF text format)
-            text_in_parens = re.findall(r'\(([^)]+)\)', decoded)
+            text_in_parens = re.findall(r"\(([^)]+)\)", decoded)
 
             # Filter out short strings and binary-looking content
             for text in text_in_parens:
@@ -131,31 +124,21 @@ class SeedProcessor:
             extracted = "".join(readable_chars)
 
             # Clean up: remove excessive whitespace
-            lines = [
-                line.strip() for line in extracted.split('\n') if line.strip()
-            ]
+            lines = [line.strip() for line in extracted.split("\n") if line.strip()]
             cleaned_text = "\n".join(lines)
 
             if len(cleaned_text) > 100:
                 return cleaned_text
 
             # If extraction yields very little, return a placeholder
-            logger.warning(
-                "PDF text extraction yielded limited results. "
-                "Consider adding pdfplumber."
-            )
-            return (
-                f"[PDF: {len(content)} bytes. Basic extraction applied.]\n\n"
-                f"{cleaned_text[:2000]}"
-            )
+            logger.warning("PDF text extraction yielded limited results. " "Consider adding pdfplumber.")
+            return f"[PDF: {len(content)} bytes. Basic extraction applied.]\n\n" f"{cleaned_text[:2000]}"
 
         except Exception as e:
             logger.error(f"PDF extraction error: {e}")
             return f"[PDF extraction failed: {str(e)}]"
 
-    async def chunk_content(
-        self, content: str, chunk_size: int = 2000, overlap: int = 200
-    ) -> list[str]:
+    async def chunk_content(self, content: str, chunk_size: int = 2000, overlap: int = 200) -> list[str]:
         """Split content into overlapping chunks for processing."""
         if not content:
             return []
@@ -171,7 +154,7 @@ class SeedProcessor:
             if end < content_length:
                 # Look for sentence endings
                 for i in range(min(end + 100, content_length) - 1, start, -1):
-                    if content[i] in '.!?':
+                    if content[i] in ".!?":
                         end = i + 1
                         break
                 else:
@@ -188,10 +171,7 @@ class SeedProcessor:
             # Move start forward with overlap
             start = end - overlap if end < content_length else content_length
 
-        logger.info(
-            f"Chunked into {len(chunks)} chunks "
-            f"(size={chunk_size}, overlap={overlap})"
-        )
+        logger.info(f"Chunked into {len(chunks)} chunks " f"(size={chunk_size}, overlap={overlap})")
         return chunks
 
     async def get_seed(self, seed_id: str) -> SeedMaterial | None:
@@ -254,10 +234,7 @@ class SeedProcessor:
             await self._get_repo().save(seed)
 
             entities_found = result.get("entities_found", [])
-            logger.info(
-                f"Augmented seed {seed_id} with research context "
-                f"({len(entities_found)} entities found)"
-            )
+            logger.info(f"Augmented seed {seed_id} with research context " f"({len(entities_found)} entities found)")
 
         except Exception as e:
             logger.error(f"Failed to augment seed {seed_id}: {e}")

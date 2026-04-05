@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Download, Shield, CheckCircle, XCircle, FileJson, FileSpreadsheet } from 'lucide-react';
+import { ChevronLeft, Shield, CheckCircle, XCircle, FileJson, FileSpreadsheet } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { useToast } from '@/components/ui/Toast';
 import { api } from '@/lib/api';
-import type { AuditTrail, AuditEvent, AuditEventType } from '@/lib/types';
+import type { AuditTrail, AuditEventType } from '@/lib/types';
 
 const eventTypeColors: Record<AuditEventType, string> = {
   config_change: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
@@ -35,170 +36,93 @@ const eventTypeLabels: Record<AuditEventType, string> = {
   export: 'Export',
 };
 
-// Mock audit trail data
-const mockAuditTrail: AuditTrail = {
-  simulation_id: 'sim-1',
-  events: [
-    {
-      event_id: 'evt-1',
-      simulation_id: 'sim-1',
-      event_type: 'simulation_start',
-      timestamp: '2024-01-15T10:05:00Z',
-      actor: 'system',
-      details: { initiated_by: 'user-1', config: { rounds: 12 } },
-      previous_hash: '0',
-      hash: 'abc123',
-    },
-    {
-      event_id: 'evt-2',
-      simulation_id: 'sim-1',
-      event_type: 'agent_decision',
-      timestamp: '2024-01-15T10:06:30Z',
-      actor: 'agent-1',
-      details: { round: 1, decision: 'propose_rapid_integration' },
-      previous_hash: 'abc123',
-      hash: 'def456',
-    },
-    {
-      event_id: 'evt-3',
-      simulation_id: 'sim-1',
-      event_type: 'agent_decision',
-      timestamp: '2024-01-15T10:07:15Z',
-      actor: 'agent-2',
-      details: { round: 1, decision: 'express_cultural_concerns' },
-      previous_hash: 'def456',
-      hash: 'ghi789',
-    },
-    {
-      event_id: 'evt-4',
-      simulation_id: 'sim-1',
-      event_type: 'simulation_pause',
-      timestamp: '2024-01-15T10:30:00Z',
-      actor: 'user-1',
-      details: { round: 3, reason: 'review_required' },
-      previous_hash: 'ghi789',
-      hash: 'jkl012',
-    },
-    {
-      event_id: 'evt-5',
-      simulation_id: 'sim-1',
-      event_type: 'simulation_resume',
-      timestamp: '2024-01-15T10:35:00Z',
-      actor: 'user-1',
-      details: { round: 3 },
-      previous_hash: 'jkl012',
-      hash: 'mno345',
-    },
-    {
-      event_id: 'evt-6',
-      simulation_id: 'sim-1',
-      event_type: 'config_change',
-      timestamp: '2024-01-15T10:40:00Z',
-      actor: 'user-1',
-      details: { parameter: 'temperature', old_value: 0.7, new_value: 0.5 },
-      previous_hash: 'mno345',
-      hash: 'pqr678',
-    },
-    {
-      event_id: 'evt-7',
-      simulation_id: 'sim-1',
-      event_type: 'annotation_added',
-      timestamp: '2024-01-15T11:00:00Z',
-      actor: 'user-1',
-      details: { round: 6, message_id: 'msg-12', tag: 'critical' },
-      previous_hash: 'pqr678',
-      hash: 'stu901',
-    },
-    {
-      event_id: 'evt-8',
-      simulation_id: 'sim-1',
-      event_type: 'simulation_complete',
-      timestamp: '2024-01-15T11:15:00Z',
-      actor: 'system',
-      details: { final_round: 12, total_duration_minutes: 70 },
-      previous_hash: 'stu901',
-      hash: 'vwx234',
-    },
-    {
-      event_id: 'evt-9',
-      simulation_id: 'sim-1',
-      event_type: 'report_generation',
-      timestamp: '2024-01-15T11:20:00Z',
-      actor: 'system',
-      details: { report_id: 'report-1', format: 'full' },
-      previous_hash: 'vwx234',
-      hash: 'yzu567',
-    },
-    {
-      event_id: 'evt-10',
-      simulation_id: 'sim-1',
-      event_type: 'export',
-      timestamp: '2024-01-15T11:25:00Z',
-      actor: 'user-1',
-      details: { format: 'json', content: 'full_simulation' },
-      previous_hash: 'yzu567',
-      hash: 'abc890',
-    },
-  ],
-  is_valid: true,
-  integrity_check_message: 'All events verified successfully',
-};
-
 export default function AuditTrailPage() {
   const params = useParams();
   const rawId = params.id;
   const simulationId = Array.isArray(rawId) ? rawId[0] : rawId ?? '';
+  const { addToast } = useToast();
 
   const [auditTrail, setAuditTrail] = useState<AuditTrail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifyResult, setVerifyResult] = useState<{ valid: boolean; message: string } | null>(null);
   const [filter, setFilter] = useState<AuditEventType | 'all'>('all');
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadAuditTrail = async () => {
       setIsLoading(true);
-      const result = await api.getAuditTrail(simulationId);
-      if (result) {
-        setAuditTrail(result);
-      } else {
-        setAuditTrail(mockAuditTrail);
+      setLoadError(null);
+      try {
+        const result = await api.getAuditTrail(simulationId);
+        setAuditTrail(result || null);
+      } catch (error) {
+        setAuditTrail(null);
+        setLoadError(
+          error instanceof Error ? error.message : 'Failed to load audit trail.'
+        );
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
-    loadAuditTrail();
+    void loadAuditTrail();
   }, [simulationId]);
 
   const handleVerify = async () => {
     setIsVerifying(true);
-    const result = await api.verifyAuditTrail(simulationId);
-    if (result) {
-      setVerifyResult(result);
-    } else {
-      setVerifyResult({ valid: true, message: 'Audit trail integrity verified (mock)' });
+    try {
+      const result = await api.verifyAuditTrail(simulationId);
+      if (result) {
+        setVerifyResult(result);
+      } else {
+        setVerifyResult({ valid: false, message: 'No audit trail exists to verify.' });
+      }
+    } catch (error) {
+      setVerifyResult({
+        valid: false,
+        message: error instanceof Error ? error.message : 'Could not verify audit trail.',
+      });
     }
     setIsVerifying(false);
   };
 
   const handleExport = async (format: 'json' | 'csv') => {
-    const data = await api.exportAuditTrail(simulationId, format);
-    if (data) {
-      const blob = new Blob([data], {
-        type: format === 'json' ? 'application/json' : 'text/csv',
-      });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.download = `audit-trail-${simulationId}.${format}`;
-      link.href = url;
-      link.click();
-      URL.revokeObjectURL(url);
+    try {
+      const data = await api.exportAuditTrail(simulationId, format);
+      if (data) {
+        const blob = new Blob([data], {
+          type: format === 'json' ? 'application/json' : 'text/csv',
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.download = `audit-trail-${simulationId}.${format}`;
+        link.href = url;
+        try {
+          document.body.appendChild(link);
+          link.click();
+        } finally {
+          link.remove();
+          URL.revokeObjectURL(url);
+        }
+        return;
+      }
+      addToast('No audit trail export is available yet.', 'info');
+    } catch (error) {
+      addToast(
+        error instanceof Error ? error.message : 'Failed to export audit trail.',
+        'error'
+      );
     }
   };
 
-  const filteredEvents = auditTrail?.events.filter(
+  const allEvents = auditTrail?.events ?? [];
+  const filteredEvents = allEvents.filter(
     (event) => filter === 'all' || event.event_type === filter
-  ) || [];
+  );
+  const totalEventCount = allEvents.length;
+  const uniqueActorCount = new Set(allEvents.map((e) => e.actor)).size;
+  const agentDecisionCount = allEvents.filter((e) => e.event_type === 'agent_decision').length;
 
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleString('en-US', {
@@ -214,6 +138,24 @@ export default function AuditTrailPage() {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-slate-400">Loading audit trail...</div>
+      </div>
+    );
+  }
+
+  if (!auditTrail || !auditTrail.events || auditTrail.events.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 text-center space-y-4">
+        <div className="w-16 h-16 bg-slate-800/50 rounded-full flex items-center justify-center mb-2">
+          <Shield className="w-8 h-8 text-slate-500" />
+        </div>
+        <h2 className="text-xl font-semibold text-slate-200">No Audit Trail Records</h2>
+        <p className="text-slate-400 max-w-md">
+          {loadError ??
+            'There are no authenticated events recorded for this simulation yet. The audit trail will populate as actions occur.'}
+        </p>
+        <Link href={`/simulations/${simulationId}`}>
+          <Button variant="secondary" className="mt-4">Return to Overview</Button>
+        </Link>
       </div>
     );
   }
@@ -308,25 +250,34 @@ export default function AuditTrailPage() {
             </div>
           </Card>
 
-          {/* Stats */}
+          {/* Stats: row count follows the table filter; actors / decisions are simulation-wide */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card padding="md">
               <div className="text-2xl font-bold text-slate-100">
-                {auditTrail?.events.length || 0}
+                {filteredEvents.length}
               </div>
-              <div className="text-sm text-slate-400">Total Events</div>
+              <div className="text-sm text-slate-400">
+                {filter === 'all' ? 'Total Events' : 'Events in view'}
+              </div>
+              {filter !== 'all' && (
+                <div className="text-xs text-slate-500 mt-1">
+                  of {totalEventCount} total
+                </div>
+              )}
             </Card>
             <Card padding="md">
               <div className="text-2xl font-bold text-slate-100">
-                {new Set(auditTrail?.events.map(e => e.actor)).size || 0}
+                {uniqueActorCount}
               </div>
               <div className="text-sm text-slate-400">Unique Actors</div>
+              <div className="text-xs text-slate-500 mt-1">Across simulation</div>
             </Card>
             <Card padding="md">
               <div className="text-2xl font-bold text-slate-100">
-                {auditTrail?.events.filter(e => e.event_type === 'agent_decision').length || 0}
+                {agentDecisionCount}
               </div>
               <div className="text-sm text-slate-400">Agent Decisions</div>
+              <div className="text-xs text-slate-500 mt-1">Across simulation</div>
             </Card>
             <Card padding="md">
               <div className="text-2xl font-bold text-green-400">

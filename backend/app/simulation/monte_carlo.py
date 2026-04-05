@@ -9,14 +9,35 @@ import uuid
 from pydantic import BaseModel
 
 from app.analytics.analytics_agent import AnalyticsAgent, SimulationMetrics
+from app.config import settings
 from app.simulation.engine import SimulationEngine
 from app.simulation.models import SimulationConfig
 
 logger = logging.getLogger(__name__)
 
 
+def _policy_adoption_rates_from_iterations(
+    iteration_results: list[dict],
+) -> list[float]:
+    """Collect policy adoption rates from MC iteration rows (supports nested metrics_summary)."""
+    rates: list[float] = []
+    for r in iteration_results:
+        if r.get("status") != "completed":
+            continue
+        ms = r.get("metrics_summary")
+        val = None
+        if isinstance(ms, dict) and "policy_adoption_rate" in ms:
+            val = ms.get("policy_adoption_rate")
+        elif "policy_adoption_rate" in r:
+            val = r.get("policy_adoption_rate")
+        if val is not None:
+            rates.append(float(val))
+    return rates
+
+
 class MonteCarloConfig(BaseModel):
     """Configuration for Monte Carlo simulation runs."""
+
     base_config: SimulationConfig
     iterations: int = 20  # 20-50 runs
     # Parameters to vary between runs
@@ -27,6 +48,7 @@ class MonteCarloConfig(BaseModel):
 
 class MonteCarloResult(BaseModel):
     """Results from a Monte Carlo simulation run."""
+
     config: MonteCarloConfig
     iterations_completed: int
     results: list[dict]  # Summary per iteration
@@ -42,17 +64,18 @@ class MonteCarloRunner:
         self.engine = simulation_engine
         self.analytics_agent = AnalyticsAgent()
 
-    async def run(
-        self, config: MonteCarloConfig, on_progress=None
-    ) -> MonteCarloResult:
+    async def run(self, config: MonteCarloConfig, on_progress=None) -> MonteCarloResult:
         """Run Monte Carlo iterations."""
-        logger.info(
-            f"Starting Monte Carlo run with {config.iterations} iterations"
-        )
+        logger.info(f"Starting Monte Carlo run with {config.iterations} iterations")
         start_time = time.time()
 
         all_metrics: list[SimulationMetrics] = []
         iteration_results: list[dict] = []
+
+        bp = config.base_config.parameters or {}
+        inf_mode = str(bp.get("inference_mode") or settings.inference_mode or "cloud").strip().lower()
+        mc_hybrid_followup = inf_mode == "hybrid" and config.iterations > 1
+        follow_up_router = None
 
         for i in range(config.iterations):
             iteration_start = time.time()
@@ -61,85 +84,85 @@ class MonteCarloRunner:
             sim_id = None
             try:
                 # Create varied config for this iteration
-                iter_config = self._create_varied_config(
-                    config.base_config, i, config
-                )
+                iter_config = self._create_varied_config(config.base_config, i, config)
 
-                # Run simulation
-                sim_state = await self.engine.create_simulation(iter_config)
+                # Run simulation (iterations 2+ reuse copy-1 exemplars in hybrid mode)
+                sim_state = await self.engine.create_simulation(
+                    iter_config,
+                    inference_router=follow_up_router if i > 0 else None,
+                )
                 sim_id = sim_state.config.id
                 await self.engine.run_simulation(sim_id)
+
+                if i == 0 and mc_hybrid_followup:
+                    router = self.engine.get_agent_router(sim_id)
+                    if router is not None and router.mode == "hybrid":
+                        follow_up_router = router.with_preloaded_exemplars()
 
                 # Get final state
                 final_state = await self.engine.get_simulation(sim_id)
 
                 if final_state and final_state.status.value == "completed":
                     # Analyze with analytics agent
-                    metrics = await self.analytics_agent.analyze_simulation(
-                        final_state
-                    )
+                    metrics = await self.analytics_agent.analyze_simulation(final_state)
                     all_metrics.append(metrics)
 
-                    iteration_results.append({
-                        "iteration": i + 1,
-                        "simulation_id": sim_id,
-                        "status": "completed",
-                        "duration_seconds": time.time() - iteration_start,
-                        "metrics_summary": {
-                            "compliance_violation_rate": (
-                                metrics.compliance_violation_rate
-                            ),
-                            "time_to_consensus": metrics.time_to_consensus,
-                            "policy_adoption_rate": (
-                                metrics.policy_adoption_rate
-                            ),
-                        },
-                    })
+                    iteration_results.append(
+                        {
+                            "iteration": i + 1,
+                            "simulation_id": sim_id,
+                            "status": "completed",
+                            "duration_seconds": time.time() - iteration_start,
+                            "metrics_summary": {
+                                "compliance_violation_rate": (metrics.compliance_violation_rate),
+                                "time_to_consensus": metrics.time_to_consensus,
+                                "policy_adoption_rate": (metrics.policy_adoption_rate),
+                            },
+                        }
+                    )
                 else:
-                    iteration_results.append({
-                        "iteration": i + 1,
-                        "simulation_id": sim_id,
-                        "status": "failed",
-                        "duration_seconds": time.time() - iteration_start,
-                        "error": "Simulation did not complete",
-                    })
+                    iteration_results.append(
+                        {
+                            "iteration": i + 1,
+                            "simulation_id": sim_id,
+                            "status": "failed",
+                            "duration_seconds": time.time() - iteration_start,
+                            "error": "Simulation did not complete",
+                        }
+                    )
 
                 # Report progress
                 if on_progress:
-                    await on_progress({
-                        "iteration": i + 1,
-                        "total": config.iterations,
-                        "percentage": round(
-                            (i + 1) / config.iterations * 100, 1
-                        ),
-                    })
+                    await on_progress(
+                        {
+                            "iteration": i + 1,
+                            "total": config.iterations,
+                            "percentage": round((i + 1) / config.iterations * 100, 1),
+                        }
+                    )
 
             except Exception as e:
                 logger.error(f"Iteration {i + 1} failed: {e}")
-                iteration_results.append({
-                    "iteration": i + 1,
-                    "status": "error",
-                    "error": str(e),
-                })
+                iteration_results.append(
+                    {
+                        "iteration": i + 1,
+                        "status": "error",
+                        "error": str(e),
+                    }
+                )
             finally:
                 # Clean up child simulation to prevent memory bloat
                 if sim_id is not None:
                     try:
                         await self.engine.delete_simulation(sim_id)
                     except Exception as cleanup_err:
-                        logger.warning(
-                            f"Failed to clean up simulation {sim_id}: "
-                            f"{cleanup_err}"
-                        )
+                        logger.warning(f"Failed to clean up simulation {sim_id}: " f"{cleanup_err}")
 
         # Compute confidence intervals
         confidence_intervals = self.compute_confidence_intervals(all_metrics)
 
-        # Check convergence
-        convergence_achieved = self.check_convergence(
-            [r.get("policy_adoption_rate", 0) for r in iteration_results
-             if "policy_adoption_rate" in r]
-        )
+        # Check convergence (metrics live under metrics_summary per iteration)
+        convergence_achieved = self.check_convergence(_policy_adoption_rates_from_iterations(iteration_results))
 
         total_duration = time.time() - start_time
 
@@ -153,8 +176,7 @@ class MonteCarloRunner:
         )
 
         logger.info(
-            f"Monte Carlo run complete: {len(all_metrics)}/"
-            f"{config.iterations} successful in {total_duration:.1f}s"
+            f"Monte Carlo run complete: {len(all_metrics)}/" f"{config.iterations} successful in {total_duration:.1f}s"
         )
         return result
 
@@ -178,9 +200,7 @@ class MonteCarloRunner:
                 if param in config_dict:
                     if isinstance(variation, list):
                         # Cycle through list values
-                        config_dict[param] = variation[
-                            iteration % len(variation)
-                        ]
+                        config_dict[param] = variation[iteration % len(variation)]
                     elif isinstance(variation, dict):
                         # Random variation within range
                         min_val = variation.get("min", 0)
@@ -192,15 +212,11 @@ class MonteCarloRunner:
             config_dict["parameters"] = {}
 
         temp_range = mc_config.temperature_range
-        config_dict["parameters"]["temperature"] = random.uniform(
-            temp_range[0], temp_range[1]
-        )
+        config_dict["parameters"]["temperature"] = random.uniform(temp_range[0], temp_range[1])
 
         return SimulationConfig(**config_dict)
 
-    def compute_confidence_intervals(
-        self, all_metrics: list[SimulationMetrics]
-    ) -> dict:
+    def compute_confidence_intervals(self, all_metrics: list[SimulationMetrics]) -> dict:
         """Compute mean, std, 95% CI for each metric across runs."""
         if not all_metrics:
             return {}
@@ -247,9 +263,7 @@ class MonteCarloRunner:
 
         return intervals
 
-    def check_convergence(
-        self, running_means: list[float], threshold: float = 0.05
-    ) -> bool:
+    def check_convergence(self, running_means: list[float], threshold: float = 0.05) -> bool:
         """Check if results have converged."""
         if len(running_means) < 10:
             return False

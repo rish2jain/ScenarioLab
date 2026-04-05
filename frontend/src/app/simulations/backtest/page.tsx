@@ -9,6 +9,8 @@ export default function BacktestPage() {
   const [selectedCase, setSelectedCase] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<BacktestResult | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [casesLoading, setCasesLoading] = useState(true);
   const [customMode, setCustomMode] = useState(false);
   const [customSeed, setCustomSeed] = useState('');
   const [customOutcomes, setCustomOutcomes] = useState('');
@@ -18,8 +20,24 @@ export default function BacktestPage() {
   }, []);
 
   const loadCases = async () => {
-    const caseList = await api.getBacktestCases();
-    setCases(caseList);
+    setLoadError(null);
+    setCasesLoading(true);
+    try {
+      const caseList = await api.getBacktestCases();
+      setCases(caseList);
+      setSelectedCase((prev) => {
+        if (prev == null) return null;
+        return caseList.some((c) => c.case_id === prev) ? prev : null;
+      });
+    } catch (err) {
+      setCases([]);
+      setSelectedCase(null);
+      setLoadError(
+        err instanceof Error ? err.message : 'Failed to load backtest cases.'
+      );
+    } finally {
+      setCasesLoading(false);
+    }
   };
 
   const runBacktest = async () => {
@@ -96,32 +114,50 @@ export default function BacktestPage() {
 
             {!customMode ? (
               <div className="space-y-3">
-                {cases.map((c) => (
-                  <div
-                    key={c.case_id}
-                    onClick={() => setSelectedCase(c.case_id)}
-                    className={`p-4 border rounded-lg cursor-pointer transition ${
-                      selectedCase === c.case_id
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <h3 className="font-medium">{c.name}</h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {c.description}
-                    </p>
-                    <div className="flex gap-2 mt-2">
-                      {c.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="text-xs bg-gray-100 px-2 py-1 rounded"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
+                {loadError ? (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 space-y-3">
+                    <p>{loadError}</p>
+                    <button
+                      type="button"
+                      onClick={() => void loadCases()}
+                      disabled={casesLoading}
+                      className="rounded-md bg-red-100 px-3 py-1.5 text-sm font-medium text-red-800 ring-1 ring-inset ring-red-200 hover:bg-red-200 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {casesLoading ? 'Retrying…' : 'Retry'}
+                    </button>
                   </div>
-                ))}
+                ) : casesLoading ? (
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+                    Loading cases…
+                  </div>
+                ) : (
+                  cases.map((c) => (
+                    <div
+                      key={c.case_id}
+                      onClick={() => setSelectedCase(c.case_id)}
+                      className={`p-4 border rounded-lg cursor-pointer transition ${
+                        selectedCase === c.case_id
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <h3 className="font-medium">{c.name}</h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {c.description}
+                      </p>
+                      <div className="flex gap-2 mt-2">
+                        {c.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="text-xs bg-gray-100 px-2 py-1 rounded"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             ) : (
               <div className="space-y-4">
@@ -154,7 +190,7 @@ export default function BacktestPage() {
 
             <button
               onClick={runBacktest}
-              disabled={loading || (!customMode && !selectedCase)}
+              disabled={loading || (!customMode && (!selectedCase || !!loadError))}
               className="mt-6 w-full bg-blue-600 text-white py-3 rounded-lg font-medium disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-blue-700 transition"
             >
               {loading ? 'Running Backtest...' : 'Run Backtest'}

@@ -49,6 +49,10 @@ logger = logging.getLogger(__name__)
 class ReportAgent:
     """Generates consulting-grade reports from simulation results."""
 
+    # Shared system message for all JSON-producing LLM calls — avoids
+    # duplicating near-identical instructions across every section prompt.
+    _SYSTEM_JSON = "You are an expert strategy consultant. " "Respond with valid JSON only."
+
     def __init__(
         self,
         llm_provider: LLMProvider,
@@ -56,12 +60,28 @@ class ReportAgent:
     ):
         self.llm = llm_provider
         self.simulation = simulation_state
+        # Lazily built once per report and shared across all sections.
+        self._shared_context: str | None = None
+        self._shared_all_messages: list | None = None
+
+    def _get_context(self) -> str:
+        """Return simulation context, building it once and caching."""
+        if self._shared_context is None:
+            self._shared_context = self._build_simulation_context()
+        return self._shared_context
+
+    def _get_all_messages(self) -> list:
+        """Get all messages from all rounds (cached)."""
+        if self._shared_all_messages is None:
+            messages = []
+            for round_state in self.simulation.rounds:
+                messages.extend(round_state.messages)
+            self._shared_all_messages = messages
+        return self._shared_all_messages
 
     async def generate_full_report(self) -> SimulationReport:
         """Generate complete report with all deliverables."""
-        logger.info(
-            f"Starting report generation for sim {self.simulation.config.id}"
-        )
+        logger.info(f"Starting report generation for sim {self.simulation.config.id}")
 
         # Create base report
         report = SimulationReport(
@@ -69,6 +89,10 @@ class ReportAgent:
             simulation_name=self.simulation.config.name,
             status="generating",
         )
+
+        # Pre-build shared context once so every section reuses it.
+        self._get_context()
+        self._get_all_messages()
 
         try:
             # Generate all sections in parallel for speed
@@ -94,9 +118,7 @@ class ReportAgent:
             )
             report.status = "draft"
 
-            report.updated_at = (
-                datetime.now(timezone.utc).isoformat()
-            )
+            report.updated_at = datetime.now(timezone.utc).isoformat()
 
             logger.info(f"Report done for {report.simulation_id}")
 
@@ -121,20 +143,23 @@ class ReportAgent:
             return ObjectiveAssessment(
                 simulation_id=oid,
                 stated_objective="",
-                conclusion=(
-                    "No explicit simulation objective was configured; "
-                    "assessment is not applicable."
-                ),
+                conclusion=("No explicit simulation objective was configured; " "assessment is not applicable."),
             )
 
-        # Use all messages for objective evaluation, with per-message
-        # truncation to manage context size
+        # Tiered transcript: recent rounds get full text, older rounds
+        # get shorter excerpts to prioritise signal-dense recent discussion
+        # while staying within a reasonable context budget.
         all_msgs = self._get_all_messages()
-        transcript = "\n".join(
-            f"[R{m.round_number}] {m.agent_name} ({m.agent_role}): "
-            f"{m.content[:400]}"
-            for m in all_msgs
-        )
+        total_rounds = len(self.simulation.rounds)
+        recent_cutoff = max(1, total_rounds - 3)  # last 3 rounds = "recent"
+        transcript_lines: list[str] = []
+        for m in all_msgs:
+            limit = 600 if m.round_number >= recent_cutoff else 150
+            excerpt = m.content[:limit]
+            if len(m.content) > limit:
+                excerpt += "..."
+            transcript_lines.append(f"[R{m.round_number}] {m.agent_name} ({m.agent_role}): " f"{excerpt}")
+        transcript = "\n".join(transcript_lines)
 
         prompt = f"""You are evaluating whether this war-game simulation answered
 the user's stated objective.
@@ -142,8 +167,8 @@ the user's stated objective.
 USER OBJECTIVE AND STRUCTURED PARSE:
 {objective_block}
 
-TRANSCRIPT EXCERPT (recent messages):
-{transcript[:12000]}
+TRANSCRIPT (older rounds summarised, recent rounds full):
+{transcript}
 
 Respond with valid JSON only:
 {{
@@ -156,16 +181,10 @@ Respond with valid JSON only:
         try:
             response = await self.llm.generate(
                 messages=[
-                    LLMMessage(
-                        role="system",
-                        content=(
-                            "You are a rigorous strategy consultant. "
-                            "Respond with valid JSON only."
-                        ),
-                    ),
+                    LLMMessage(role="system", content=self._SYSTEM_JSON),
                     LLMMessage(role="user", content=prompt),
                 ],
-                temperature=0.25,
+                temperature=0.15,
                 max_tokens=1200,
             )
             content = self._clean_json_response(response.content)
@@ -173,9 +192,7 @@ Respond with valid JSON only:
             return ObjectiveAssessment(
                 simulation_id=oid,
                 stated_objective=str(data.get("stated_objective", "")),
-                success_metrics_addressed=list(
-                    data.get("success_metrics_addressed") or []
-                ),
+                success_metrics_addressed=list(data.get("success_metrics_addressed") or []),
                 gaps=list(data.get("gaps") or []),
                 conclusion=str(data.get("conclusion", "")),
             )
@@ -185,8 +202,7 @@ Respond with valid JSON only:
                 simulation_id=oid,
                 stated_objective=objective_block[:500],
                 conclusion=(
-                    "Objective assessment could not be generated automatically; "
-                    f"see stated objective above. ({e})"
+                    "Objective assessment could not be generated automatically; " f"see stated objective above. ({e})"
                 ),
             )
 
@@ -201,20 +217,16 @@ Respond with valid JSON only:
             self.simulation.agents,
         )
 
-        # Build context for LLM
-        context = self._build_simulation_context()
+        # Use pre-built shared context
+        context = self._get_context()
 
-        prompt_start = (
-            "You are a senior strategy consultant writing an executive "
-            "summary."
-        )
         objective_block = self._objective_block_for_report()
         obj_section = ""
         if objective_block.strip():
             obj_section = "\n\nSTATED OBJECTIVE (primary user question):\n"
             obj_section += objective_block
 
-        prompt = f"""{prompt_start}
+        prompt = f"""You are a senior strategy consultant writing an executive summary.
 
 SIMULATION CONTEXT:
 {context}
@@ -253,11 +265,7 @@ IMPORTANT: Include at most 3 recommendations, ranked by impact."""
         try:
             response = await self.llm.generate(
                 messages=[
-                    LLMMessage(
-                        role="system",
-                        content="You are an expert strategy consultant. "
-                        "Respond with valid JSON only."
-                    ),
+                    LLMMessage(role="system", content=self._SYSTEM_JSON),
                     LLMMessage(role="user", content=prompt),
                 ],
                 temperature=0.3,
@@ -274,9 +282,7 @@ IMPORTANT: Include at most 3 recommendations, ranked by impact."""
 
             return ExecutiveSummary(
                 simulation_id=self.simulation.config.id,
-                summary_text=format_for_presentation(
-                    data.get("summary_text", "")
-                ),
+                summary_text=format_for_presentation(data.get("summary_text", "")),
                 key_findings=data.get("key_findings", findings),
                 recommendations=recommendations,
             )
@@ -303,15 +309,11 @@ IMPORTANT: Include at most 3 recommendations, ranked by impact."""
                 items=[],
             )
 
-        # Build context for LLM
-        context = self._build_simulation_context()
+        # Use pre-built shared context
+        context = self._get_context()
         signals_json = json.dumps(signals[:10], indent=2)  # Limit to top 10
 
-        prompt_start = (
-            "You are a risk management consultant analyzing a business "
-            "simulation."
-        )
-        prompt = f"""{prompt_start}
+        prompt = f"""You are a risk management consultant analyzing a business simulation.
 
 SIMULATION CONTEXT:
 {context}
@@ -348,14 +350,10 @@ Include 3-7 significant risks. Be specific and actionable."""
         try:
             response = await self.llm.generate(
                 messages=[
-                    LLMMessage(
-                        role="system",
-                        content="You are a risk management expert. "
-                        "Respond with valid JSON only."
-                    ),
+                    LLMMessage(role="system", content=self._SYSTEM_JSON),
                     LLMMessage(role="user", content=prompt),
                 ],
-                temperature=0.3,
+                temperature=0.2,
                 max_tokens=2000,
             )
 
@@ -369,14 +367,16 @@ Include 3-7 significant risks. Be specific and actionable."""
                 prob = risk_data.get("probability", 0.5)
                 impact = risk_data.get("impact", "medium")
 
-                items.append(RiskItem(
-                    description=risk_data.get("description", "Unknown risk"),
-                    probability=prob,
-                    impact=impact,
-                    owner=risk_data.get("owner", "Unassigned"),
-                    mitigation=risk_data.get("mitigation", "TBD"),
-                    trigger=risk_data.get("trigger", "Unknown"),
-                ))
+                items.append(
+                    RiskItem(
+                        description=risk_data.get("description", "Unknown risk"),
+                        probability=prob,
+                        impact=impact,
+                        owner=risk_data.get("owner", "Unassigned"),
+                        mitigation=risk_data.get("mitigation", "TBD"),
+                        trigger=risk_data.get("trigger", "Unknown"),
+                    )
+                )
 
             return RiskRegister(
                 simulation_id=self.simulation.config.id,
@@ -393,22 +393,16 @@ Include 3-7 significant risks. Be specific and actionable."""
 
         # Use helpers to identify branches and construct narratives
         branches = identify_decision_branches(self.simulation.rounds)
-        narratives = construct_scenario_narratives(
-            branches, len(self.simulation.rounds)
-        )
+        narratives = construct_scenario_narratives(branches, len(self.simulation.rounds))
 
-        # Build context for LLM
-        context = self._build_simulation_context()
+        # Use pre-built shared context
+        context = self._get_context()
         narratives_json = json.dumps(narratives, indent=2)
 
         # Standard outcome dimensions
         outcome_dimensions = get_outcome_dimensions()
 
-        prompt_start = (
-            "You are a scenario planning consultant developing strategic "
-            "scenarios."
-        )
-        prompt = f"""{prompt_start}
+        prompt = f"""You are a scenario planning consultant developing strategic scenarios.
 
 SIMULATION CONTEXT:
 {context}
@@ -450,14 +444,10 @@ Ensure scenarios are distinct, plausible, and cover a range of outcomes."""
         try:
             response = await self.llm.generate(
                 messages=[
-                    LLMMessage(
-                        role="system",
-                        content="You are a scenario planning expert. "
-                        "Respond with valid JSON only."
-                    ),
+                    LLMMessage(role="system", content=self._SYSTEM_JSON),
                     LLMMessage(role="user", content=prompt),
                 ],
-                temperature=0.4,
+                temperature=0.5,
                 max_tokens=2500,
             )
 
@@ -473,14 +463,16 @@ Ensure scenarios are distinct, plausible, and cover a range of outcomes."""
                 else:
                     prob_tuple = (0.2, 0.4)
 
-                scenarios.append(ScenarioOutcome(
-                    scenario_name=scen_data.get("scenario_name", "Unnamed"),
-                    description=scen_data.get("description", ""),
-                    probability_range=prob_tuple,
-                    confidence_interval=scen_data.get("confidence_interval", 0.7),
-                    key_drivers=scen_data.get("key_drivers", []),
-                    outcomes=scen_data.get("outcomes", {}),
-                ))
+                scenarios.append(
+                    ScenarioOutcome(
+                        scenario_name=scen_data.get("scenario_name", "Unnamed"),
+                        description=scen_data.get("description", ""),
+                        probability_range=prob_tuple,
+                        confidence_interval=scen_data.get("confidence_interval", 0.7),
+                        key_drivers=scen_data.get("key_drivers", []),
+                        outcomes=scen_data.get("outcomes", {}),
+                    )
+                )
 
             return ScenarioMatrix(
                 simulation_id=self.simulation.config.id,
@@ -501,41 +493,38 @@ Ensure scenarios are distinct, plausible, and cover a range of outcomes."""
         messages = self._get_all_messages()
 
         for agent in self.simulation.agents:
-            position, support_level = compute_support_levels(
-                agent, messages, self.simulation.rounds
-            )
-            influence = calculate_influence_scores(
-                agent, self.simulation.agents, messages
-            )
+            position, support_level = compute_support_levels(agent, messages, self.simulation.rounds)
+            influence = calculate_influence_scores(agent, self.simulation.agents, messages)
             concerns = identify_key_concerns(agent, messages)
 
-            stakeholders.append({
-                "agent": agent,
-                "position": position,
-                "support_level": support_level,
-                "influence": influence,
-                "concerns": concerns,
-            })
+            stakeholders.append(
+                {
+                    "agent": agent,
+                    "position": position,
+                    "support_level": support_level,
+                    "influence": influence,
+                    "concerns": concerns,
+                }
+            )
 
-        # Build context for LLM
-        context = self._build_simulation_context()
-        stakeholders_json = json.dumps([
-            {
-                "name": s["agent"].name,
-                "role": s["agent"].archetype_id,
-                "position": s["position"],
-                "support_level": s["support_level"],
-                "influence": s["influence"],
-                "concerns": s["concerns"],
-            }
-            for s in stakeholders
-        ], indent=2)
-
-        prompt_start = (
-            "You are a stakeholder analysis consultant mapping influence "
-            "dynamics."
+        # Use pre-built shared context
+        context = self._get_context()
+        stakeholders_json = json.dumps(
+            [
+                {
+                    "name": s["agent"].name,
+                    "role": s["agent"].archetype_id,
+                    "position": s["position"],
+                    "support_level": s["support_level"],
+                    "influence": s["influence"],
+                    "concerns": s["concerns"],
+                }
+                for s in stakeholders
+            ],
+            indent=2,
         )
-        prompt = f"""{prompt_start}
+
+        prompt = f"""You are a stakeholder analysis consultant mapping influence dynamics.
 
 SIMULATION CONTEXT:
 {context}
@@ -571,14 +560,10 @@ Ensure the analysis reflects the actual dynamics observed in the simulation."""
         try:
             response = await self.llm.generate(
                 messages=[
-                    LLMMessage(
-                        role="system",
-                        content="You are a stakeholder management expert. "
-                        "Respond with valid JSON only."
-                    ),
+                    LLMMessage(role="system", content=self._SYSTEM_JSON),
                     LLMMessage(role="user", content=prompt),
                 ],
-                temperature=0.3,
+                temperature=0.25,
                 max_tokens=2000,
             )
 
@@ -588,14 +573,16 @@ Ensure the analysis reflects the actual dynamics observed in the simulation."""
             # Create stakeholder positions
             positions = []
             for pos_data in data.get("stakeholders", []):
-                positions.append(StakeholderPosition(
-                    stakeholder=pos_data.get("stakeholder", "Unknown"),
-                    role=pos_data.get("role", "Unknown"),
-                    position=pos_data.get("position", "neutral"),
-                    influence=pos_data.get("influence", 0.5),
-                    support_level=pos_data.get("support_level", 0.0),
-                    key_concerns=pos_data.get("key_concerns", []),
-                ))
+                positions.append(
+                    StakeholderPosition(
+                        stakeholder=pos_data.get("stakeholder", "Unknown"),
+                        role=pos_data.get("role", "Unknown"),
+                        position=pos_data.get("position", "neutral"),
+                        influence=pos_data.get("influence", 0.5),
+                        support_level=pos_data.get("support_level", 0.0),
+                        key_concerns=pos_data.get("key_concerns", []),
+                    )
+                )
 
             return StakeholderHeatmap(
                 simulation_id=self.simulation.config.id,
@@ -615,39 +602,40 @@ Ensure the analysis reflects the actual dynamics observed in the simulation."""
         ]
         if obj.strip():
             lines.append(f"Objective and parsed fields:\n{obj}")
-        lines.extend([
-            f"Environment: {self.simulation.config.environment_type.value}",
-            f"Total Rounds: {len(self.simulation.rounds)}",
-            f"Status: {self.simulation.status.value}",
-            "",
-            "Agents:",
-        ])
+        lines.extend(
+            [
+                f"Environment: {self.simulation.config.environment_type.value}",
+                f"Total Rounds: {len(self.simulation.rounds)}",
+                f"Status: {self.simulation.status.value}",
+                "",
+                "Agents:",
+            ]
+        )
 
         for agent in self.simulation.agents:
             lines.append(f"  - {agent.name} ({agent.archetype_id})")
             if agent.current_stance:
                 lines.append(f"    Final Stance: {agent.current_stance}")
             if agent.coalition_members:
-                coalitions = ', '.join(agent.coalition_members)
+                coalitions = ", ".join(agent.coalition_members)
                 lines.append(f"    Coalitions: {coalitions}")
 
         lines.extend(["", "Messages by Round:"])
 
+        # Tiered truncation: recent rounds (last 3) get full excerpts,
+        # older rounds get shorter excerpts to fit more signal per token.
+        total_rounds = len(self.simulation.rounds)
+        recent_cutoff = max(1, total_rounds - 3)
+
         for round_state in self.simulation.rounds:
-            lines.append(
-                f"\nRound {round_state.round_number} "
-                f"({len(round_state.messages)} messages):"
-            )
+            lines.append(f"\nRound {round_state.round_number} " f"({len(round_state.messages)} messages):")
+            is_recent = round_state.round_number >= recent_cutoff
+            char_limit = 600 if is_recent else 150
             for msg in round_state.messages:
-                # 400 chars preserves substance while managing
-                # overall context size for typical 10-round sims
-                excerpt = msg.content[:400]
-                if len(msg.content) > 400:
+                excerpt = msg.content[:char_limit]
+                if len(msg.content) > char_limit:
                     excerpt += "..."
-                lines.append(
-                    f"  [{msg.agent_name} ({msg.agent_role})] "
-                    f"{excerpt}"
-                )
+                lines.append(f"  [{msg.agent_name} ({msg.agent_role})] " f"{excerpt}")
 
             # Include round decisions/votes if present
             for dec in round_state.decisions:
@@ -665,13 +653,6 @@ Ensure the analysis reflects the actual dynamics observed in the simulation."""
                     )
 
         return "\n".join(lines)
-
-    def _get_all_messages(self) -> list:
-        """Get all messages from all rounds."""
-        messages = []
-        for round_state in self.simulation.rounds:
-            messages.extend(round_state.messages)
-        return messages
 
     def collect_tool_context(self) -> ReportToolContextSummary:
         """Structured slices for interactive report tools and UI drill-down."""
@@ -732,9 +713,7 @@ Ensure the analysis reflects the actual dynamics observed in the simulation."""
                     ReportMemoryByAgent(
                         agent_id=a.id,
                         agent_name=a.name,
-                        snippets=[
-                            (m.get("content") or "")[:300] for m in mems
-                        ],
+                        snippets=[(m.get("content") or "")[:300] for m in mems],
                     )
                 )
             return ReportMemoryToolContext(by_agent=by_agent)
@@ -756,9 +735,7 @@ Ensure the analysis reflects the actual dynamics observed in the simulation."""
 
         return content.strip()
 
-    def _generate_fallback_executive_summary(
-        self, findings: list
-    ) -> ExecutiveSummary:
+    def _generate_fallback_executive_summary(self, findings: list) -> ExecutiveSummary:
         """Generate a basic executive summary without LLM."""
         summary_text = (
             f"This report summarizes the '{self.simulation.config.name}' "
@@ -777,16 +754,12 @@ Ensure the analysis reflects the actual dynamics observed in the simulation."""
                     title="Review Simulation Findings",
                     description="Conduct detailed review of identified dynamics",
                     priority="high",
-                    rationale=(
-                        "Understanding is critical"
-                    ),
+                    rationale=("Understanding is critical"),
                 )
             ],
         )
 
-    def _generate_fallback_risk_register(
-        self, signals: list
-    ) -> RiskRegister:
+    def _generate_fallback_risk_register(self, signals: list) -> RiskRegister:
         """Generate a basic risk register without LLM."""
         items = []
         messages = self._get_all_messages()
@@ -796,23 +769,23 @@ Ensure the analysis reflects the actual dynamics observed in the simulation."""
             impact = score_risk_impact(signal.get("content", ""))
             owner = identify_risk_owner(signal, self.simulation.agents)
 
-            items.append(RiskItem(
-                description=signal.get("content", "Unknown risk")[:100],
-                probability=prob,
-                impact=impact,
-                owner=owner,
-                mitigation="Further analysis required",
-                trigger="TBD",
-            ))
+            items.append(
+                RiskItem(
+                    description=signal.get("content", "Unknown risk")[:100],
+                    probability=prob,
+                    impact=impact,
+                    owner=owner,
+                    mitigation="Further analysis required",
+                    trigger="TBD",
+                )
+            )
 
         return RiskRegister(
             simulation_id=self.simulation.config.id,
             items=items,
         )
 
-    def _generate_fallback_scenario_matrix(
-        self, narratives: list
-    ) -> ScenarioMatrix:
+    def _generate_fallback_scenario_matrix(self, narratives: list) -> ScenarioMatrix:
         """Generate a basic scenario matrix without LLM."""
         scenarios = []
         dimensions = get_outcome_dimensions()
@@ -820,14 +793,16 @@ Ensure the analysis reflects the actual dynamics observed in the simulation."""
         for narrative in narratives[:4]:
             prob_range = calculate_probability_ranges(narrative, narratives)
 
-            scenarios.append(ScenarioOutcome(
-                scenario_name=narrative.get("name", "Unnamed"),
-                description=narrative.get("description", ""),
-                probability_range=prob_range,
-                confidence_interval=0.6,
-                key_drivers=narrative.get("key_decisions", []),
-                outcomes={dim: "TBD" for dim in dimensions},
-            ))
+            scenarios.append(
+                ScenarioOutcome(
+                    scenario_name=narrative.get("name", "Unnamed"),
+                    description=narrative.get("description", ""),
+                    probability_range=prob_range,
+                    confidence_interval=0.6,
+                    key_drivers=narrative.get("key_decisions", []),
+                    outcomes={dim: "TBD" for dim in dimensions},
+                )
+            )
 
         return ScenarioMatrix(
             simulation_id=self.simulation.config.id,
@@ -835,22 +810,22 @@ Ensure the analysis reflects the actual dynamics observed in the simulation."""
             outcome_dimensions=dimensions,
         )
 
-    def _generate_fallback_stakeholder_heatmap(
-        self, stakeholders_data: list
-    ) -> StakeholderHeatmap:
+    def _generate_fallback_stakeholder_heatmap(self, stakeholders_data: list) -> StakeholderHeatmap:
         """Generate a basic stakeholder heatmap without LLM."""
         positions = []
 
         for data in stakeholders_data:
             agent = data["agent"]
-            positions.append(StakeholderPosition(
-                stakeholder=agent.name,
-                role=agent.archetype_id,
-                position=data["position"],
-                influence=data["influence"],
-                support_level=data["support_level"],
-                key_concerns=data["concerns"],
-            ))
+            positions.append(
+                StakeholderPosition(
+                    stakeholder=agent.name,
+                    role=agent.archetype_id,
+                    position=data["position"],
+                    influence=data["influence"],
+                    support_level=data["support_level"],
+                    key_concerns=data["concerns"],
+                )
+            )
 
         return StakeholderHeatmap(
             simulation_id=self.simulation.config.id,

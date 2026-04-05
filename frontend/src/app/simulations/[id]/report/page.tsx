@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Download, Lightbulb } from 'lucide-react';
+import { clsx } from 'clsx';
+import { ChevronLeft, Lightbulb } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Tabs } from '@/components/ui/Tabs';
@@ -11,31 +12,61 @@ import { ExportButtons } from '@/components/reports/ExportButtons';
 import { RiskRegisterTable } from '@/components/reports/RiskRegisterTable';
 import { ScenarioMatrixGrid } from '@/components/reports/ScenarioMatrixGrid';
 import { StakeholderHeatmap } from '@/components/reports/StakeholderHeatmap';
+import { useToast } from '@/components/ui/Toast';
 import { useReportStore } from '@/lib/store';
 import { api } from '@/lib/api';
-import type { Report } from '@/lib/types';
+
+function downloadTextExport(
+  content: string,
+  filename: string,
+  contentType: string
+) {
+  const blob = new Blob([content], { type: contentType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
 
 export default function ReportPage() {
   const params = useParams();
   const rawId = params.id;
   const simulationId = Array.isArray(rawId) ? rawId[0] : rawId ?? '';
-  
+  const { addToast } = useToast();
   const { currentReport, setCurrentReport } = useReportStore();
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadReport = async () => {
       setIsLoading(true);
-      const data = await api.getReport(simulationId);
-      if (data) {
+      setLoadError(null);
+      try {
+        let data = await api.getReport(simulationId);
+        if (!data) {
+          data = await api.generateReport(simulationId);
+        }
         setCurrentReport(data);
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Could not load report.';
+        setCurrentReport(null);
+        setLoadError(message);
+        addToast(message, 'error');
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
-    loadReport();
-  }, [simulationId, setCurrentReport]);
+    void loadReport();
+  }, [simulationId, setCurrentReport, addToast]);
 
   const handleExport = async (format: 'pdf' | 'markdown' | 'json' | 'miro') => {
     if (!currentReport) return;
@@ -52,24 +83,41 @@ export default function ReportPage() {
         };
 
         if (miroResult.mock_mode) {
-          // Show mock mode notification with board structure preview
-          alert(
-            `Miro Export (Mock Mode)\n\n` +
-            `${miroResult.message || 'No API token configured'}\n\n` +
-            `Board structure preview available in console.`
+          addToast(
+            miroResult.message || 'Miro export is in mock mode.',
+            'info'
           );
         } else if (miroResult.board_url) {
-          // Real export succeeded - open board URL
-          alert(`Miro board created successfully!\n\nOpening: ${miroResult.board_url}`);
+          addToast('Miro board created. Opening in a new tab.', 'success');
           window.open(miroResult.board_url, '_blank');
         }
-      } else {
-        // For other formats, trigger download
-        alert(`Exporting as ${format.toUpperCase()}...`);
+      } else if (typeof result === 'object' && result !== null) {
+        const exported = result as {
+          content?: string;
+          content_type?: string;
+          filename?: string;
+          note?: string;
+        };
+        if (typeof exported.content === 'string' && typeof exported.filename === 'string') {
+          downloadTextExport(
+            exported.content,
+            exported.filename,
+            exported.content_type ?? 'text/plain'
+          );
+          const base = `Downloaded ${exported.filename}.`;
+          const note = exported.note?.trim();
+          const exportMessage = note ? `${base} ${note}` : base;
+          addToast(exportMessage, 'success');
+        } else {
+          throw new Error('Export response did not include downloadable content.');
+        }
       }
     } catch (error) {
       console.error('Export failed:', error);
-      alert(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      addToast(
+        error instanceof Error ? error.message : 'Export failed.',
+        'error'
+      );
     } finally {
       setIsExporting(false);
     }
@@ -83,13 +131,31 @@ export default function ReportPage() {
     );
   }
 
-  if (!currentReport) {
+  if (loadError) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-slate-400">Report not found</div>
-      </div>
+      <Card className="mt-8 mx-auto max-w-2xl">
+        <div className="p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-slate-100">
+            Could not load report
+          </h2>
+          <p className="text-slate-400">{loadError}</p>
+          <Link
+            href={`/simulations/${simulationId}`}
+            className={clsx(
+              'inline-flex items-center justify-center gap-2 font-medium rounded-lg border transition-all duration-200',
+              'focus:outline-none focus:ring-2 focus:ring-accent/50 focus:ring-offset-2 focus:ring-offset-background',
+              'bg-background-tertiary hover:bg-border text-foreground border-border',
+              'px-3 py-1.5 text-sm',
+            )}
+          >
+            Back to Simulation
+          </Link>
+        </div>
+      </Card>
     );
   }
+
+  if (!currentReport) return null;
 
   const tabs = [
     {

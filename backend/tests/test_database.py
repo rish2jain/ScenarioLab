@@ -35,19 +35,18 @@ def sim_state(sim_config):
 @pytest.fixture
 async def repo(tmp_path):
     """Initialize a test database and return a SimulationRepository."""
-    import app.database as db_mod
+    import app.db.connection as conn_mod
 
     db_path = tmp_path / "test.db"
-    # Patch the module-level path so init_database() uses our temp dir
     with (
-        patch.object(db_mod, "_DB_DIR", tmp_path),
-        patch.object(db_mod, "_DB_PATH", db_path),
+        patch.object(conn_mod, "_DB_DIR", tmp_path),
+        patch.object(conn_mod, "DB_PATH", db_path),
     ):
-        await db_mod.init_database()
+        await conn_mod.init_schema()
         from app.database import SimulationRepository
 
         yield SimulationRepository()
-        await db_mod.close_database()
+        await conn_mod.close_database()
 
 
 @pytest.mark.asyncio
@@ -67,12 +66,8 @@ class TestSimulationRepository:
 
     async def test_list_all(self, repo, sim_config):
         for i in range(3):
-            config = sim_config.model_copy(
-                update={"id": f"sim-{i}", "name": f"Sim {i}"}
-            )
-            state = SimulationState(
-                config=config, status=SimulationStatus.READY
-            )
+            config = sim_config.model_copy(update={"id": f"sim-{i}", "name": f"Sim {i}"})
+            state = SimulationState(config=config, status=SimulationStatus.READY)
             await repo.save(state)
 
         summaries = await repo.list_all()

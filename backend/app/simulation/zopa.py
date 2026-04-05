@@ -46,9 +46,7 @@ class ZOPAResult(BaseModel):
     positions: list[AgentPosition] = Field(default_factory=list)
     zopa_exists: bool = False
     zopa_boundaries: ZOPABoundaries | None = None
-    concession_recommendations: list[ConcessionRecommendation] = Field(
-        default_factory=list
-    )
+    concession_recommendations: list[ConcessionRecommendation] = Field(default_factory=list)
     no_deal_probability: float = Field(default=0.5, ge=0.0, le=1.0)
     analysis_summary: str = ""
 
@@ -68,16 +66,17 @@ class ZOPAAnalyzer:
         """
         self.llm = llm_provider
 
-    async def extract_positions(
-        self, simulation_state: SimulationState
-    ) -> list[AgentPosition]:
+    async def extract_positions(self, simulation_state: SimulationState) -> list[AgentPosition]:
         """Extract negotiation positions from agent messages.
 
-        Analyzes agent messages in NEGOTIATION environment to extract:
+        Analyzes agent messages to extract:
         - Red lines (non-negotiable positions)
         - BATNA (Best Alternative to Negotiated Agreement)
         - Current position/offer
         - Flexibility score
+
+        Works with all environment types; uses LLM analysis for NEGOTIATION
+        environments and heuristic analysis for others.
 
         Args:
             simulation_state: The simulation state.
@@ -85,17 +84,12 @@ class ZOPAAnalyzer:
         Returns:
             List of AgentPosition for each agent.
         """
-        # Only analyze NEGOTIATION environments
         env = simulation_state.config.environment_type
-        if env != EnvironmentType.NEGOTIATION:
-            logger.warning(
-                "ZOPA analysis only applicable to NEGOTIATION "
-                f"environments, got {simulation_state.config.environment_type}"
-            )
-            return []
 
-        if not self.llm:
-            # Return basic positions without LLM analysis
+        # LLM-based extraction only runs when env is NEGOTIATION and self.llm is set;
+        # otherwise use heuristics: non-negotiation (env != EnvironmentType.NEGOTIATION)
+        # or negotiation without an LLM (not self.llm).
+        if env != EnvironmentType.NEGOTIATION or not self.llm:
             return self._extract_basic_positions(simulation_state)
 
         positions = []
@@ -114,16 +108,12 @@ class ZOPAAnalyzer:
             if not messages:
                 continue
 
-            position = await self._extract_agent_position(
-                agent.id, agent.name, messages
-            )
+            position = await self._extract_agent_position(agent.id, agent.name, messages)
             positions.append(position)
 
         return positions
 
-    def _extract_basic_positions(
-        self, simulation_state: SimulationState
-    ) -> list[AgentPosition]:
+    def _extract_basic_positions(self, simulation_state: SimulationState) -> list[AgentPosition]:
         """Extract basic positions without LLM.
 
         Uses heuristic extraction from message content.
@@ -140,8 +130,9 @@ class ZOPAAnalyzer:
 
             all_text = " ".join(agent_messages)
 
-            # Heuristic red line detection
-            red_lines = []
+            # Heuristic red line detection — extract full sentence around keyword
+            red_lines: list[str] = []
+            seen_red_line_spans: set[str] = set()
             red_line_keywords = [
                 "will not",
                 "cannot accept",
@@ -150,14 +141,24 @@ class ZOPAAnalyzer:
                 "refuse",
             ]
             for keyword in red_line_keywords:
+                if len(red_lines) >= 3:
+                    break
                 if keyword in all_text:
-                    # Extract surrounding context as red line
                     idx = all_text.find(keyword)
-                    start = max(0, idx - 30)
-                    end = min(len(all_text), idx + 50)
-                    red_lines.append(all_text[start:end].strip())
+                    # Walk back to sentence start (period/newline)
+                    start = max(0, idx - 150)
+                    sent_start = all_text.rfind(".", start, idx)
+                    start = (sent_start + 1) if sent_start >= start else start
+                    # Walk forward to sentence end
+                    end = min(len(all_text), idx + 200)
+                    sent_end = all_text.find(".", idx, end)
+                    end = (sent_end + 1) if sent_end > idx else end
+                    candidate = all_text[start:end].strip()
+                    if candidate and candidate not in seen_red_line_spans:
+                        seen_red_line_spans.add(candidate)
+                        red_lines.append(candidate)
 
-            # Heuristic BATNA detection
+            # Heuristic BATNA detection — extract full sentence around keyword
             batna = ""
             batna_keywords = [
                 "alternative",
@@ -169,8 +170,12 @@ class ZOPAAnalyzer:
             for keyword in batna_keywords:
                 if keyword in all_text:
                     idx = all_text.find(keyword)
-                    start = max(0, idx - 20)
-                    end = min(len(all_text), idx + 60)
+                    start = max(0, idx - 150)
+                    sent_start = all_text.rfind(".", start, idx)
+                    start = (sent_start + 1) if sent_start >= start else start
+                    end = min(len(all_text), idx + 200)
+                    sent_end = all_text.find(".", idx, end)
+                    end = (sent_end + 1) if sent_end > idx else end
                     batna = all_text[start:end].strip()
                     break
 
@@ -220,8 +225,7 @@ Respond with valid JSON only."""
                 messages=[
                     LLMMessage(
                         role="system",
-                        content="You analyze negotiation positions. "
-                        "Respond with valid JSON only.",
+                        content="You analyze negotiation positions. " "Respond with valid JSON only.",
                     ),
                     LLMMessage(role="user", content=prompt),
                 ],
@@ -260,9 +264,7 @@ Respond with valid JSON only."""
                 flexibility_score=0.5,
             )
 
-    def compute_zopa(
-        self, positions: list[AgentPosition]
-    ) -> tuple[bool, ZOPABoundaries | None]:
+    def compute_zopa(self, positions: list[AgentPosition]) -> tuple[bool, ZOPABoundaries | None]:
         """Compute the Zone of Possible Agreement.
 
         Finds the overlap zone across all parties' positions.
@@ -290,7 +292,7 @@ Respond with valid JSON only."""
         # Check for contradictory red lines
         red_line_conflicts = 0
         for i, pos1 in enumerate(positions):
-            for pos2 in positions[i + 1:]:
+            for pos2 in positions[i + 1 :]:
                 # Check if red lines directly conflict
                 for rl1 in pos1.red_lines:
                     for rl2 in pos2.red_lines:
@@ -303,28 +305,21 @@ Respond with valid JSON only."""
             return False, None
 
         # Compute average flexibility as ZOPA indicator
-        avg_flexibility = sum(p.flexibility_score for p in positions) / len(
-            positions
-        )
+        avg_flexibility = sum(p.flexibility_score for p in positions) / len(positions)
 
         # ZOPA exists if average flexibility is moderate to high
-        zopa_exists = avg_flexibility > 0.3 and red_line_conflicts < len(
-            positions
-        )
+        zopa_exists = avg_flexibility > 0.3 and red_line_conflicts < len(positions)
 
         if zopa_exists:
             # Create synthetic ZOPA boundaries based on positions
             most_flexible = max(positions, key=lambda p: p.flexibility_score)
-            least_flexible = min(
-                positions, key=lambda p: p.flexibility_score
-            )
+            least_flexible = min(positions, key=lambda p: p.flexibility_score)
 
             boundaries = ZOPABoundaries(
                 lower_bound=f"Constrained by {least_flexible.agent_name}",
                 upper_bound=f"Expanded by {most_flexible.agent_name}",
                 overlap_description=(
-                    f"Potential agreement zone exists with "
-                    f"{avg_flexibility:.0%} average flexibility"
+                    f"Potential agreement zone exists with " f"{avg_flexibility:.0%} average flexibility"
                 ),
             )
             return True, boundaries
@@ -349,9 +344,7 @@ Respond with valid JSON only."""
         text2_lower = text2.lower()
 
         for term1, term2 in opposing_pairs:
-            if (term1 in text1_lower and term2 in text2_lower) or (
-                term2 in text1_lower and term1 in text2_lower
-            ):
+            if (term1 in text1_lower and term2 in text2_lower) or (term2 in text1_lower and term1 in text2_lower):
                 return True
 
         return False
@@ -374,9 +367,7 @@ Respond with valid JSON only."""
             return recommendations
 
         # Sort positions by flexibility (least flexible first)
-        sorted_positions = sorted(
-            positions, key=lambda p: p.flexibility_score
-        )
+        sorted_positions = sorted(positions, key=lambda p: p.flexibility_score)
 
         # Recommend concessions from least flexible agents
         for pos in sorted_positions:
@@ -388,14 +379,10 @@ Respond with valid JSON only."""
                         ConcessionRecommendation(
                             agent_id=pos.agent_id,
                             agent_name=pos.agent_name,
-                            concession=(
-                                f"Consider flexibility on: "
-                                f"{red_line[:50]}"
-                            ),
+                            concession=(f"Consider flexibility on: " f"{red_line[:200]}"),
                             impact_score=impact,
                             description=(
-                                f"{pos.agent_name} has low flexibility. "
-                                "Softening this position could expand ZOPA."
+                                f"{pos.agent_name} has low flexibility. " "Softening this position could expand ZOPA."
                             ),
                         )
                     )
@@ -404,9 +391,7 @@ Respond with valid JSON only."""
         recommendations.sort(key=lambda r: r.impact_score, reverse=True)
         return recommendations[:5]  # Top 5 recommendations
 
-    def compute_no_deal_probability(
-        self, positions: list[AgentPosition], zopa_exists: bool
-    ) -> float:
+    def compute_no_deal_probability(self, positions: list[AgentPosition], zopa_exists: bool) -> float:
         """Compute probability of no deal.
 
         Args:
@@ -423,9 +408,7 @@ Respond with valid JSON only."""
         base_prob = 0.2 if zopa_exists else 0.7
 
         # Adjust based on average flexibility
-        avg_flexibility = sum(p.flexibility_score for p in positions) / len(
-            positions
-        )
+        avg_flexibility = sum(p.flexibility_score for p in positions) / len(positions)
         flexibility_adjustment = (1.0 - avg_flexibility) * 0.3
 
         # Adjust based on number of red lines
@@ -451,21 +434,14 @@ Respond with valid JSON only."""
         zopa_exists, zopa_boundaries = self.compute_zopa(positions)
 
         # Generate recommendations
-        recommendations = await self.recommend_concessions(
-            positions, zopa_exists
-        )
+        recommendations = await self.recommend_concessions(positions, zopa_exists)
 
         # Compute no-deal probability
-        no_deal_prob = self.compute_no_deal_probability(
-            positions, zopa_exists
-        )
+        no_deal_prob = self.compute_no_deal_probability(positions, zopa_exists)
 
         # Generate summary
         if zopa_exists:
-            summary = (
-                f"ZOPA identified across {len(positions)} parties. "
-                f"No-deal probability: {no_deal_prob:.0%}."
-            )
+            summary = f"ZOPA identified across {len(positions)} parties. " f"No-deal probability: {no_deal_prob:.0%}."
         else:
             summary = (
                 f"No clear ZOPA found among {len(positions)} parties. "

@@ -53,33 +53,21 @@ class NegotiationEnvironment(BaseEnvironment):
         round_state: RoundState,
     ) -> RoundState:
         """Execute a single phase of a negotiation round."""
-        logger.info(
-            f"Running negotiation phase: {phase} (round {round_number})"
-        )
+        logger.info(f"Running negotiation phase: {phase} (round {round_number})")
 
         speaking_order = turn_manager.get_speaking_order(phase, round_number)
         participants = turn_manager.get_phase_participants(phase)
 
         if phase == "position_statements":
-            await self._run_position_statements(
-                agents, speaking_order, round_state, visibility
-            )
+            await self._run_position_statements(agents, speaking_order, round_state, visibility)
         elif phase == "private_caucus":
-            await self._run_private_caucus(
-                agents, speaking_order, round_state, visibility
-            )
+            await self._run_private_caucus(agents, speaking_order, round_state, visibility)
         elif phase == "counter_proposal":
-            await self._run_counter_proposal(
-                agents, speaking_order, participants, round_state, visibility
-            )
+            await self._run_counter_proposal(agents, speaking_order, participants, round_state, visibility)
         elif phase == "red_line_identification":
-            await self._run_red_line_identification(
-                agents, speaking_order, round_state, visibility
-            )
+            await self._run_red_line_identification(agents, speaking_order, round_state, visibility)
         elif phase == "agreement_check":
-            await self._run_agreement_check(
-                agents, speaking_order, round_state, visibility
-            )
+            await self._run_agreement_check(agents, speaking_order, round_state, visibility)
 
         round_state.phase = phase
         round_state.phase_complete = True
@@ -97,10 +85,7 @@ class NegotiationEnvironment(BaseEnvironment):
         agent_map = {a.id: a for a in agents}
 
         # Exclude mediator from position statements
-        parties = [
-            aid for aid in speaking_order
-            if aid in [a.id for a in agents if a.archetype.id != "mediator"]
-        ]
+        parties = [aid for aid in speaking_order if aid in [a.id for a in agents if a.archetype.id != "mediator"]]
 
         for agent_id in parties:
             agent = agent_map.get(agent_id)
@@ -113,10 +98,7 @@ class NegotiationEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context=(
-                    "Clearly state your position and interests in the "
-                    "negotiation."
-                ),
+                context=("Clearly state your position and interests in the " "negotiation."),
             )
             if message:
                 round_state.messages.append(message)
@@ -144,10 +126,7 @@ class NegotiationEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context=(
-                    "Summarize the private discussions and identify "
-                    "common ground."
-                ),
+                context=("Summarize the private discussions and identify " "common ground."),
             )
             if message:
                 # Mark as coalition visible (mediator's view)
@@ -167,9 +146,9 @@ class NegotiationEnvironment(BaseEnvironment):
 
         # Alternate between parties
         parties = [
-            aid for aid in speaking_order
-            if aid in participants and aid in [a.id for a in agents
-                                               if a.archetype.id != "mediator"]
+            aid
+            for aid in speaking_order
+            if aid in participants and aid in [a.id for a in agents if a.archetype.id != "mediator"]
         ]
 
         for i, agent_id in enumerate(parties[:4]):  # Limit exchanges
@@ -183,10 +162,7 @@ class NegotiationEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context=(
-                    "Make a counter-proposal or respond to the other "
-                    "party's offer."
-                ),
+                context=("Make a counter-proposal or respond to the other " "party's offer."),
             )
             if message:
                 round_state.messages.append(message)
@@ -201,10 +177,7 @@ class NegotiationEnvironment(BaseEnvironment):
         """Run red line identification phase."""
         agent_map = {a.id: a for a in agents}
 
-        parties = [
-            aid for aid in speaking_order
-            if aid in [a.id for a in agents if a.archetype.id != "mediator"]
-        ]
+        parties = [aid for aid in speaking_order if aid in [a.id for a in agents if a.archetype.id != "mediator"]]
 
         for agent_id in parties:
             agent = agent_map.get(agent_id)
@@ -232,10 +205,7 @@ class NegotiationEnvironment(BaseEnvironment):
         """Run agreement check phase."""
         agent_map = {a.id: a for a in agents}
 
-        parties = [
-            aid for aid in speaking_order
-            if aid in [a.id for a in agents if a.archetype.id != "mediator"]
-        ]
+        parties = [aid for aid in speaking_order if aid in [a.id for a in agents if a.archetype.id != "mediator"]]
 
         for agent_id in parties:
             agent = agent_map.get(agent_id)
@@ -248,29 +218,26 @@ class NegotiationEnvironment(BaseEnvironment):
                 round_number=round_state.round_number,
                 visibility=visibility,
                 round_state=round_state,
-                context=(
-                    "Indicate whether you can accept the current terms "
-                    "or if we're at an impasse."
-                ),
+                context=("Indicate whether you can accept the current terms " "or if we're at an impasse."),
             )
             if message:
                 round_state.messages.append(message)
 
                 # Check for agreement indicators
                 content_lower = message.content.lower()
-                if any(word in content_lower
-                       for word in ["agree", "accept", "yes"]):
+                if any(word in content_lower for word in ["agree", "accept", "yes"]):
                     self._agreement_reached = True
-                elif any(word in content_lower
-                         for word in ["impasse", "no deal", "reject"]):
+                elif any(word in content_lower for word in ["impasse", "no deal", "reject"]):
                     self._impasse_rounds += 1
 
         # Record agreement status
-        round_state.decisions.append({
-            "type": "agreement_check",
-            "agreement_reached": self._agreement_reached,
-            "impasse_rounds": self._impasse_rounds,
-        })
+        round_state.decisions.append(
+            {
+                "type": "agreement_check",
+                "agreement_reached": self._agreement_reached,
+                "impasse_rounds": self._impasse_rounds,
+            }
+        )
 
     async def evaluate_round(self, round_state: RoundState) -> dict:
         """Evaluate negotiation round outcomes."""
@@ -287,21 +254,17 @@ class NegotiationEnvironment(BaseEnvironment):
         if self._impasse_rounds >= 3 and not self._batna_triggered:
             self._batna_triggered = True
             evaluation["batna_triggered"] = True
-            evaluation["warning"] = (
-                "BATNA (Best Alternative) should be considered"
-            )
+            evaluation["warning"] = "BATNA (Best Alternative) should be considered"
 
         # Analyze positions
         concession_keywords = ["concede", "compromise", "flexible", "willing"]
         hardline_keywords = ["non-negotiable", "must", "cannot", "red line"]
 
         concession_count = sum(
-            1 for msg in round_state.messages
-            if any(kw in msg.content.lower() for kw in concession_keywords)
+            1 for msg in round_state.messages if any(kw in msg.content.lower() for kw in concession_keywords)
         )
         hardline_count = sum(
-            1 for msg in round_state.messages
-            if any(kw in msg.content.lower() for kw in hardline_keywords)
+            1 for msg in round_state.messages if any(kw in msg.content.lower() for kw in hardline_keywords)
         )
 
         evaluation["concession_signals"] = concession_count
@@ -316,12 +279,11 @@ class NegotiationEnvironment(BaseEnvironment):
 
         return evaluation
 
-    def get_phase_instruction(self, phase: str, agent_role: str) -> str:
+    def _resolve_phase_instruction(self, phase: str, agent_role: str) -> str:
         """Get phase-specific instruction for an agent."""
         instructions = {
             "position_statements": (
-                "Clearly state your opening position and key interests. "
-                "Be firm but leave room for negotiation."
+                "Clearly state your opening position and key interests. " "Be firm but leave room for negotiation."
             ),
             "private_caucus": (
                 "If you're the mediator, identify common ground. "
@@ -329,16 +291,13 @@ class NegotiationEnvironment(BaseEnvironment):
                 "mediator."
             ),
             "counter_proposal": (
-                "Respond to the other party's position with a "
-                "counter-proposal. Show where you can be flexible."
+                "Respond to the other party's position with a " "counter-proposal. Show where you can be flexible."
             ),
             "red_line_identification": (
-                "Clearly identify your non-negotiable red lines. "
-                "Be explicit about what you cannot accept."
+                "Clearly identify your non-negotiable red lines. " "Be explicit about what you cannot accept."
             ),
             "agreement_check": (
-                "Indicate clearly if you can accept the current terms. "
-                "If not, state that we're at an impasse."
+                "Indicate clearly if you can accept the current terms. " "If not, state that we're at an impasse."
             ),
         }
         return instructions.get(phase, "Participate in the negotiation.")

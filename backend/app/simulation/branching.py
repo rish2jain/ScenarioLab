@@ -1,6 +1,5 @@
 """Git-like scenario branching for simulations."""
 
-import json
 import logging
 import uuid
 from datetime import datetime
@@ -94,17 +93,19 @@ class ScenarioBranchManager:
 
         # Persist to DB
         try:
-            await self._repo.save_branch({
-                "id": new_branch.id,
-                "root_id": root_id,
-                "parent_id": parent_branch_id,
-                "name": new_branch.name,
-                "description": new_branch.description,
-                "config_diff": new_branch.config_diff,
-                "simulation_id": new_branch.simulation_id,
-                "created_at": new_branch.created_at,
-                "creator": new_branch.creator,
-            })
+            await self._repo.save_branch(
+                {
+                    "id": new_branch.id,
+                    "root_id": root_id,
+                    "parent_id": parent_branch_id,
+                    "name": new_branch.name,
+                    "description": new_branch.description,
+                    "config_diff": new_branch.config_diff,
+                    "simulation_id": new_branch.simulation_id,
+                    "created_at": new_branch.created_at,
+                    "creator": new_branch.creator,
+                }
+            )
         except Exception as e:
             logger.warning(f"Failed to save branch to DB: {e}")
 
@@ -151,23 +152,23 @@ class ScenarioBranchManager:
 
         # Persist to DB
         try:
-            await self._repo.save_branch({
-                "id": root_branch.id,
-                "root_id": root_branch.id,
-                "parent_id": None,
-                "name": root_branch.name,
-                "description": root_branch.description,
-                "config_diff": root_branch.config_diff,
-                "simulation_id": root_branch.simulation_id,
-                "created_at": root_branch.created_at,
-                "creator": root_branch.creator,
-            })
+            await self._repo.save_branch(
+                {
+                    "id": root_branch.id,
+                    "root_id": root_branch.id,
+                    "parent_id": None,
+                    "name": root_branch.name,
+                    "description": root_branch.description,
+                    "config_diff": root_branch.config_diff,
+                    "simulation_id": root_branch.simulation_id,
+                    "created_at": root_branch.created_at,
+                    "creator": root_branch.creator,
+                }
+            )
         except Exception as e:
             logger.warning(f"Failed to save root branch to DB: {e}")
 
-        logger.info(
-            f"Created root branch {root_branch.id} for scenario: {name}"
-        )
+        logger.info(f"Created root branch {root_branch.id} for scenario: {name}")
 
         return root_branch
 
@@ -280,14 +281,16 @@ class ScenarioBranchManager:
         }
 
         for branch in branches:
-            comparison["branch_details"].append({
-                "id": branch.id,
-                "name": branch.name,
-                "description": branch.description,
-                "parent_id": branch.parent_id,
-                "creator": branch.creator,
-                "created_at": branch.created_at,
-            })
+            comparison["branch_details"].append(
+                {
+                    "id": branch.id,
+                    "name": branch.name,
+                    "description": branch.description,
+                    "parent_id": branch.parent_id,
+                    "creator": branch.creator,
+                    "created_at": branch.created_at,
+                }
+            )
 
         # Find common and divergent configuration keys
         all_keys = set()
@@ -299,10 +302,7 @@ class ScenarioBranchManager:
             if len(set(str(v) for v in values)) == 1:
                 comparison["common_config"][key] = values[0]
             else:
-                comparison["divergent_configs"][key] = {
-                    branch.id: branch.config_diff.get(key)
-                    for branch in branches
-                }
+                comparison["divergent_configs"][key] = {branch.id: branch.config_diff.get(key) for branch in branches}
 
         return comparison
 
@@ -391,9 +391,7 @@ class ScenarioBranchManager:
 
         return lineage
 
-    async def merge_branch_config(
-        self, source_branch_id: str, target_branch_id: str
-    ) -> dict:
+    async def merge_branch_config(self, source_branch_id: str, target_branch_id: str) -> dict:
         """Merge configuration from source branch into target.
 
         Args:
@@ -430,13 +428,15 @@ class ScenarioBranchManager:
         for root_id, tree in self._trees.items():
             root_branch = tree.branches.get(root_id)
             if root_branch:
-                summaries.append({
-                    "root_id": root_id,
-                    "name": root_branch.name,
-                    "description": root_branch.description,
-                    "branch_count": len(tree.branches),
-                    "created_at": root_branch.created_at,
-                })
+                summaries.append(
+                    {
+                        "root_id": root_id,
+                        "name": root_branch.name,
+                        "description": root_branch.description,
+                        "branch_count": len(tree.branches),
+                        "created_at": root_branch.created_at,
+                    }
+                )
         return summaries
 
     async def delete_branch(self, branch_id: str) -> bool:
@@ -468,10 +468,7 @@ class ScenarioBranchManager:
 
         # Check if trying to delete root with other branches
         if branch_id == root_id and len(descendants) > 0:
-            raise ValueError(
-                "Cannot delete root branch with existing children. "
-                "Delete children first."
-            )
+            raise ValueError("Cannot delete root branch with existing children. " "Delete children first.")
 
         # Delete branch and descendants
         ids_to_delete = [branch_id] + descendants
@@ -488,9 +485,7 @@ class ScenarioBranchManager:
         if branch_id == root_id:
             del self._trees[root_id]
 
-        logger.info(
-            f"Deleted branch {branch_id} and {len(descendants)} descendants"
-        )
+        logger.info(f"Deleted branch {branch_id} and {len(descendants)} descendants")
 
         return True
 

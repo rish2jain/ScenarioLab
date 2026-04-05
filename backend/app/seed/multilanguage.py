@@ -55,8 +55,7 @@ Use ISO 639-1 language codes. Respond with valid JSON only."""
                 messages=[
                     LLMMessage(
                         role="system",
-                        content="You detect the language of text. "
-                                "Respond with valid JSON only.",
+                        content="You detect the language of text. " "Respond with valid JSON only.",
                     ),
                     LLMMessage(role="user", content=prompt),
                 ],
@@ -93,8 +92,6 @@ Use ISO 639-1 language codes. Respond with valid JSON only."""
 
     def _heuristic_language_detection(self, text: str) -> LanguageDetectionResult:
         """Simple heuristic language detection."""
-        text_lower = text.lower()
-
         # Simple character-based detection
         if any(ord(c) > 127 for c in text[:100]):
             # Check for specific scripts
@@ -102,31 +99,21 @@ Use ISO 639-1 language codes. Respond with valid JSON only."""
                 code = ord(char)
                 # Japanese Hiragana/Katakana
                 if 0x3040 <= code <= 0x309F or 0x30A0 <= code <= 0x30FF:
-                    return LanguageDetectionResult(
-                        detected_language="ja", confidence=0.7
-                    )
+                    return LanguageDetectionResult(detected_language="ja", confidence=0.7)
                 # Chinese
                 if 0x4E00 <= code <= 0x9FFF:
-                    return LanguageDetectionResult(
-                        detected_language="zh", confidence=0.7
-                    )
+                    return LanguageDetectionResult(detected_language="zh", confidence=0.7)
                 # Korean
                 if 0xAC00 <= code <= 0xD7AF:
-                    return LanguageDetectionResult(
-                        detected_language="ko", confidence=0.7
-                    )
+                    return LanguageDetectionResult(detected_language="ko", confidence=0.7)
                 # Arabic
                 if 0x0600 <= code <= 0x06FF:
-                    return LanguageDetectionResult(
-                        detected_language="ar", confidence=0.7
-                    )
+                    return LanguageDetectionResult(detected_language="ar", confidence=0.7)
 
         # Default to English
         return LanguageDetectionResult(detected_language="en", confidence=0.9)
 
-    async def translate_to_english(
-        self, text: str, source_language: str
-    ) -> str:
+    async def translate_to_english(self, text: str, source_language: str) -> str:
         """Translate text to English for processing, preserving key terms.
 
         Args:
@@ -193,9 +180,7 @@ Provide only the translated text, no explanations."""
         # Translate if needed
         translated_content = content
         if detection.detected_language != "en":
-            translated_content = await self.translate_to_english(
-                content, detection.detected_language
-            )
+            translated_content = await self.translate_to_english(content, detection.detected_language)
 
         return {
             "original_content": content,

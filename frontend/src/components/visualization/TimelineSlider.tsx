@@ -8,8 +8,6 @@ import {
   SkipBack,
   SkipForward,
   Star,
-  ChevronLeft,
-  ChevronRight,
 } from 'lucide-react';
 import type { BookmarkData, TimelineEventType } from '@/lib/types';
 
@@ -18,7 +16,6 @@ interface TimelineSliderProps {
   currentRound: number;
   onRoundChange: (round: number) => void;
   bookmarks?: BookmarkData[];
-  onBookmarkToggle?: (round: number) => void;
   keyEvents?: Array<{
     round: number;
     type: TimelineEventType;
@@ -50,13 +47,11 @@ export function TimelineSlider({
   currentRound,
   onRoundChange,
   bookmarks = [],
-  onBookmarkToggle,
   keyEvents = [],
   className,
 }: TimelineSliderProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
-  const [hoveredRound, setHoveredRound] = useState<number | null>(null);
   const [tooltip, setTooltip] = useState<{
     visible: boolean;
     x: number;
@@ -183,7 +178,7 @@ export function TimelineSlider({
   return (
     <div className={clsx('bg-slate-800/50 border border-slate-700 rounded-lg p-4', className)}>
       {/* Controls Row */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         {/* Playback Controls */}
         <div className="flex items-center gap-2">
           <button
@@ -221,7 +216,7 @@ export function TimelineSlider({
         </div>
 
         {/* Speed Control */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-start md:self-auto">
           <span className="text-sm text-slate-400">Speed:</span>
           {[1, 2, 4].map((speed) => (
             <button
@@ -330,7 +325,7 @@ export function TimelineSlider({
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 mt-6 text-xs">
+      <div className="flex flex-wrap items-center gap-4 mt-6 text-xs">
         <span className="text-slate-500">Event Types:</span>
         {Object.entries(eventTypeIcons).map(([type, icon]) => (
           <div key={type} className="flex items-center gap-1">

@@ -47,20 +47,20 @@ class SECClient:
                 cik = source.get("entity_id", "")
                 if cik and cik not in seen_ciks:
                     seen_ciks.add(cik)
-                    results.append({
-                        "cik": cik,
-                        "name": source.get("entity_name", ""),
-                        "form_type": source.get("form_type", ""),
-                        "filed_at": source.get("file_date", ""),
-                    })
+                    results.append(
+                        {
+                            "cik": cik,
+                            "name": source.get("entity_name", ""),
+                            "form_type": source.get("form_type", ""),
+                            "filed_at": source.get("file_date", ""),
+                        }
+                    )
             return results
         except httpx.HTTPError as exc:
             logger.error(f"SEC company search failed for '{query}': {exc}")
             return []
 
-    async def get_company_filings(
-        self, cik: str, form_type: str = "10-K", count: int = 5
-    ) -> list[dict[str, Any]]:
+    async def get_company_filings(self, cik: str, form_type: str = "10-K", count: int = 5) -> list[dict[str, Any]]:
         """Get recent filings for a company by CIK number.
 
         Args:
@@ -73,9 +73,7 @@ class SECClient:
         """
         padded_cik = cik.zfill(10)
         try:
-            resp = await self._client.get(
-                f"{SEC_SUBMISSIONS_BASE}/CIK{padded_cik}.json"
-            )
+            resp = await self._client.get(f"{SEC_SUBMISSIONS_BASE}/CIK{padded_cik}.json")
             resp.raise_for_status()
             data = resp.json()
 
@@ -92,25 +90,24 @@ class SECClient:
                 if len(results) >= count:
                     break
                 accession = accessions[i].replace("-", "")
-                results.append({
-                    "form_type": form,
-                    "filed_at": dates[i] if i < len(dates) else "",
-                    "accession": accessions[i] if i < len(accessions) else "",
-                    "url": (
-                        f"https://www.sec.gov/Archives/edgar/data/"
-                        f"{padded_cik}/{accession}/{primary_docs[i]}"
-                        if i < len(primary_docs)
-                        else ""
-                    ),
-                })
+                results.append(
+                    {
+                        "form_type": form,
+                        "filed_at": dates[i] if i < len(dates) else "",
+                        "accession": accessions[i] if i < len(accessions) else "",
+                        "url": (
+                            f"https://www.sec.gov/Archives/edgar/data/" f"{padded_cik}/{accession}/{primary_docs[i]}"
+                            if i < len(primary_docs)
+                            else ""
+                        ),
+                    }
+                )
             return results
         except httpx.HTTPError as exc:
             logger.error(f"SEC filings fetch failed for CIK {cik}: {exc}")
             return []
 
-    async def full_text_search(
-        self, query: str, form_type: str = "", count: int = 10
-    ) -> list[dict[str, Any]]:
+    async def full_text_search(self, query: str, form_type: str = "", count: int = 10) -> list[dict[str, Any]]:
         """Full-text search across SEC filings (EFTS endpoint).
 
         Args:
@@ -139,12 +136,14 @@ class SECClient:
             results = []
             for hit in hits[:count]:
                 source = hit.get("_source", {})
-                results.append({
-                    "entity_name": source.get("entity_name", ""),
-                    "form_type": source.get("form_type", ""),
-                    "filed_at": source.get("file_date", ""),
-                    "excerpt": source.get("file_description", ""),
-                })
+                results.append(
+                    {
+                        "entity_name": source.get("entity_name", ""),
+                        "form_type": source.get("form_type", ""),
+                        "filed_at": source.get("file_date", ""),
+                        "excerpt": source.get("file_description", ""),
+                    }
+                )
             return results
         except httpx.HTTPError as exc:
             logger.error(f"SEC full-text search failed for '{query}': {exc}")
@@ -163,9 +162,7 @@ class EURLexClient:
             headers={"Accept": "application/json"},
         )
 
-    async def search_legislation(
-        self, query: str, count: int = 10
-    ) -> list[dict[str, Any]]:
+    async def search_legislation(self, query: str, count: int = 10) -> list[dict[str, Any]]:
         """Search EUR-Lex for legislation by keyword.
 
         Uses the EUR-Lex REST search API.
@@ -177,10 +174,7 @@ class EURLexClient:
         try:
             # EUR-Lex SparQL or REST endpoint
             sparql_url = "https://publications.europa.eu/webapi/rdf/sparql"
-            reg_type = (
-                "http://publications.europa.eu/"
-                "resource/authority/resource-type/REG"
-            )
+            reg_type = "http://publications.europa.eu/" "resource/authority/resource-type/REG"
             sparql_query = f"""
             PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
             SELECT ?work ?title WHERE {{
@@ -202,10 +196,12 @@ class EURLexClient:
 
             results = []
             for binding in data.get("results", {}).get("bindings", []):
-                results.append({
-                    "uri": binding.get("work", {}).get("value", ""),
-                    "title": binding.get("title", {}).get("value", ""),
-                })
+                results.append(
+                    {
+                        "uri": binding.get("work", {}).get("value", ""),
+                        "title": binding.get("title", {}).get("value", ""),
+                    }
+                )
             return results
         except Exception as exc:
             logger.error(f"EUR-Lex search failed for '{query}': {exc}")

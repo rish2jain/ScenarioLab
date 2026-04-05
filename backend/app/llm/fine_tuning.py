@@ -5,6 +5,7 @@ Actual training requires GPU hardware - this implementation provides the
 orchestration and configuration management.
 """
 
+import asyncio
 import json
 import logging
 import uuid
@@ -18,6 +19,9 @@ from app.llm.factory import get_llm_provider
 from app.llm.provider import LLMMessage
 
 logger = logging.getLogger(__name__)
+
+# Cap parallel dataset lookups in list_jobs (each may hit the repository).
+_MAX_CONCURRENT_DATASET_LOOKUPS = 8
 
 
 # Pydantic models for fine-tuning
@@ -43,12 +47,11 @@ class FineTuningJob(BaseModel):
     lora_config: LoRAConfig = LoRAConfig()
     status: str = "queued"  # queued, training, completed, failed
     progress: float = 0.0
-    created_at: str = Field(
-        default_factory=lambda: datetime.utcnow().isoformat()
-    )
+    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     completed_at: str | None = None
     metrics: dict[str, Any] = {}
     error_message: str | None = None
+    num_examples: int | None = None
     hyperparameters: dict[str, Any] = {
         "learning_rate": 2e-4,
         "num_train_epochs": 3,
@@ -68,9 +71,7 @@ class LoRAAdapter(BaseModel):
     base_model: str
     domain: str
     size_mb: float = 0.0
-    created_at: str = Field(
-        default_factory=lambda: datetime.utcnow().isoformat()
-    )
+    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     performance_metrics: dict[str, Any] = {}
     active: bool = False
 
@@ -82,9 +83,7 @@ class DatasetInfo(BaseModel):
     data_type: str  # earnings_calls, sec_filings, regulatory_testimony
     num_examples: int = 0
     format: str = "jsonl"
-    created_at: str = Field(
-        default_factory=lambda: datetime.utcnow().isoformat()
-    )
+    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     preview_samples: list[dict[str, str]] = []
 
 
@@ -95,9 +94,7 @@ class BenchmarkInfo(BaseModel):
     domain: str
     questions: list[dict[str, Any]]
     evaluation_criteria: list[str]
-    created_at: str = Field(
-        default_factory=lambda: datetime.utcnow().isoformat()
-    )
+    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
 class FineTuningManager:
@@ -127,6 +124,21 @@ class FineTuningManager:
                 self._initialized = True
             except Exception as e:
                 logger.warning(f"Failed to init LLM tables: {e}")
+
+    async def _with_dataset_examples(self, job: FineTuningJob) -> FineTuningJob:
+        """Attach dataset example count when missing (e.g. job loaded from DB)."""
+        if job.num_examples is not None:
+            return job
+        try:
+            dataset = await self.get_dataset(job.dataset_id)
+            return job.model_copy(update={"num_examples": dataset.num_examples})
+        except Exception as e:
+            logger.debug(
+                "Failed to enrich job with num_examples from dataset (dataset_id=%s): %s",
+                job.dataset_id,
+                e,
+            )
+            return job
 
     async def prepare_dataset(
         self,
@@ -174,8 +186,7 @@ class FineTuningManager:
 
             instruction = type_instructions.get(
                 data_type,
-                "Convert the document into instruction/response pairs "
-                "suitable for fine-tuning.",
+                "Convert the document into instruction/response pairs " "suitable for fine-tuning.",
             )
 
             prompt = f"""You are a data preparation assistant. {instruction}
@@ -204,8 +215,7 @@ Respond with a JSON array of examples:
                 messages=[
                     LLMMessage(
                         role="system",
-                        content="You are a data preparation expert. "
-                        "Respond with valid JSON only.",
+                        content="You are a data preparation expert. " "Respond with valid JSON only.",
                     ),
                     LLMMessage(role="user", content=prompt),
                 ],
@@ -244,10 +254,7 @@ Respond with a JSON array of examples:
             except Exception as e:
                 logger.warning(f"Failed to persist dataset: {e}")
 
-            logger.info(
-                f"Created dataset {dataset.dataset_id} "
-                f"with {dataset.num_examples} examples"
-            )
+            logger.info(f"Created dataset {dataset.dataset_id} " f"with {dataset.num_examples} examples")
             return dataset
 
         except Exception as e:
@@ -302,6 +309,7 @@ Respond with a JSON array of examples:
             dataset_id=dataset_id,
             base_model=base_model,
             lora_config=lora_config,
+            num_examples=dataset.num_examples,
         )
 
         if config and "hyperparameters" in config:
@@ -317,16 +325,13 @@ Respond with a JSON array of examples:
         except Exception as e:
             logger.warning(f"Failed to persist job: {e}")
 
-        logger.info(
-            f"Created fine-tuning job {job.job_id} "
-            f"for model {base_model}"
-        )
+        logger.info(f"Created fine-tuning job {job.job_id} " f"for model {base_model}")
 
         # In production, would launch training here
         # For now, simulate completion after a delay would be handled
         # by a background task in a real implementation
 
-        return job
+        return await self._with_dataset_examples(job)
 
     async def get_job_status(self, job_id: str) -> FineTuningJob:
         """Get the status of a fine-tuning job.
@@ -343,7 +348,7 @@ Respond with a JSON array of examples:
         # Try in-memory first
         job = self._jobs.get(job_id)
         if job:
-            return job
+            return await self._with_dataset_examples(job)
 
         # Fall back to DB
         try:
@@ -352,7 +357,7 @@ Respond with a JSON array of examples:
             if job_data:
                 job = FineTuningJob(**job_data)
                 self._jobs[job_id] = job
-                return job
+                return await self._with_dataset_examples(job)
         except Exception as e:
             logger.warning(f"Failed to get job from DB: {e}")
 
@@ -473,9 +478,7 @@ Respond with a JSON array of examples:
             adapter = LoRAAdapter(
                 job_id=job_id,
                 base_model=job.base_model,
-                domain=self._datasets.get(
-                    job.dataset_id, DatasetInfo()
-                ).data_type,
+                domain=self._datasets.get(job.dataset_id, DatasetInfo()).data_type,
                 size_mb=256.0,  # Simulated size
                 performance_metrics=metrics or {"loss": 0.5, "accuracy": 0.85},
             )
@@ -490,9 +493,7 @@ Respond with a JSON array of examples:
             except Exception as e:
                 logger.warning(f"Failed to persist adapter/job: {e}")
 
-            logger.info(
-                f"Job {job_id} completed, created adapter {adapter.adapter_id}"
-            )
+            logger.info(f"Job {job_id} completed, created adapter {adapter.adapter_id}")
             return adapter
         else:
             job.status = "failed"
@@ -568,8 +569,7 @@ Respond with valid JSON:
                 messages=[
                     LLMMessage(
                         role="system",
-                        content="You are a benchmark creation expert. "
-                        "Respond with valid JSON only.",
+                        content="You are a benchmark creation expert. " "Respond with valid JSON only.",
                     ),
                     LLMMessage(role="user", content=prompt),
                 ],
@@ -604,10 +604,7 @@ Respond with valid JSON:
             except Exception as persist_err:
                 logger.warning(f"Failed to persist benchmark: {persist_err}")
 
-            logger.info(
-                f"Created benchmark {benchmark.benchmark_id} "
-                f"with {len(benchmark.questions)} questions"
-            )
+            logger.info(f"Created benchmark {benchmark.benchmark_id} " f"with {len(benchmark.questions)} questions")
             return benchmark
 
         except Exception as e:
@@ -643,7 +640,16 @@ Respond with valid JSON:
         except Exception as e:
             logger.warning(f"Failed to list jobs from DB: {e}")
 
-        return list(self._jobs.values())
+        jobs = list(self._jobs.values())
+        if not jobs:
+            return []
+        sem = asyncio.Semaphore(_MAX_CONCURRENT_DATASET_LOOKUPS)
+
+        async def _with_sem(j: FineTuningJob) -> FineTuningJob:
+            async with sem:
+                return await self._with_dataset_examples(j)
+
+        return list(await asyncio.gather(*(_with_sem(j) for j in jobs)))
 
     async def list_datasets(self) -> list[DatasetInfo]:
         """List all prepared datasets.

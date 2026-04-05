@@ -17,7 +17,7 @@ from app.llm.provider import (
     LLMMessage,
     LLMProvider,
     LLMResponse,
-    _llm_semaphore,
+    get_llm_semaphore,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,9 +44,7 @@ class OpenAIProvider(LLMProvider):
 
     def _convert_messages(self, messages: list[LLMMessage]) -> list[dict]:
         """Convert LLMMessage objects to OpenAI format."""
-        return [
-            {"role": msg.role, "content": msg.content} for msg in messages
-        ]
+        return [{"role": msg.role, "content": msg.content} for msg in messages]
 
     async def generate(
         self,
@@ -57,17 +55,13 @@ class OpenAIProvider(LLMProvider):
     ) -> LLMResponse:
         """Generate a completion from messages."""
         max_tokens = min(max_tokens, MAX_TOKENS_CAP)
-        async with _llm_semaphore:
-            return await self._generate_with_retry(
-                messages, temperature, max_tokens, **kwargs
-            )
+        async with get_llm_semaphore(self.provider_name):
+            return await self._generate_with_retry(messages, temperature, max_tokens, **kwargs)
 
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(
-            (RateLimitError, APITimeoutError, APIConnectionError)
-        ),
+        retry=retry_if_exception_type((RateLimitError, APITimeoutError, APIConnectionError)),
         before_sleep=lambda retry_state: logger.warning(
             f"LLM call failed, retrying (attempt "
             f"{retry_state.attempt_number}): "
@@ -84,14 +78,12 @@ class OpenAIProvider(LLMProvider):
         """Generate a completion with retry logic."""
         try:
             openai_messages = self._convert_messages(messages)
-            response: ChatCompletion = (
-                await self.client.chat.completions.create(
-                    model=self.model,
-                    messages=openai_messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    **kwargs,
-                )
+            response: ChatCompletion = await self.client.chat.completions.create(
+                model=self.model,
+                messages=openai_messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                **kwargs,
             )
 
             content = response.choices[0].message.content or ""

@@ -41,49 +41,35 @@ def extract_key_findings(
     # 1. Analyze for consensus or conflict
     consensus_level = _analyze_consensus(messages)
     if consensus_level > 0.7:
-        findings.append(
-            "Strong consensus emerged among stakeholders on key decisions"
-        )
+        findings.append("Strong consensus emerged among stakeholders on key decisions")
     elif consensus_level < 0.3:
-        findings.append(
-            "Significant disagreement persisted throughout the simulation"
-        )
+        findings.append("Significant disagreement persisted throughout the simulation")
     else:
-        findings.append(
-            "Mixed alignment with partial consensus on some issues"
-        )
+        findings.append("Mixed alignment with partial consensus on some issues")
 
     # 2. Check for decisive moments
     decisive_rounds = _identify_decisive_rounds(rounds)
     if decisive_rounds:
         findings.append(
-            f"Critical turning points occurred in rounds "
-            f"{', '.join(str(r) for r in decisive_rounds[:3])}"
+            f"Critical turning points occurred in rounds " f"{', '.join(str(r) for r in decisive_rounds[:3])}"
         )
 
     # 3. Analyze coalition dynamics
     coalitions = _analyze_coalitions(agent_states)
     if coalitions:
         findings.append(
-            f"{len(coalitions)} distinct coalitions formed during "
-            f"the simulation, influencing decision outcomes"
+            f"{len(coalitions)} distinct coalitions formed during " f"the simulation, influencing decision outcomes"
         )
 
     # 4. Check for unresolved issues
     unresolved = _identify_unresolved_issues(messages, agent_states)
     if unresolved:
-        findings.append(
-            f"{len(unresolved)} significant issues remained unresolved "
-            f"at simulation conclusion"
-        )
+        findings.append(f"{len(unresolved)} significant issues remained unresolved " f"at simulation conclusion")
 
     # 5. Analyze participation patterns
     participation = _analyze_participation(messages, agent_states)
     if participation["dominant"]:
-        findings.append(
-            f"{participation['dominant'][0]} emerged as the most "
-            f"influential voice in discussions"
-        )
+        findings.append(f"{participation['dominant'][0]} emerged as the most " f"influential voice in discussions")
 
     logger.info(f"Extracted {len(findings)} key findings")
     return findings
@@ -111,82 +97,69 @@ def rank_recommendations(
         finding_lower = finding.lower()
 
         if "consensus" in finding_lower and "strong" in finding_lower:
-            recommendations.append({
-                "title": "Leverage Existing Alignment",
-                "description": (
-                    "Build on the strong consensus achieved to drive "
-                    "rapid implementation of agreed initiatives"
-                ),
-                "priority": "high",
-                "rationale": (
-                    "Window of alignment may close; act while "
-                    "stakeholder support is strong"
-                ),
-            })
+            recommendations.append(
+                {
+                    "title": "Leverage Existing Alignment",
+                    "description": (
+                        "Build on the strong consensus achieved to drive " "rapid implementation of agreed initiatives"
+                    ),
+                    "priority": "high",
+                    "rationale": ("Window of alignment may close; act while " "stakeholder support is strong"),
+                }
+            )
 
         if "disagreement" in finding_lower or "conflict" in finding_lower:
-            recommendations.append({
-                "title": "Address Core Divisions",
-                "description": (
-                    "Facilitate targeted mediation sessions to resolve "
-                    "fundamental disagreements before proceeding"
-                ),
-                "priority": "high",
-                "rationale": (
-                    "Unaddressed conflicts will resurface during "
-                    "implementation and derail progress"
-                ),
-            })
+            recommendations.append(
+                {
+                    "title": "Address Core Divisions",
+                    "description": (
+                        "Facilitate targeted mediation sessions to resolve "
+                        "fundamental disagreements before proceeding"
+                    ),
+                    "priority": "high",
+                    "rationale": ("Unaddressed conflicts will resurface during " "implementation and derail progress"),
+                }
+            )
 
         if "coalition" in finding_lower:
-            recommendations.append({
-                "title": "Engage Coalition Leaders",
-                "description": (
-                    "Work with coalition leaders to align interests "
-                    "and build broader consensus"
-                ),
-                "priority": "medium",
-                "rationale": (
-                    "Coalition dynamics will shape implementation; "
-                    "early engagement is critical"
-                ),
-            })
+            recommendations.append(
+                {
+                    "title": "Engage Coalition Leaders",
+                    "description": ("Work with coalition leaders to align interests " "and build broader consensus"),
+                    "priority": "medium",
+                    "rationale": ("Coalition dynamics will shape implementation; " "early engagement is critical"),
+                }
+            )
 
     # Add recommendations based on risks
     critical_risks = [r for r in risk_items if r.get("impact") == "critical"]
     high_risks = [r for r in risk_items if r.get("impact") == "high"]
 
     if critical_risks:
-        recommendations.append({
-            "title": "Mitigate Critical Risks",
-            "description": (
-                f"Immediately address {len(critical_risks)} critical "
-                f"risk(s) identified in the simulation"
-            ),
-            "priority": "high",
-            "rationale": (
-                "Critical risks have potential for severe negative impact"
-            ),
-        })
+        recommendations.append(
+            {
+                "title": "Mitigate Critical Risks",
+                "description": (
+                    f"Immediately address {len(critical_risks)} critical " f"risk(s) identified in the simulation"
+                ),
+                "priority": "high",
+                "rationale": ("Critical risks have potential for severe negative impact"),
+            }
+        )
 
     if high_risks:
-        recommendations.append({
-            "title": "Develop Risk Response Plan",
-            "description": (
-                f"Create detailed mitigation plans for {len(high_risks)} "
-                f"high-impact risks"
-            ),
-            "priority": "medium",
-            "rationale": (
-                "Proactive risk management will improve outcome predictability"
-            ),
-        })
+        recommendations.append(
+            {
+                "title": "Develop Risk Response Plan",
+                "description": (f"Create detailed mitigation plans for {len(high_risks)} " f"high-impact risks"),
+                "priority": "medium",
+                "rationale": ("Proactive risk management will improve outcome predictability"),
+            }
+        )
 
     # Sort by priority
     priority_order = {"high": 0, "medium": 1, "low": 2}
-    recommendations.sort(
-        key=lambda x: priority_order.get(x["priority"], 3)
-    )
+    recommendations.sort(key=lambda x: priority_order.get(x["priority"], 3))
 
     # Limit to top 3
     return recommendations[:3]
@@ -224,7 +197,7 @@ def format_for_presentation(
 
     # Truncate if needed
     if len(formatted) > max_length:
-        formatted = formatted[:max_length-3] + "..."
+        formatted = formatted[: max_length - 3] + "..."
 
     return formatted
 
@@ -264,11 +237,7 @@ def _identify_decisive_rounds(rounds: list[RoundState]) -> list[int]:
         # Check for breakthrough or deadlock indicators
         for msg in round_state.messages:
             content_lower = msg.content.lower()
-            if any(
-                kw in content_lower
-                for kw in FINDING_INDICATORS["breakthrough"]
-                + FINDING_INDICATORS["deadlock"]
-            ):
+            if any(kw in content_lower for kw in FINDING_INDICATORS["breakthrough"] + FINDING_INDICATORS["deadlock"]):
                 decisive.append(round_state.round_number)
                 break
 
@@ -287,11 +256,7 @@ def _analyze_coalitions(
                 coalition_map[coalition] = []
             coalition_map[coalition].append(agent.name)
 
-    return [
-        {"name": name, "members": members}
-        for name, members in coalition_map.items()
-        if len(members) > 1
-    ]
+    return [{"name": name, "members": members} for name, members in coalition_map.items() if len(members) > 1]
 
 
 def _identify_unresolved_issues(
@@ -333,9 +298,7 @@ def _analyze_participation(
 
     # Find most active participant
     dominant_id = max(message_counts, key=message_counts.get)
-    dominant_agent = next(
-        (a for a in agent_states if a.id == dominant_id), None
-    )
+    dominant_agent = next((a for a in agent_states if a.id == dominant_id), None)
 
     return {
         "dominant": [dominant_agent.name] if dominant_agent else ["Unknown"],

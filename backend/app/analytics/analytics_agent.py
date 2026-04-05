@@ -1,5 +1,7 @@
 """Silent monitoring agent that extracts quantitative metrics."""
 
+import asyncio
+import json
 import logging
 import re
 from collections import Counter
@@ -46,9 +48,7 @@ def _decision_meta_for_score(decision: dict[str, Any]) -> dict[str, Any]:
             meta[k] = v
     if "vote_result" not in meta:
         res = decision.get("result")
-        if isinstance(res, dict) and any(
-            x in res for x in ("for", "against", "abstain", "total", "result")
-        ):
+        if isinstance(res, dict) and any(x in res for x in ("for", "against", "abstain", "total", "result")):
             meta["vote_result"] = res
     return meta
 
@@ -101,6 +101,7 @@ def _derive_decision_turning_point_score(decision: dict[str, Any]) -> float:
 
 class SimulationMetrics(BaseModel):
     """Comprehensive metrics extracted from a simulation."""
+
     simulation_id: str
     # % of actions violating stated policies
     compliance_violation_rate: float
@@ -136,13 +137,9 @@ class AnalyticsAgent:
     def __init__(self, llm_provider=None):
         self.llm = llm_provider
 
-    async def analyze_simulation(
-        self, simulation_state: SimulationState
-    ) -> SimulationMetrics:
+    async def analyze_simulation(self, simulation_state: SimulationState) -> SimulationMetrics:
         """Analyze a completed simulation and extract all metrics."""
-        logger.info(
-            f"Analyzing simulation: {simulation_state.config.id}"
-        )
+        logger.info(f"Analyzing simulation: {simulation_state.config.id}")
 
         # Gather all messages from all rounds
         all_messages: list[SimulationMessage] = []
@@ -152,22 +149,28 @@ class AnalyticsAgent:
         agents = simulation_state.agents
         rounds = simulation_state.rounds
 
-        # Compute all metrics in parallel where possible
-        compliance_rate = await self.compute_compliance_violations(
-            all_messages, agents
+        # Compute all metrics in parallel — these are independent of each other.
+        (
+            compliance_rate,
+            time_to_consensus,
+            sentiment_trajectory,
+            polarization,
+            adoption_rate,
+            coalitions,
+            turning_points,
+            activity_scores,
+            decision_outcomes,
+        ) = await asyncio.gather(
+            self.compute_compliance_violations(all_messages, agents),
+            self.compute_time_to_consensus(rounds),
+            self.compute_sentiment_trajectory(rounds),
+            self.compute_polarization_index(agents, all_messages),
+            self.compute_policy_adoption_rate(rounds),
+            self.detect_coalitions(all_messages, agents),
+            self.identify_turning_points(rounds),
+            self.compute_agent_activity_scores(all_messages, agents),
+            self.extract_decision_outcomes(rounds),
         )
-        time_to_consensus = await self.compute_time_to_consensus(rounds)
-        sentiment_trajectory = await self.compute_sentiment_trajectory(rounds)
-        polarization = await self.compute_polarization_index(
-            agents, all_messages
-        )
-        adoption_rate = await self.compute_policy_adoption_rate(rounds)
-        coalitions = await self.detect_coalitions(all_messages, agents)
-        turning_points = await self.identify_turning_points(rounds)
-        activity_scores = await self.compute_agent_activity_scores(
-            all_messages, agents
-        )
-        decision_outcomes = await self.extract_decision_outcomes(rounds)
 
         metrics = SimulationMetrics(
             simulation_id=simulation_state.config.id,
@@ -182,15 +185,14 @@ class AnalyticsAgent:
             decision_outcomes=decision_outcomes,
         )
 
-        logger.info(
-            f"Analysis complete for simulation: {simulation_state.config.id}"
-        )
+        logger.info(f"Analysis complete for simulation: {simulation_state.config.id}")
         return metrics
 
-    async def compute_compliance_violations(
-        self, messages: list[SimulationMessage], agents: list[AgentState]
-    ) -> float:
+    async def compute_compliance_violations(self, messages: list[SimulationMessage], agents: list[AgentState]) -> float:
         """Detect messages/actions that violate stated policies.
+
+        Uses LLM-based semantic detection when a provider is available
+        (batched into a single call); falls back to keyword heuristics.
 
         Returns percentage of potentially non-compliant messages (0-100).
         """
@@ -200,25 +202,80 @@ class AnalyticsAgent:
         # Build agent policy map from archetype info
         agent_policies: dict[str, list[str]] = {}
         for agent in agents:
-            # Extract policy constraints from persona prompt
             policies = self._extract_policies_from_prompt(agent.persona_prompt)
-            agent_policies[agent.id] = policies
+            if policies:
+                agent_policies[agent.id] = policies
 
+        if not agent_policies:
+            return 0.0
+
+        # --- LLM path: single batched call ---------------------------------
+        if self.llm:
+            return await self._llm_compliance_violations(messages, agent_policies)
+
+        # --- Keyword fallback ------------------------------------------------
+        return self._keyword_compliance_violations(messages, agent_policies)
+
+    async def _llm_compliance_violations(
+        self,
+        messages: list[SimulationMessage],
+        agent_policies: dict[str, list[str]],
+    ) -> float:
+        """LLM-based compliance check — one batched call."""
+        from app.llm.provider import LLMMessage
+
+        # Build a compact summary: agent policies + sample messages to check.
+        # Limit to agents that have policies and cap messages to keep prompt small.
+        policy_block = "\n".join(f"Agent {aid}: {'; '.join(pols)}" for aid, pols in agent_policies.items())
+        msg_block = "\n".join(f"[{m.agent_id}] {m.content[:200]}" for m in messages[:60])
+        prompt = (
+            "Below are agent policy constraints and their messages. "
+            "Count how many messages CONTRADICT or VIOLATE the agent's "
+            "own stated policies.\n\n"
+            f"POLICIES:\n{policy_block}\n\n"
+            f"MESSAGES ({len(messages)} total, sample shown):\n{msg_block}\n\n"
+            'Respond with ONLY valid JSON: {"violation_count": N, '
+            '"total_checked": N}'
+        )
+        try:
+            resp = await self.llm.generate(
+                messages=[
+                    LLMMessage(
+                        role="system",
+                        content=(
+                            "You detect policy violations in boardroom " "discussions. Respond with ONLY valid JSON."
+                        ),
+                    ),
+                    LLMMessage(role="user", content=prompt),
+                ],
+                temperature=0.1,
+                max_tokens=100,
+            )
+            raw = resp.content.strip().removeprefix("```json").removesuffix("```").strip()
+            data = json.loads(raw)
+            total = int(data.get("total_checked", len(messages)))
+            violations = int(data.get("violation_count", 0))
+            if total <= 0:
+                return 0.0
+            return round((violations / total) * 100, 2)
+        except Exception:
+            logger.debug("LLM compliance check failed, falling back to keywords")
+            return self._keyword_compliance_violations(messages, agent_policies)
+
+    def _keyword_compliance_violations(
+        self,
+        messages: list[SimulationMessage],
+        agent_policies: dict[str, list[str]],
+    ) -> float:
+        """Keyword-based compliance fallback."""
         violation_count = 0
-
         for msg in messages:
-            agent_id = msg.agent_id
             content = msg.content.lower()
-
-            # Check against agent's stated policies
-            policies = agent_policies.get(agent_id, [])
+            policies = agent_policies.get(msg.agent_id, [])
             for policy in policies:
-                # Simple keyword-based contradiction detection
                 if self._is_contradictory(content, policy):
                     violation_count += 1
                     break
-
-        # Return percentage of violations
         return round((violation_count / len(messages)) * 100, 2)
 
     def _extract_policies_from_prompt(self, prompt: str) -> list[str]:
@@ -257,9 +314,7 @@ class AnalyticsAgent:
 
         return False
 
-    async def compute_time_to_consensus(
-        self, rounds: list[RoundState]
-    ) -> int | None:
+    async def compute_time_to_consensus(self, rounds: list[RoundState]) -> int | None:
         """Calculate rounds needed to reach decision/consensus."""
         if not rounds:
             return None
@@ -281,9 +336,7 @@ class AnalyticsAgent:
 
         return None  # No consensus reached
 
-    async def compute_sentiment_trajectory(
-        self, rounds: list[RoundState]
-    ) -> list[dict]:
+    async def compute_sentiment_trajectory(self, rounds: list[RoundState]) -> list[dict]:
         """Track sentiment over time.
 
         Uses LLM-based semantic analysis when a provider is available;
@@ -293,86 +346,91 @@ class AnalyticsAgent:
             return await self._llm_sentiment_trajectory(rounds)
         return self._keyword_sentiment_trajectory(rounds)
 
-    async def _llm_sentiment_trajectory(
-        self, rounds: list[RoundState]
-    ) -> list[dict]:
-        """LLM-based sentiment: asks the model to rate each round."""
+    async def _llm_sentiment_trajectory(self, rounds: list[RoundState]) -> list[dict]:
+        """LLM-based sentiment: single batched call for all rounds.
+
+        Instead of 1 LLM call per round (N calls), we send all round
+        excerpts in one prompt and ask the model to return an array.
+        Falls back to keyword analysis on failure.
+        """
         from app.llm.provider import LLMMessage
 
-        trajectory: list[dict] = []
-        for round_state in rounds:
-            if not round_state.messages:
-                trajectory.append({
-                    "round": round_state.round_number,
+        # Separate empty rounds (no LLM needed) from rounds with content.
+        empty_rounds: dict[int, dict] = {}
+        round_excerpts: list[tuple[int, str]] = []
+        for rs in rounds:
+            if not rs.messages:
+                empty_rounds[rs.round_number] = {
+                    "round": rs.round_number,
                     "positive": 0.0,
                     "negative": 0.0,
                     "neutral": 1.0,
-                })
-                continue
+                }
+            else:
+                excerpt = "\n".join(f"{m.agent_name}: {m.content[:200]}" for m in rs.messages)
+                round_excerpts.append((rs.round_number, excerpt[:2000]))
 
-            excerpt = "\n".join(
-                f"{m.agent_name}: {m.content[:200]}"
-                for m in round_state.messages
+        # If no rounds have content, return empties only.
+        if not round_excerpts:
+            return [empty_rounds[rs.round_number] for rs in rounds]
+
+        # Build a single batched prompt.
+        round_blocks = "\n\n".join(f"--- ROUND {rn} ---\n{exc}" for rn, exc in round_excerpts)
+        prompt = (
+            f"Rate the overall sentiment of EACH round below. "
+            f"Respond with ONLY a JSON array, one object per round:\n"
+            f'[{{"round": N, "positive": 0.0-1.0, "negative": 0.0-1.0, '
+            f'"neutral": 0.0-1.0}}]\n'
+            f"Values in each object must sum to 1.0.\n\n{round_blocks}"
+        )
+
+        try:
+            resp = await self.llm.generate(
+                messages=[
+                    LLMMessage(
+                        role="system",
+                        content=("You analyze boardroom discussion sentiment. " "Respond with ONLY valid JSON."),
+                    ),
+                    LLMMessage(role="user", content=prompt),
+                ],
+                temperature=0.1,
+                max_tokens=50 * len(round_excerpts) + 50,
             )
-            try:
-                resp = await self.llm.generate(
-                    messages=[
-                        LLMMessage(
-                            role="system",
-                            content=(
-                                "Rate the overall sentiment of this "
-                                "boardroom discussion round. Respond "
-                                "with ONLY valid JSON: "
-                                '{"positive": 0.0-1.0, '
-                                '"negative": 0.0-1.0, '
-                                '"neutral": 0.0-1.0} '
-                                "Values must sum to 1.0."
-                            ),
-                        ),
-                        LLMMessage(
-                            role="user", content=excerpt[:4000]
-                        ),
-                    ],
-                    temperature=0.1,
-                    max_tokens=100,
-                )
-                import json
-                data = json.loads(
-                    resp.content.strip()
-                    .removeprefix("```json")
-                    .removesuffix("```")
-                    .strip()
-                )
-                trajectory.append({
-                    "round": round_state.round_number,
-                    "positive": float(data.get("positive", 0)),
-                    "negative": float(data.get("negative", 0)),
-                    "neutral": float(data.get("neutral", 0)),
-                })
-            except Exception:
-                logger.debug(
-                    "LLM sentiment failed for round %d, "
-                    "falling back to keywords",
-                    round_state.round_number,
-                )
-                kw = self._keyword_sentiment_for_round(
-                    round_state
-                )
-                trajectory.append(kw)
+            raw = resp.content.strip().removeprefix("```json").removesuffix("```").strip()
+            parsed: list[dict] = json.loads(raw)
+            # Index by round number for fast lookup.
+            by_round: dict[int, dict] = {}
+            for entry in parsed:
+                rn = int(entry.get("round", 0))
+                by_round[rn] = {
+                    "round": rn,
+                    "positive": float(entry.get("positive", 0)),
+                    "negative": float(entry.get("negative", 0)),
+                    "neutral": float(entry.get("neutral", 0)),
+                }
+        except Exception:
+            logger.debug("Batched LLM sentiment failed, falling back to keywords")
+            return self._keyword_sentiment_trajectory(rounds)
+
+        # Merge: LLM results for content rounds, empties for the rest.
+        trajectory: list[dict] = []
+        for rs in rounds:
+            rn = rs.round_number
+            if rn in empty_rounds:
+                trajectory.append(empty_rounds[rn])
+            elif rn in by_round:
+                trajectory.append(by_round[rn])
+            else:
+                # LLM missed this round — keyword fallback.
+                trajectory.append(self._keyword_sentiment_for_round(rs))
 
         return trajectory
 
-    def _keyword_sentiment_trajectory(
-        self, rounds: list[RoundState]
-    ) -> list[dict]:
+    def _keyword_sentiment_trajectory(self, rounds: list[RoundState]) -> list[dict]:
         """Fallback keyword-based sentiment analysis."""
-        return [
-            self._keyword_sentiment_for_round(r) for r in rounds
-        ]
+        return [self._keyword_sentiment_for_round(r) for r in rounds]
 
-    def _keyword_sentiment_for_round(
-        self, round_state: RoundState
-    ) -> dict:
+    def _keyword_sentiment_for_round(self, round_state: RoundState) -> dict:
         """Keyword sentiment for a single round."""
         if not round_state.messages:
             return {
@@ -387,7 +445,7 @@ class AnalyticsAgent:
 
         for msg in round_state.messages:
             content = msg.content.lower()
-            words = set(re.findall(r'\b\w+\b', content))
+            words = set(re.findall(r"\b\w+\b", content))
             pos_matches = len(words & POSITIVE_WORDS)
             neg_matches = len(words & NEGATIVE_WORDS)
             if pos_matches > neg_matches:
@@ -401,8 +459,7 @@ class AnalyticsAgent:
             "positive": round(positive_count / total, 2),
             "negative": round(negative_count / total, 2),
             "neutral": round(
-                (total - positive_count - negative_count)
-                / total,
+                (total - positive_count - negative_count) / total,
                 2,
             ),
         }
@@ -428,7 +485,7 @@ class AnalyticsAgent:
             total_sentiment = 0
             for msg in msgs:
                 content = msg.content.lower()
-                words = set(re.findall(r'\b\w+\b', content))
+                words = set(re.findall(r"\b\w+\b", content))
                 pos_matches = len(words & POSITIVE_WORDS)
                 neg_matches = len(words & NEGATIVE_WORDS)
                 sentiment = (pos_matches - neg_matches) / max(len(words), 1)
@@ -444,24 +501,18 @@ class AnalyticsAgent:
         mean_sentiment = sum(sentiments) / len(sentiments)
 
         # Calculate variance
-        variance = sum(
-            (s - mean_sentiment) ** 2 for s in sentiments
-        ) / len(sentiments)
-        std_dev = variance ** 0.5
+        variance = sum((s - mean_sentiment) ** 2 for s in sentiments) / len(sentiments)
+        std_dev = variance**0.5
 
         # Individual polarization scores (distance from mean, normalized)
         polarization = {}
         for role, sentiment in role_sentiments.items():
             distance = abs(sentiment - mean_sentiment)
-            polarization[role] = round(
-                min(distance / max(std_dev, 0.001), 2.0), 2
-            )
+            polarization[role] = round(min(distance / max(std_dev, 0.001), 2.0), 2)
 
         return polarization
 
-    async def compute_policy_adoption_rate(
-        self, rounds: list[RoundState]
-    ) -> float:
+    async def compute_policy_adoption_rate(self, rounds: list[RoundState]) -> float:
         """Calculate % of proposals that were adopted."""
         proposals = []
         adoptions = []
@@ -474,16 +525,20 @@ class AnalyticsAgent:
                 for pattern in PROPOSAL_PATTERNS:
                     matches = re.finditer(pattern, content, re.IGNORECASE)
                     for match in matches:
-                        proposals.append({
-                            "text": match.group(1).strip(),
-                            "round": round_state.round_number,
-                        })
+                        proposals.append(
+                            {
+                                "text": match.group(1).strip(),
+                                "round": round_state.round_number,
+                            }
+                        )
 
             # Check decisions for adoption
             for decision in round_state.decisions:
                 evaluation = decision.get("evaluation", {})
                 if evaluation.get("outcome") in [
-                    "approved", "accepted", "adopted",
+                    "approved",
+                    "accepted",
+                    "adopted",
                     "proposal_accepted",  # legacy boardroom
                 ]:
                     adoptions.append(round_state.round_number)
@@ -501,9 +556,7 @@ class AnalyticsAgent:
 
         return round((adopted_count / len(proposals)) * 100, 2)
 
-    async def detect_coalitions(
-        self, messages: list[SimulationMessage], agents: list[AgentState]
-    ) -> list[dict]:
+    async def detect_coalitions(self, messages: list[SimulationMessage], agents: list[AgentState]) -> list[dict]:
         """Detect coalition formation events."""
         coalitions = []
 
@@ -542,17 +595,17 @@ class AnalyticsAgent:
                 # Find coalition topic
                 topic = self._extract_coalition_topic(msgs, group)
 
-                coalitions.append({
-                    "round": round_num,
-                    "members": list(group),
-                    "topic": topic,
-                })
+                coalitions.append(
+                    {
+                        "round": round_num,
+                        "members": list(group),
+                        "topic": topic,
+                    }
+                )
 
         return coalitions
 
-    def _find_coalition_groups(
-        self, alignments: dict[str, set[str]]
-    ) -> list[set[str]]:
+    def _find_coalition_groups(self, alignments: dict[str, set[str]]) -> list[set[str]]:
         """Find groups of MIN_COALITION_SIZE+ mutually aligned agents."""
         groups = []
         processed = set()
@@ -577,9 +630,7 @@ class AnalyticsAgent:
 
         return groups
 
-    def _extract_coalition_topic(
-        self, messages: list[SimulationMessage], coalition_members: set[str]
-    ) -> str:
+    def _extract_coalition_topic(self, messages: list[SimulationMessage], coalition_members: set[str]) -> str:
         """Extract the topic around which a coalition formed."""
         # Collect messages from coalition members
         member_msgs = [m for m in messages if m.agent_id in coalition_members]
@@ -587,7 +638,7 @@ class AnalyticsAgent:
         # Extract common keywords (excluding stop words)
         word_counts = Counter()
         for msg in member_msgs:
-            words = re.findall(r'\b\w+\b', msg.content.lower())
+            words = re.findall(r"\b\w+\b", msg.content.lower())
             for word in words:
                 if word not in COALITION_STOP_WORDS and len(word) > 3:
                     word_counts[word] += 1
@@ -596,9 +647,7 @@ class AnalyticsAgent:
         top_words = [w for w, c in word_counts.most_common(3)]
         return " ".join(top_words) if top_words else "general alignment"
 
-    async def identify_turning_points(
-        self, rounds: list[RoundState]
-    ) -> list[dict]:
+    async def identify_turning_points(self, rounds: list[RoundState]) -> list[dict]:
         """Identify key turning points in the simulation."""
         turning_points = []
 
@@ -636,15 +685,9 @@ class AnalyticsAgent:
 
                 # Generate description
                 if pos_shift > 0:
-                    description = (
-                        f"Significant positive shift in sentiment "
-                        f"(+{round(pos_shift * 100)}%)"
-                    )
+                    description = f"Significant positive shift in sentiment " f"(+{round(pos_shift * 100)}%)"
                 else:
-                    description = (
-                        f"Significant negative shift in sentiment "
-                        f"(+{round(abs(neg_shift) * 100)}%)"
-                    )
+                    description = f"Significant negative shift in sentiment " f"(+{round(abs(neg_shift) * 100)}%)"
 
                 # Look for triggering event in messages
                 round_state = rounds[i]
@@ -652,12 +695,14 @@ class AnalyticsAgent:
                     first_msg = round_state.messages[0]
                     description += f" triggered by {first_msg.agent_name}"
 
-                turning_points.append({
-                    "round": curr["round"],
-                    "description": description,
-                    "impact": impact,
-                    "score": round(max(abs_pos, abs_neg), 2),
-                })
+                turning_points.append(
+                    {
+                        "round": curr["round"],
+                        "description": description,
+                        "impact": impact,
+                        "score": round(max(abs_pos, abs_neg), 2),
+                    }
+                )
 
         # Check for decision points
         for round_state in rounds:
@@ -667,18 +712,17 @@ class AnalyticsAgent:
                 consensus_reached = evaluation.get("consensus_reached")
                 if decision_made or consensus_reached:
                     # Check if not already recorded
-                    already_recorded = any(
-                        tp["round"] == round_state.round_number
-                        for tp in turning_points
-                    )
+                    already_recorded = any(tp["round"] == round_state.round_number for tp in turning_points)
                     if not already_recorded:
                         score = _derive_decision_turning_point_score(decision)
-                        turning_points.append({
-                            "round": round_state.round_number,
-                            "description": "Key decision point reached",
-                            "impact": "high",
-                            "score": score,
-                        })
+                        turning_points.append(
+                            {
+                                "round": round_state.round_number,
+                                "description": "Key decision point reached",
+                                "impact": "high",
+                                "score": score,
+                            }
+                        )
 
         # Sort by round number
         turning_points.sort(key=lambda x: x["round"])
@@ -717,15 +761,11 @@ class AnalyticsAgent:
             normalized_count = count / max_messages if max_messages > 0 else 0
             normalized_length = min(avg_length / 500, 1.0)  # Cap at 500 chars
 
-            activity_scores[agent.id] = round(
-                (normalized_count * 0.7 + normalized_length * 0.3), 2
-            )
+            activity_scores[agent.id] = round((normalized_count * 0.7 + normalized_length * 0.3), 2)
 
         return activity_scores
 
-    async def extract_decision_outcomes(
-        self, rounds: list[RoundState]
-    ) -> list[dict]:
+    async def extract_decision_outcomes(self, rounds: list[RoundState]) -> list[dict]:
         """Extract decision outcomes from rounds."""
         outcomes = []
 
@@ -744,10 +784,12 @@ class AnalyticsAgent:
                 else:
                     result = "pending"
 
-                outcomes.append({
-                    "decision": decision_text,
-                    "result": result,
-                    "round": round_state.round_number,
-                })
+                outcomes.append(
+                    {
+                        "decision": decision_text,
+                        "result": result,
+                        "round": round_state.round_number,
+                    }
+                )
 
         return outcomes

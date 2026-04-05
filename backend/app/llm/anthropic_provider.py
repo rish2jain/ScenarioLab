@@ -18,7 +18,7 @@ from app.llm.provider import (
     LLMMessage,
     LLMProvider,
     LLMResponse,
-    _llm_semaphore,
+    get_llm_semaphore,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,13 +39,9 @@ class AnthropicProvider(LLMProvider):
         self.api_key = api_key
         self.model = model
         self.client = anthropic.AsyncAnthropic(api_key=api_key)
-        logger.info(
-            f"Initialized Anthropic provider with model: {model}"
-        )
+        logger.info(f"Initialized Anthropic provider with model: {model}")
 
-    def _convert_messages(
-        self, messages: list[LLMMessage]
-    ) -> tuple[str, list[dict]]:
+    def _convert_messages(self, messages: list[LLMMessage]) -> tuple[str, list[dict]]:
         """Convert LLMMessage objects to Anthropic format.
 
         Returns:
@@ -58,9 +54,7 @@ class AnthropicProvider(LLMProvider):
             if msg.role == "system":
                 system_message = msg.content
             elif msg.role in ("user", "assistant"):
-                conversation_messages.append(
-                    {"role": msg.role, "content": msg.content}
-                )
+                conversation_messages.append({"role": msg.role, "content": msg.content})
 
         return system_message, conversation_messages
 
@@ -73,17 +67,13 @@ class AnthropicProvider(LLMProvider):
     ) -> LLMResponse:
         """Generate a completion from messages."""
         max_tokens = min(max_tokens, MAX_TOKENS_CAP)
-        async with _llm_semaphore:
-            return await self._generate_with_retry(
-                messages, temperature, max_tokens, **kwargs
-            )
+        async with get_llm_semaphore(self.provider_name):
+            return await self._generate_with_retry(messages, temperature, max_tokens, **kwargs)
 
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type(
-            (RateLimitError, APITimeoutError, APIConnectionError)
-        ),
+        retry=retry_if_exception_type((RateLimitError, APITimeoutError, APIConnectionError)),
         before_sleep=lambda retry_state: logger.warning(
             f"LLM call failed, retrying (attempt "
             f"{retry_state.attempt_number}): "
@@ -111,9 +101,7 @@ class AnthropicProvider(LLMProvider):
             if system_msg:
                 request_kwargs["system"] = system_msg
 
-            response: Message = (
-                await self.client.messages.create(**request_kwargs)
-            )
+            response: Message = await self.client.messages.create(**request_kwargs)
 
             content = ""
             if response.content:
@@ -124,10 +112,7 @@ class AnthropicProvider(LLMProvider):
                 usage = {
                     "prompt_tokens": response.usage.input_tokens,
                     "completion_tokens": response.usage.output_tokens,
-                    "total_tokens": (
-                        response.usage.input_tokens
-                        + response.usage.output_tokens
-                    ),
+                    "total_tokens": (response.usage.input_tokens + response.usage.output_tokens),
                 }
 
             return LLMResponse(

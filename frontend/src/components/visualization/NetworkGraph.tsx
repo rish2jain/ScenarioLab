@@ -1,8 +1,113 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
 import { clsx } from 'clsx';
 import type { NetworkNode, NetworkEdge, NetworkGraphData } from '@/lib/types';
+
+/** Cheap pass on the render path; full refinement runs in idle time. */
+const INITIAL_FORCE_ITERATIONS = 24;
+const REFINE_FORCE_ITERATIONS = 126;
+const MAX_LAYOUT_CACHE_ENTRIES = 32;
+
+type LayoutPositions = Record<string, { x: number; y: number }>;
+
+const layoutCache = new Map<string, LayoutPositions>();
+
+/** Read from cache and move key to most-recent end (Map insertion order = LRU). */
+function readLayoutCache(key: string): LayoutPositions | undefined {
+  const v = layoutCache.get(key);
+  if (v === undefined) return undefined;
+  layoutCache.delete(key);
+  layoutCache.set(key, v);
+  return v;
+}
+
+/** Insert or update; existing keys move to most-recent end. */
+function writeLayoutCache(key: string, positions: LayoutPositions): void {
+  layoutCache.delete(key);
+  layoutCache.set(key, positions);
+}
+
+/**
+ * Drop least-recently-used entries. After readLayoutCache/writeLayoutCache, iteration order
+ * is LRU: oldest at keys().next(), newest at the end.
+ */
+function pruneLayoutCache(): void {
+  while (layoutCache.size > MAX_LAYOUT_CACHE_ENTRIES) {
+    const lru = layoutCache.keys().next().value;
+    if (lru === undefined) break;
+    layoutCache.delete(lru);
+  }
+}
+
+/** Stable key from topology + canvas size so layouts reuse across re-renders. */
+function buildLayoutCacheKey(
+  data: { nodes: NetworkNode[]; edges: NetworkEdge[] },
+  width: number,
+  height: number
+): string {
+  const nodeIds = [...data.nodes].map((n) => n.id).sort().join('\x00');
+  const edgeKeys = [...data.edges]
+    .map((e) => `${e.source}\x00${e.target}\x00${e.id}`)
+    .sort()
+    .join('\x01');
+  return `${width}x${height}\n${nodeIds}\n${edgeKeys}`;
+}
+
+function hashStringToUint32(str: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/** Deterministic PRNG in [0, 1) for initial placement (replaces Math.random). */
+function mulberry32(seed: number): () => number {
+  return () => {
+    let t = (seed += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function extractPositions(nodes: NetworkNode[]): LayoutPositions {
+  const out: LayoutPositions = {};
+  for (const n of nodes) {
+    out[n.id] = { x: n.x ?? 0, y: n.y ?? 0 };
+  }
+  return out;
+}
+
+function applyCachedPositions(
+  nodes: NetworkNode[],
+  positions: LayoutPositions
+): NetworkNode[] {
+  return nodes.map((n) => {
+    const p = positions[n.id];
+    if (!p) return { ...n };
+    return { ...n, x: p.x, y: p.y, vx: 0, vy: 0 };
+  });
+}
+
+function scheduleIdleTask(fn: () => void): { id: number; usedIdleCallback: boolean } {
+  if (typeof requestIdleCallback !== 'undefined') {
+    const id = requestIdleCallback(() => fn(), { timeout: 2500 });
+    return { id, usedIdleCallback: true };
+  }
+  const id = window.setTimeout(fn, 0) as unknown as number;
+  return { id, usedIdleCallback: false };
+}
+
+function cancelIdleTask(id: number, usedIdleCallback: boolean): void {
+  if (usedIdleCallback && typeof cancelIdleCallback !== 'undefined') {
+    cancelIdleCallback(id);
+  } else {
+    clearTimeout(id);
+  }
+}
 
 interface NetworkGraphProps {
   data: NetworkGraphData;
@@ -23,42 +128,58 @@ interface TooltipState {
   content: React.ReactNode;
 }
 
-// Force-directed layout simulation
+interface RunForceSimulationOptions {
+  iterations?: number;
+  /** Seed for deterministic initial placement when x/y are zero (mulberry32). */
+  seed?: number;
+}
+
+// Force-directed layout simulation (mutates node x/y/vx/vy in-place; does not reorder caller's array)
 function runForceSimulation(
   nodes: NetworkNode[],
   edges: NetworkEdge[],
   width: number,
   height: number,
-  iterations: number = 100
+  options: RunForceSimulationOptions = {}
 ): NetworkNode[] {
+  const iterations = options.iterations ?? 100;
+  const seed = options.seed;
+
+  if (nodes.length === 0) {
+    return nodes;
+  }
+
+  const sortedNodes = [...nodes].sort((a, b) => a.id.localeCompare(b.id));
+
   const centerX = width / 2;
   const centerY = height / 2;
-  const k = Math.sqrt((width * height) / nodes.length) * 0.5; // optimal distance
+  const k = Math.sqrt((width * height) / sortedNodes.length) * 0.5; // optimal distance
 
-  // Ensure simulation properties are initialized
-  for (const node of nodes) {
-    node.x = node.x ?? 0;
-    node.y = node.y ?? 0;
+  const rand = mulberry32(seed ?? 0x9e3779b9);
+
+  // Ensure velocity is initialized (do not coerce missing x/y to 0 — that breaks
+  // the “uninitialized position” check below for legitimate (0, 0) placements).
+  for (const node of sortedNodes) {
     node.vx = node.vx ?? 0;
     node.vy = node.vy ?? 0;
   }
 
-  // Initialize positions if not set
-  nodes.forEach((node) => {
-    if (node.x === 0 && node.y === 0) {
-      node.x = centerX + (Math.random() - 0.5) * 200;
-      node.y = centerY + (Math.random() - 0.5) * 200;
+  // Initialize positions when coordinates are missing (deterministic when seed is given)
+  sortedNodes.forEach((node) => {
+    if (node.x == null || node.y == null) {
+      node.x = centerX + (rand() - 0.5) * 200;
+      node.y = centerY + (rand() - 0.5) * 200;
     }
-    node.vx = 0;
-    node.vy = 0;
   });
+
+  const nodeById = new Map(sortedNodes.map((n) => [n.id, n]));
 
   for (let i = 0; i < iterations; i++) {
     // Repulsion (Coulomb's law) - nodes repel each other
-    for (let a = 0; a < nodes.length; a++) {
-      for (let b = a + 1; b < nodes.length; b++) {
-        const nodeA = nodes[a];
-        const nodeB = nodes[b];
+    for (let a = 0; a < sortedNodes.length; a++) {
+      for (let b = a + 1; b < sortedNodes.length; b++) {
+        const nodeA = sortedNodes[a];
+        const nodeB = sortedNodes[b];
         const dx = (nodeB.x ?? 0) - (nodeA.x ?? 0);
         const dy = (nodeB.y ?? 0) - (nodeA.y ?? 0);
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -75,13 +196,13 @@ function runForceSimulation(
 
     // Attraction (spring force) - edges pull nodes together
     edges.forEach((edge) => {
-      const source = nodes.find((n) => n.id === edge.source);
-      const target = nodes.find((n) => n.id === edge.target);
+      const source = nodeById.get(edge.source);
+      const target = nodeById.get(edge.target);
       if (source && target) {
         const dx = (target.x ?? 0) - (source.x ?? 0);
         const dy = (target.y ?? 0) - (source.y ?? 0);
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const force = (dist * dist) / k * 0.01;
+        const force = ((dist * dist) / k) * 0.01;
         const fx = (dx / dist) * force;
         const fy = (dy / dist) * force;
 
@@ -93,7 +214,7 @@ function runForceSimulation(
     });
 
     // Center gravity - pull toward center
-    nodes.forEach((node) => {
+    sortedNodes.forEach((node) => {
       const dx = centerX - (node.x ?? 0);
       const dy = centerY - (node.y ?? 0);
       node.vx = (node.vx ?? 0) + dx * 0.001;
@@ -101,7 +222,7 @@ function runForceSimulation(
     });
 
     // Apply velocity with damping
-    nodes.forEach((node) => {
+    sortedNodes.forEach((node) => {
       node.vx = (node.vx ?? 0) * 0.9; // damping
       node.vy = (node.vy ?? 0) * 0.9;
       node.x = (node.x ?? 0) + (node.vx ?? 0);
@@ -114,7 +235,7 @@ function runForceSimulation(
     });
   }
 
-  return nodes;
+  return sortedNodes;
 }
 
 export function NetworkGraph({
@@ -129,7 +250,6 @@ export function NetworkGraph({
   className,
 }: NetworkGraphProps) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const [nodes, setNodes] = useState<NetworkNode[]>([]);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -174,17 +294,68 @@ export function NetworkGraph({
     return { nodes: filteredNodes, edges: filteredEdges };
   }, [data, filterRoles, filterCoalitions, sentimentThreshold]);
 
-  // Run force simulation on mount and when data changes
-  useEffect(() => {
-    const simulatedNodes = runForceSimulation(
+  const layoutKey = useMemo(
+    () => buildLayoutCacheKey(filteredData, width, height),
+    [filteredData, width, height]
+  );
+
+  /** Positions from the last idle refinement; keyed so a layout change does not need a reset effect. */
+  const [idleRefined, setIdleRefined] = useState<{
+    key: string;
+    positions: LayoutPositions;
+  } | null>(null);
+
+  const cheapLayout = useMemo(() => {
+    const fromIdle =
+      idleRefined?.key === layoutKey ? idleRefined.positions : null;
+    const cached = readLayoutCache(layoutKey) ?? fromIdle;
+    if (cached) {
+      return applyCachedPositions(filteredData.nodes, cached);
+    }
+    const seed = hashStringToUint32(layoutKey);
+    return runForceSimulation(
       filteredData.nodes.map((n) => ({ ...n })),
       filteredData.edges,
       width,
       height,
-      150
+      { iterations: INITIAL_FORCE_ITERATIONS, seed }
     );
-    setNodes(simulatedNodes);
-  }, [filteredData.nodes, filteredData.edges, width, height]);
+  }, [
+    layoutKey,
+    filteredData.nodes,
+    filteredData.edges,
+    width,
+    height,
+    idleRefined,
+  ]);
+
+  useEffect(() => {
+    if (layoutCache.has(layoutKey)) {
+      return;
+    }
+    if (cheapLayout.length === 0) {
+      return;
+    }
+
+    const copy = cheapLayout.map((n) => ({ ...n }));
+    const edges = filteredData.edges;
+
+    const { id: idleId, usedIdleCallback } = scheduleIdleTask(() => {
+      const refineSeed = hashStringToUint32(`${layoutKey}|refine`);
+      const refined = runForceSimulation(copy, edges, width, height, {
+        iterations: REFINE_FORCE_ITERATIONS,
+        seed: refineSeed,
+      });
+      const positions = extractPositions(refined);
+      writeLayoutCache(layoutKey, positions);
+      pruneLayoutCache();
+      setIdleRefined({ key: layoutKey, positions });
+    });
+
+    return () => cancelIdleTask(idleId, usedIdleCallback);
+  }, [layoutKey, cheapLayout, filteredData.edges, width, height]);
+
+  const nodes = cheapLayout;
 
   // Get edge color based on sentiment
   const getEdgeColor = (sentiment: NetworkEdge['sentiment']) => {
@@ -278,6 +449,33 @@ export function NetworkGraph({
   const handleEdgeMouseLeave = () => {
     setTooltip((prev) => ({ ...prev, visible: false }));
   };
+
+  // Handle node hover
+  const handleNodeMouseEnter = useCallback(
+    (e: React.MouseEvent, node: NetworkNode) => {
+      setTooltip({
+        visible: true,
+        x: e.clientX + 10,
+        y: e.clientY - 10,
+        content: (
+          <div className="space-y-1">
+            <div className="font-medium text-slate-200">{node.name}</div>
+            <div className="text-sm text-slate-400 capitalize">
+              {node.role} • {node.archetype}
+            </div>
+            <div className="text-xs text-slate-500">
+              Click to view full details
+            </div>
+          </div>
+        ),
+      });
+    },
+    []
+  );
+
+  const handleNodeMouseLeave = useCallback(() => {
+    setTooltip((prev) => ({ ...prev, visible: false }));
+  }, []);
 
   // Export functions
   const exportAsPNG = useCallback(() => {
@@ -385,6 +583,8 @@ export function NetworkGraph({
                 transform={`translate(${node.x}, ${node.y})`}
                 className="cursor-pointer"
                 onClick={() => onNodeClick?.(node)}
+                onMouseEnter={(e) => handleNodeMouseEnter(e, node)}
+                onMouseLeave={handleNodeMouseLeave}
               >
                 {/* Selection ring */}
                 {isSelected && (
@@ -413,7 +613,6 @@ export function NetworkGraph({
                   fill="#e2e8f0"
                   fontSize={11}
                   fontWeight={500}
-                  style={{ pointerEvents: 'none' }}
                 >
                   {node.name}
                 </text>
@@ -424,7 +623,6 @@ export function NetworkGraph({
                   textAnchor="middle"
                   fill="#94a3b8"
                   fontSize={9}
-                  style={{ pointerEvents: 'none' }}
                 >
                   {node.role}
                 </text>

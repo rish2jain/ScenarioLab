@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, Gavel, Sparkles, FileText, Building2, AlertTriangle, Play } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { useToast } from '@/components/ui/Toast';
 import { api } from '@/lib/api';
 
 interface GeneratedScenario {
@@ -28,40 +29,6 @@ interface GeneratedScenario {
   suggested_objectives: string[];
 }
 
-// Mock generated scenario
-const mockGeneratedScenario: GeneratedScenario = {
-  name: 'GDPR Article 17 Compliance Crisis',
-  description: 'A multinational corporation faces urgent GDPR Article 17 (Right to Erasure) compliance demands affecting 50,000 customer records across 12 jurisdictions.',
-  environment_type: 'crisis',
-  agents: [
-    { role: 'Chief Privacy Officer', archetype: 'defender', description: 'Responsible for GDPR compliance' },
-    { role: 'CTO', archetype: 'analyst', description: 'Manages technical implementation' },
-    { role: 'Legal Counsel', archetype: 'analyst', description: 'Advises on legal risks' },
-    { role: 'CEO', archetype: 'aggressor', description: 'Balances business and compliance' },
-    { role: 'Data Protection Officer', archetype: 'mediator', description: 'Liaison with regulators' },
-  ],
-  rounds: 10,
-  key_issues: [
-    'Technical feasibility of data erasure across legacy systems',
-    'Cross-border data transfer implications',
-    'Third-party processor notification requirements',
-    'Documentation and audit trail obligations',
-    'Timeline pressure from regulatory deadlines',
-  ],
-  impact_assessment: {
-    compliance_risk: 'critical',
-    operational_impact: 'high',
-    timeline_pressure: 'critical',
-    financial_exposure: 'high',
-  },
-  suggested_objectives: [
-    'Develop compliant data erasure process',
-    'Assess third-party notification requirements',
-    'Create regulatory response strategy',
-    'Evaluate technical implementation options',
-  ],
-};
-
 const industries = [
   'Technology',
   'Financial Services',
@@ -82,22 +49,35 @@ const riskColors: Record<string, string> = {
 
 export default function RegulatoryGeneratorPage() {
   const router = useRouter();
+  const { addToast } = useToast();
   const [regulatoryText, setRegulatoryText] = useState('');
   const [industry, setIndustry] = useState('');
   const [organizationContext, setOrganizationContext] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedScenario, setGeneratedScenario] = useState<GeneratedScenario | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
+    setLoadError(null);
     try {
-      // Mock API call - in real implementation, call api.generateRegulatoryScenario
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      setGeneratedScenario(mockGeneratedScenario);
-    } catch {
-      // Handle error
+      const scenario = await api.generateRegulatoryScenario({
+        regulatory_text: regulatoryText,
+        industry: industry.toLowerCase().replace(/\s+/g, '_'),
+        organization_context: organizationContext,
+      });
+      setGeneratedScenario(scenario);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Could not generate regulatory scenario.';
+      setGeneratedScenario(null);
+      setLoadError(message);
+      addToast(message, 'error');
+    } finally {
+      setIsGenerating(false);
     }
-    setIsGenerating(false);
   };
 
   const handleCreateSimulation = () => {
@@ -189,6 +169,11 @@ export default function RegulatoryGeneratorPage() {
 
         {/* Output Section */}
         <div className="space-y-6">
+          {loadError && (
+            <Card>
+              <div className="text-sm text-red-400">{loadError}</div>
+            </Card>
+          )}
           {generatedScenario ? (
             <>
               <Card
@@ -310,14 +295,14 @@ export default function RegulatoryGeneratorPage() {
                 Create Simulation with This Scenario
               </Button>
             </>
-          ) : (
+          ) : !loadError ? (
             <Card className="h-full flex items-center justify-center min-h-[400px]">
               <div className="text-center text-slate-500">
                 <Gavel className="w-12 h-12 mx-auto mb-4 opacity-50" />
                 <p>Generate a scenario to see results</p>
               </div>
             </Card>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

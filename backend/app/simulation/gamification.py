@@ -31,11 +31,13 @@ class GamificationConfig(BaseModel):
     enabled: bool = False
     team_count: int = 2
     teams: list[dict] = Field(default_factory=list)
-    scoring_weights: dict = Field(default_factory=lambda: {
-        "consensus_points": 1.0,
-        "speed_bonus": 0.5,
-        "risk_reduction": 0.8,
-    })
+    scoring_weights: dict = Field(
+        default_factory=lambda: {
+            "consensus_points": 1.0,
+            "speed_bonus": 0.5,
+            "risk_reduction": 0.8,
+        }
+    )
 
 
 class Leaderboard(BaseModel):
@@ -65,9 +67,7 @@ class GamificationEngine:
                 await ensure_tables()
                 self._initialized = True
             except Exception as e:
-                logger.warning(
-                    f"Failed to initialize gamification DB: {e}"
-                )
+                logger.warning(f"Failed to initialize gamification DB: {e}")
 
     async def compute_scores(
         self,
@@ -134,15 +134,11 @@ class GamificationEngine:
         )
 
         # Save to database
-        asyncio.create_task(
-            self._save_leaderboard(simulation_id, leaderboard)
-        )
+        asyncio.create_task(self._save_leaderboard(simulation_id, leaderboard))
 
         return leaderboard
 
-    async def _save_leaderboard(
-        self, simulation_id: str, leaderboard: Leaderboard
-    ) -> None:
+    async def _save_leaderboard(self, simulation_id: str, leaderboard: Leaderboard) -> None:
         """Save leaderboard to database."""
         try:
             scores = {
@@ -154,9 +150,7 @@ class GamificationEngine:
                 for team in leaderboard.teams
             }
             leaderboard_data = leaderboard.model_dump()
-            await gamification_repo.save_scores(
-                simulation_id, scores, leaderboard_data
-            )
+            await gamification_repo.save_scores(simulation_id, scores, leaderboard_data)
         except Exception as e:
             logger.warning(f"Failed to save leaderboard to DB: {e}")
 
@@ -181,12 +175,8 @@ class GamificationEngine:
         breakdown = {}
 
         # Consensus points - team members voting together
-        consensus_score = self._calculate_consensus_score(
-            member_ids, simulation_state
-        )
-        breakdown["consensus_points"] = consensus_score * weights.get(
-            "consensus_points", 1.0
-        )
+        consensus_score = self._calculate_consensus_score(member_ids, simulation_state)
+        breakdown["consensus_points"] = consensus_score * weights.get("consensus_points", 1.0)
 
         # Speed bonus - early agreement
         speed_score = self._calculate_speed_score(member_ids, simulation_state)
@@ -194,31 +184,19 @@ class GamificationEngine:
 
         # Risk reduction - conservative decisions
         risk_score = self._calculate_risk_score(member_ids, simulation_state)
-        breakdown["risk_reduction"] = risk_score * weights.get(
-            "risk_reduction", 0.8
-        )
+        breakdown["risk_reduction"] = risk_score * weights.get("risk_reduction", 0.8)
 
         # Coalition strength
-        coalition_score = self._calculate_coalition_score(
-            member_ids, simulation_state
-        )
-        breakdown["coalition_strength"] = coalition_score * weights.get(
-            "coalition_strength", 0.6
-        )
+        coalition_score = self._calculate_coalition_score(member_ids, simulation_state)
+        breakdown["coalition_strength"] = coalition_score * weights.get("coalition_strength", 0.6)
 
         # Message quality (engagement)
-        engagement_score = self._calculate_engagement_score(
-            member_ids, simulation_state
-        )
-        breakdown["engagement"] = engagement_score * weights.get(
-            "engagement", 0.4
-        )
+        engagement_score = self._calculate_engagement_score(member_ids, simulation_state)
+        breakdown["engagement"] = engagement_score * weights.get("engagement", 0.4)
 
         return breakdown
 
-    def _calculate_consensus_score(
-        self, member_ids: list[str], simulation_state
-    ) -> float:
+    def _calculate_consensus_score(self, member_ids: list[str], simulation_state) -> float:
         """Calculate consensus score based on aligned votes."""
         if not simulation_state or not simulation_state.rounds:
             return 0.0
@@ -248,19 +226,14 @@ class GamificationEngine:
 
         return consensus_count / total_votes if total_votes > 0 else 0.0
 
-    def _calculate_speed_score(
-        self, member_ids: list[str], simulation_state
-    ) -> float:
+    def _calculate_speed_score(self, member_ids: list[str], simulation_state) -> float:
         """Calculate speed score based on early agreement."""
         if not simulation_state or not simulation_state.rounds:
             return 0.0
 
         # Check if team reached consensus in early rounds
         for i, round_state in enumerate(simulation_state.rounds[:3]):
-            team_messages = [
-                msg for msg in round_state.messages
-                if msg.agent_id in member_ids
-            ]
+            team_messages = [msg for msg in round_state.messages if msg.agent_id in member_ids]
 
             # Check for agreement indicators
             agreement_count = 0
@@ -275,9 +248,7 @@ class GamificationEngine:
 
         return 0.0
 
-    def _calculate_risk_score(
-        self, member_ids: list[str], simulation_state
-    ) -> float:
+    def _calculate_risk_score(self, member_ids: list[str], simulation_state) -> float:
         """Calculate risk reduction score."""
         if not simulation_state or not simulation_state.rounds:
             return 0.0
@@ -295,9 +266,7 @@ class GamificationEngine:
 
         return risk_mentions / total_messages if total_messages > 0 else 0.0
 
-    def _calculate_coalition_score(
-        self, member_ids: list[str], simulation_state
-    ) -> float:
+    def _calculate_coalition_score(self, member_ids: list[str], simulation_state) -> float:
         """Calculate coalition strength score."""
         if not simulation_state or not simulation_state.agents:
             return 0.0
@@ -308,17 +277,13 @@ class GamificationEngine:
         for agent in simulation_state.agents:
             if agent.id in member_ids:
                 # Count coalition members who are also team members
-                team_coalition = [
-                    m for m in agent.coalition_members if m in member_ids
-                ]
+                team_coalition = [m for m in agent.coalition_members if m in member_ids]
                 if team_coalition:
                     coalition_strength += len(team_coalition) / len(member_ids)
 
         return min(1.0, coalition_strength / len(member_ids)) if member_ids else 0.0
 
-    def _calculate_engagement_score(
-        self, member_ids: list[str], simulation_state
-    ) -> float:
+    def _calculate_engagement_score(self, member_ids: list[str], simulation_state) -> float:
         """Calculate engagement score based on message activity."""
         if not simulation_state or not simulation_state.rounds:
             return 0.0
@@ -377,10 +342,7 @@ class GamificationEngine:
             member_ids = team_config.get("member_ids", [])
 
             # Count messages from team members in this round
-            message_count = sum(
-                1 for msg in round_state.messages
-                if msg.agent_id in member_ids
-            ) if round_state else 0
+            message_count = sum(1 for msg in round_state.messages if msg.agent_id in member_ids) if round_state else 0
 
             teams.append(
                 TeamScore(
@@ -388,9 +350,7 @@ class GamificationEngine:
                     team_name=team_name,
                     members=member_ids,
                     total_score=float(message_count * 10),
-                    score_breakdown={
-                        "round_activity": float(message_count * 10)
-                    },
+                    score_breakdown={"round_activity": float(message_count * 10)},
                     rank=0,
                 )
             )

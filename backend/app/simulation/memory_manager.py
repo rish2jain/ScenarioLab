@@ -27,9 +27,7 @@ class SimulationMemoryManager:
         for agent in agents:
             try:
                 # Build memory content from what this agent observed
-                observed_messages = self._get_observed_messages(
-                    agent, round_state.messages
-                )
+                observed_messages = self._get_observed_messages(agent, round_state.messages)
 
                 if not observed_messages:
                     continue
@@ -50,9 +48,7 @@ class SimulationMemoryManager:
                 )
 
             except Exception as e:
-                logger.error(
-                    f"Failed to record memory for agent {agent.name}: {e}"
-                )
+                logger.error(f"Failed to record memory for agent {agent.name}: {e}")
 
     def _get_observed_messages(
         self,
@@ -99,9 +95,7 @@ class SimulationMemoryManager:
             content = msg.content[:500]
             if len(msg.content) > 500:
                 content += "..."
-            parts.append(
-                f"- {msg.agent_name} ({msg.agent_role}): {content}"
-            )
+            parts.append(f"- {msg.agent_name} ({msg.agent_role}): {content}")
 
         return "\n".join(parts)
 
@@ -196,18 +190,14 @@ class SimulationMemoryManager:
                 if memories:
                     context_parts = ["RECENT MEMORIES:"]
                     for mem in memories[:5]:  # Last 5 memories
-                        context_parts.append(
-                            f"- Round {mem.round_number}: {mem.content[:200]}"
-                        )
+                        context_parts.append(f"- Round {mem.round_number}: {mem.content[:200]}")
                     return "\n".join(context_parts)
 
             except Exception as e:
                 logger.warning(f"Graph memory failed, using fallback: {e}")
 
         # Fallback to local memories
-        return await self._get_local_context(
-            agent_id, simulation_id, current_round
-        )
+        return await self._get_local_context(agent_id, simulation_id, current_round)
 
     async def _get_local_context(
         self,
@@ -222,9 +212,7 @@ class SimulationMemoryManager:
         # Try loading from DB if not in memory
         if not memories:
             try:
-                db_memories = await self._memory_repo.get_memories(
-                    simulation_id, agent_id, limit=10
-                )
+                db_memories = await self._memory_repo.get_memories(simulation_id, agent_id, limit=10)
                 if db_memories:
                     memories = db_memories
                     self._local_memories[key] = memories  # Cache
@@ -235,29 +223,21 @@ class SimulationMemoryManager:
             return ""
 
         # Get recent memories (last 3 rounds)
-        recent = [
-            m for m in memories
-            if m.get("round_number", 0) >= current_round - 3
-        ]
+        recent = [m for m in memories if m.get("round_number", 0) >= current_round - 3]
 
         if not recent:
             return ""
 
         context_parts = ["RECENT MEMORIES:"]
         for mem in recent[-5:]:  # Last 5 memories
-            context_parts.append(
-                f"- Round {mem['round_number']}: {mem['content'][:200]}"
-            )
+            context_parts.append(f"- Round {mem['round_number']}: {mem['content'][:200]}")
 
         return "\n".join(context_parts)
 
     async def clear_memories(self, simulation_id: str):
         """Clear all memories for a simulation."""
         # Clear local memories
-        keys_to_remove = [
-            key for key in self._local_memories.keys()
-            if key.startswith(f"{simulation_id}:")
-        ]
+        keys_to_remove = [key for key in self._local_memories.keys() if key.startswith(f"{simulation_id}:")]
         for key in keys_to_remove:
             del self._local_memories[key]
 

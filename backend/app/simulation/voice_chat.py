@@ -125,25 +125,18 @@ class VoiceChatManager:
         try:
             # 1. Transcribe user audio
             transcript = await self.transcribe_audio(audio_data)
-            logger.info(
-                f"Transcribed audio for simulation {simulation_id}: "
-                f"{transcript[:50]}..."
-            )
+            logger.info(f"Transcribed audio for simulation {simulation_id}: " f"{transcript[:50]}...")
 
             # 2. Get agent response via LLM
             llm_provider = get_llm_provider()
 
-            messages = [
-                LLMMessage(role="system", content=agent_persona_prompt)
-            ]
+            messages = [LLMMessage(role="system", content=agent_persona_prompt)]
 
             # Add conversation history
             if conversation_history:
                 for msg in conversation_history[-10:]:  # Last 10 messages
                     role = "user" if msg.get("is_user") else "assistant"
-                    messages.append(
-                        LLMMessage(role=role, content=msg.get("content", ""))
-                    )
+                    messages.append(LLMMessage(role=role, content=msg.get("content", "")))
 
             # Add current user message
             messages.append(LLMMessage(role="user", content=transcript))
@@ -155,9 +148,7 @@ class VoiceChatManager:
             )
 
             agent_response = response.content.strip()
-            logger.info(
-                f"Agent {agent_id} responded: {agent_response[:50]}..."
-            )
+            logger.info(f"Agent {agent_id} responded: {agent_response[:50]}...")
 
             # 3. Synthesize agent response
             audio_response = await self.synthesize_speech(agent_response)

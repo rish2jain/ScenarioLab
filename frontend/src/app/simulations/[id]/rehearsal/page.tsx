@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -9,10 +9,7 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
-  Loader2,
   Plus,
-  Trash2,
-  MessageSquare,
   Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";

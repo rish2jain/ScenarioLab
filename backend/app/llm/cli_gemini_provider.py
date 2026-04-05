@@ -5,18 +5,17 @@ import logging
 import shutil
 from typing import AsyncIterator
 
+from app.config import settings
 from app.llm.provider import (
     MAX_TOKENS_CAP,
     LLMMessage,
     LLMProvider,
     LLMResponse,
-    _llm_semaphore,
+    get_llm_semaphore,
+    terminate_process_with_timeout,
 )
 
 logger = logging.getLogger(__name__)
-
-# Maximum seconds to wait for the Gemini CLI subprocess to respond.
-GEMINI_CLI_TIMEOUT: float = 120.0
 
 
 class CLIGeminiProvider(LLMProvider):
@@ -25,7 +24,13 @@ class CLIGeminiProvider(LLMProvider):
     provider_name = "cli-gemini"
 
     def __init__(self, model: str = ""):
-        self.model = model or "gemini-3.1-pro"
+        if model and not model.lower().startswith("gemini"):
+            logger.warning(
+                "Invalid model '%s' for Gemini CLI (must start with 'gemini'). " "Using the CLI default model instead.",
+                model,
+            )
+            model = ""
+        self.model = model
         self._cli = shutil.which("gemini")
         if not self._cli:
             logger.warning(
@@ -53,26 +58,14 @@ class CLIGeminiProvider(LLMProvider):
             stderr=asyncio.subprocess.PIPE,
         )
         try:
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=GEMINI_CLI_TIMEOUT
-            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=settings.gemini_cli_timeout)
         except asyncio.TimeoutError:
-            proc.terminate()
-            try:
-                await asyncio.wait_for(proc.wait(), timeout=5.0)
-            except asyncio.TimeoutError:
-                proc.kill()
-                await proc.wait()
-            raise RuntimeError(
-                f"Gemini CLI timed out after {GEMINI_CLI_TIMEOUT}s"
-            )
+            await terminate_process_with_timeout(proc)
+            raise RuntimeError(f"Gemini CLI timed out after {settings.gemini_cli_timeout}s")
 
         if proc.returncode != 0:
             err = stderr.decode().strip()
-            raise RuntimeError(
-                f"Gemini CLI exited with code "
-                f"{proc.returncode}: {err}"
-            )
+            raise RuntimeError(f"Gemini CLI exited with code " f"{proc.returncode}: {err}")
 
         return stdout.decode().strip()
 
@@ -98,7 +91,7 @@ class CLIGeminiProvider(LLMProvider):
                 temperature,
             )
         max_tokens = min(max_tokens, MAX_TOKENS_CAP)
-        async with _llm_semaphore:
+        async with get_llm_semaphore(self.provider_name):
             # Gemini CLI takes a single prompt; combine messages
             parts = []
             for msg in messages:
@@ -107,18 +100,14 @@ class CLIGeminiProvider(LLMProvider):
                 elif msg.role == "user":
                     parts.append(msg.content)
                 elif msg.role == "assistant":
-                    parts.append(
-                        f"[Previous response]\n{msg.content}"
-                    )
+                    parts.append(f"[Previous response]\n{msg.content}")
 
             prompt = "\n\n".join(parts)
-            content = await self._run_cli(
-                prompt, max_tokens=max_tokens
-            )
+            content = await self._run_cli(prompt, max_tokens=max_tokens)
 
             return LLMResponse(
                 content=content,
-                model=self.model,
+                model=self.model or "provider default",
                 provider=self.provider_name,
                 usage=None,
             )
@@ -131,35 +120,52 @@ class CLIGeminiProvider(LLMProvider):
         **kwargs,
     ) -> AsyncIterator[str]:
         """Stream not supported by CLI; falls back to generate."""
-        response = await self.generate(
-            messages, temperature, max_tokens, **kwargs
-        )
+        response = await self.generate(messages, temperature, max_tokens, **kwargs)
         yield response.content
 
     async def test_connection(self) -> dict:
-        """Test that the Gemini CLI is available."""
+        """Test that the Gemini CLI is available.
+
+        The version check subprocess is capped at ``settings.gemini_cli_version_check_timeout``
+        seconds to mirror the timeout and cleanup behaviour of ``_run_cli``.
+        """
         if not self._cli:
             return {
                 "status": "error",
                 "message": "Gemini CLI not found in PATH",
-                "model": self.model,
+                "model": self.model or "provider default",
             }
+        proc: asyncio.subprocess.Process | None = None
         try:
             proc = await asyncio.create_subprocess_exec(
-                self._cli, "--version",
+                self._cli,
+                "--version",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, _ = await proc.communicate()
+            stdout, _ = await asyncio.wait_for(
+                proc.communicate(),
+                timeout=settings.gemini_cli_version_check_timeout,
+            )
             version = stdout.decode().strip()
             return {
                 "status": "ok",
                 "message": f"Gemini CLI available: {version}",
-                "model": self.model,
+                "model": self.model or "provider default",
+            }
+        except asyncio.TimeoutError:
+            if proc is not None:
+                await terminate_process_with_timeout(proc)
+            return {
+                "status": "error",
+                "message": (
+                    f"Gemini CLI version check timed out " f"after {settings.gemini_cli_version_check_timeout}s"
+                ),
+                "model": self.model or "provider default",
             }
         except Exception as e:
             return {
                 "status": "error",
                 "message": str(e),
-                "model": self.model,
+                "model": self.model or "provider default",
             }

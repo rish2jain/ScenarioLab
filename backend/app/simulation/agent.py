@@ -22,9 +22,7 @@ logger = logging.getLogger(__name__)
 
 # Per running event loop — a single global Semaphore binds to
 # one loop at creation time. Weak keys drop entries when the loop is GC'd.
-_llm_semaphores: weakref.WeakKeyDictionary[
-    asyncio.AbstractEventLoop, asyncio.Semaphore
-] = weakref.WeakKeyDictionary()
+_llm_semaphores: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = weakref.WeakKeyDictionary()
 
 
 # Remove entire reasoning blocks (multi-line), not only the boundary tags.
@@ -40,15 +38,11 @@ _ORPHAN_REASONING_TAG_RE = re.compile(
     re.IGNORECASE,
 )
 _NON_LATIN_HEAVY_RE = re.compile(
-    r"[\u4e00-\u9fff\u3400-\u4dbf\uac00-\ud7af\u0400-\u04ff\u0600-\u06ff"
-    r"\u0900-\u097f\u3040-\u309f\u30a0-\u30ff]"
+    r"[\u4e00-\u9fff\u3400-\u4dbf\uac00-\ud7af\u0400-\u04ff\u0600-\u06ff" r"\u0900-\u097f\u3040-\u309f\u30a0-\u30ff]"
 )
 
 
-_DEFAULT_CLOSING = (
-    "Respond in 2-3 paragraphs as your character. "
-    "Reference at least one prior argument by name."
-)
+_DEFAULT_CLOSING = "Respond in 2-3 paragraphs as your character. " "Reference at least one prior argument by name."
 
 _PHASE_CLOSING: dict[str, str] = {
     "presentation": (
@@ -72,9 +66,7 @@ _PHASE_CLOSING: dict[str, str] = {
         "Push back where the objection misreads your intent."
     ),
     "vote": (
-        "Cast your vote. Format:\n"
-        "VOTE: [for/against/abstain]\n"
-        "REASONING: [2-3 sentences explaining your vote]"
+        "Cast your vote. Format:\n" "VOTE: [for/against/abstain]\n" "REASONING: [2-3 sentences explaining your vote]"
     ),
 }
 
@@ -111,8 +103,7 @@ def sanitize_llm_response(content: Optional[str]) -> str:
         non_latin_count = len(_NON_LATIN_HEAVY_RE.findall(cleaned))
         if non_latin_count / len(alpha_chars) > 0.4:
             logger.warning(
-                "LLM response appears to be non-English (%d/%d non-Latin "
-                "chars); flagging as hallucination",
+                "LLM response appears to be non-English (%d/%d non-Latin " "chars); flagging as hallucination",
                 non_latin_count,
                 len(alpha_chars),
             )
@@ -211,8 +202,7 @@ class SimulationAgent:
             if exemplar_msgs:
                 if not isinstance(messages, list):
                     logger.warning(
-                        "Hybrid exemplar injection skipped: messages is not "
-                        "a list (%s)",
+                        "Hybrid exemplar injection skipped: messages is not " "a list (%s)",
                         type(messages).__name__,
                     )
                 elif not messages:
@@ -221,8 +211,7 @@ class SimulationAgent:
                     messages = [messages[0]] + exemplar_msgs + messages[1:]
                 else:
                     logger.warning(
-                        "Hybrid exemplar injection: first message is not system; "
-                        "prepending exemplar messages"
+                        "Hybrid exemplar injection: first message is not system; " "prepending exemplar messages"
                     )
                     messages = list(exemplar_msgs) + list(messages)
         async with _llm_limit_semaphore():
@@ -257,19 +246,11 @@ class SimulationAgent:
         # Add seed document context
         seed_ctx = customization.get("seed_context", "")
         if seed_ctx:
-            prompt += (
-                "\n\nSEED DOCUMENTS (reference material for "
-                "this simulation):\n"
-                f"{seed_ctx}\n"
-            )
+            prompt += "\n\nSEED DOCUMENTS (reference material for " "this simulation):\n" f"{seed_ctx}\n"
 
         ext_ctx = customization.get("external_research_context", "")
         if ext_ctx:
-            prompt += (
-                "\n\nEXTERNAL RESEARCH (web-sourced; do not invent facts "
-                "beyond this block):\n"
-                f"{ext_ctx}\n"
-            )
+            prompt += "\n\nEXTERNAL RESEARCH (web-sourced; do not invent facts " "beyond this block):\n" f"{ext_ctx}\n"
 
         # Add customization overrides
         if customization:
@@ -378,33 +359,19 @@ class SimulationAgent:
         # 3. Recent conversation history — show all current-round
         #    messages plus tail of prior round for continuity.
         if visible_messages:
-            current_round_msgs = [
-                m for m in visible_messages
-                if m.round_number == round_number
-            ]
-            prior_msgs = [
-                m for m in visible_messages
-                if m.round_number == round_number - 1
-            ][-5:]  # Last 5 from prior round
+            current_round_msgs = [m for m in visible_messages if m.round_number == round_number]
+            prior_msgs = [m for m in visible_messages if m.round_number == round_number - 1][
+                -5:
+            ]  # Last 5 from prior round
 
             history_parts: list[str] = []
             if prior_msgs:
-                history_parts.append(
-                    f"--- Prior round ({round_number - 1}) ---"
-                )
+                history_parts.append(f"--- Prior round ({round_number - 1}) ---")
                 for m in prior_msgs:
-                    history_parts.append(
-                        f"{m.agent_name} ({m.agent_role}): "
-                        f"{m.content[:300]}"
-                    )
-                history_parts.append(
-                    f"\n--- Current round ({round_number}) ---"
-                )
+                    history_parts.append(f"{m.agent_name} ({m.agent_role}): " f"{m.content[:300]}")
+                history_parts.append(f"\n--- Current round ({round_number}) ---")
             for m in current_round_msgs:
-                history_parts.append(
-                    f"{m.agent_name} ({m.agent_role}): "
-                    f"{m.content}"
-                )
+                history_parts.append(f"{m.agent_name} ({m.agent_role}): " f"{m.content}")
 
             if history_parts:
                 history = "\n\n".join(history_parts)
@@ -417,9 +384,7 @@ class SimulationAgent:
 
         # 4. Phase-specific instruction
         if instruction:
-            messages.append(
-                LLMMessage(role="user", content=f"INSTRUCTION: {instruction}")
-            )
+            messages.append(LLMMessage(role="user", content=f"INSTRUCTION: {instruction}"))
 
         # 5. Final prompt — phase-aware format guidance
         closing = _PHASE_CLOSING.get(phase, _DEFAULT_CLOSING)
@@ -463,12 +428,8 @@ class SimulationAgent:
             ]
 
             if arguments:
-                args_text = "\n\n".join(
-                    [f"{msg.agent_name}: {msg.content}" for msg in arguments]
-                )
-                messages.append(
-                    LLMMessage(role="user", content=f"ARGUMENTS:\n{args_text}")
-                )
+                args_text = "\n\n".join([f"{msg.agent_name}: {msg.content}" for msg in arguments])
+                messages.append(LLMMessage(role="user", content=f"ARGUMENTS:\n{args_text}"))
 
             messages.append(
                 LLMMessage(
@@ -538,9 +499,7 @@ class SimulationAgent:
         prior_stance = self.state.current_stance
 
         # Use more messages for richer context (up to 10, not just 5)
-        conversation = "\n\n".join(
-            [f"{msg.agent_name}: {msg.content}" for msg in round_messages[-10:]]
-        )
+        conversation = "\n\n".join([f"{msg.agent_name}: {msg.content}" for msg in round_messages[-10:]])
 
         # Include prior stance for cumulative awareness
         stance_ctx = ""
@@ -607,8 +566,7 @@ class SimulationAgent:
         if not self.state.current_stance and prior_stance:
             self.state.current_stance = prior_stance
             logger.warning(
-                "Stance update failed for %s after %d attempts; "
-                "preserving prior stance",
+                "Stance update failed for %s after %d attempts; " "preserving prior stance",
                 self.name,
                 max_retries + 1,
             )
@@ -622,9 +580,7 @@ class SimulationAgent:
     ):
         """Store a memory from the current round."""
         if not self.memory:
-            logger.debug(
-                f"No memory manager for agent {self.name}, " "skipping memory storage"
-            )
+            logger.debug(f"No memory manager for agent {self.name}, " "skipping memory storage")
             return
 
         try:

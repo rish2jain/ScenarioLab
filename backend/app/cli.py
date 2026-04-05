@@ -198,9 +198,7 @@ async def simulate_remote(args: argparse.Namespace, api_url: str) -> int:
                 break
 
         if status != "completed":
-            print_progress(
-                f"Simulation did not complete. Final status: {status}"
-            )
+            print_progress(f"Simulation did not complete. Final status: {status}")
             return 1
 
         # Get results
@@ -397,9 +395,7 @@ def main():
         default=None,
     )
 
-    subparsers = parser.add_subparsers(
-        dest="command", help="Available commands"
-    )
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # simulate command
     sim_parser = subparsers.add_parser("simulate", help="Run a simulation")
