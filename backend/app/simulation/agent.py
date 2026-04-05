@@ -18,15 +18,41 @@ from app.simulation.models import (
 
 logger = logging.getLogger(__name__)
 
-# Per running event loop — a single global Semaphore binds to one loop at creation time.
+# Per running event loop — a single global Semaphore binds to
+# one loop at creation time.
 _llm_semaphores: dict[int, asyncio.Semaphore] = {}
 
 
-_THINK_TAG_RE = re.compile(r"</?think>", re.IGNORECASE)
+# Remove entire reasoning blocks (multi-line), not only the boundary tags.
+_THINK_BLOCK_RE = re.compile(
+    r"(?:"
+    r"<think\b[^>]*>.*?(?:`</redacted_thinking>`|</redacted_thinking>)"
+    r"|<redacted_thinking\b[^>]*>.*?</redacted_thinking>"
+    r")",
+    re.DOTALL | re.IGNORECASE,
+)
+_ORPHAN_REASONING_TAG_RE = re.compile(
+    r"</?(?:think|redacted_thinking)\b[^>]*>",
+    re.IGNORECASE,
+)
 _NON_LATIN_HEAVY_RE = re.compile(
     r"[\u4e00-\u9fff\u3400-\u4dbf\uac00-\ud7af\u0400-\u04ff\u0600-\u06ff"
     r"\u0900-\u097f\u3040-\u309f\u30a0-\u30ff]"
 )
+
+
+def _strip_reasoning_markup(content: str) -> str:
+    """Remove think/redacted_thinking blocks and stray tags."""
+    cleaned = content
+    for _ in range(32):
+        nxt = _THINK_BLOCK_RE.sub("", cleaned)
+        if nxt == cleaned:
+            break
+        cleaned = nxt
+    cleaned = _ORPHAN_REASONING_TAG_RE.sub("", cleaned)
+    cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
 
 
 def sanitize_llm_response(content: str) -> str:
@@ -38,8 +64,8 @@ def sanitize_llm_response(content: str) -> str:
     """
     if not content:
         return ""
-    # Strip model think-tags that leak through
-    cleaned = _THINK_TAG_RE.sub("", content).strip()
+    # Strip full reasoning blocks (including inner text), then stray tags
+    cleaned = _strip_reasoning_markup(str(content))
     # Detect language drift: if >40% of characters are non-Latin script,
     # flag the response rather than passing garbage downstream
     alpha_chars = [c for c in cleaned if c.isalpha()]

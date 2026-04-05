@@ -5,8 +5,14 @@ from app.simulation.agent import parse_vote_from_response, sanitize_llm_response
 
 class TestSanitizeLlmResponse:
     def test_strips_think_tags(self):
-        raw = "<think>internal reasoning</think>The actual response."
-        assert sanitize_llm_response(raw) == "internal reasoningThe actual response."
+        raw = "<think>internal reasoning</redacted_thinking>The actual response."
+        assert sanitize_llm_response(raw) == "The actual response."
+
+    def test_strips_multiline_think_block(self):
+        raw = (
+            "<think>line1\nline2\n</think>\nVisible answer."
+        )
+        assert sanitize_llm_response(raw) == "Visible answer."
 
     def test_strips_closing_think_tag_only(self):
         raw = "Some leaked reasoning</think>\nThe real answer."
