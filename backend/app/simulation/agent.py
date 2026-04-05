@@ -1,10 +1,14 @@
 """Simulation agent with LLM-driven reasoning."""
 
+import asyncio
 import logging
+import re
 import uuid
 from datetime import datetime, timezone
 
-from app.llm.provider import LLMMessage, LLMProvider
+from app.config import settings
+from app.llm.inference_router import InferenceRouter
+from app.llm.provider import LLMMessage, LLMResponse
 from app.personas.archetypes import ArchetypeDefinition
 from app.simulation.models import (
     AgentConfig,
@@ -14,6 +18,115 @@ from app.simulation.models import (
 
 logger = logging.getLogger(__name__)
 
+# Per running event loop — a single global Semaphore binds to
+# one loop at creation time.
+_llm_semaphores: dict[int, asyncio.Semaphore] = {}
+
+
+# Remove entire reasoning blocks (multi-line), not only the boundary tags.
+_THINK_BLOCK_RE = re.compile(
+    r"(?:"
+    r"<think\b[^>]*>.*?(?:`</redacted_thinking>`|</redacted_thinking>)"
+    r"|<redacted_thinking\b[^>]*>.*?</redacted_thinking>"
+    r")",
+    re.DOTALL | re.IGNORECASE,
+)
+_ORPHAN_REASONING_TAG_RE = re.compile(
+    r"</?(?:think|redacted_thinking)\b[^>]*>",
+    re.IGNORECASE,
+)
+_NON_LATIN_HEAVY_RE = re.compile(
+    r"[\u4e00-\u9fff\u3400-\u4dbf\uac00-\ud7af\u0400-\u04ff\u0600-\u06ff"
+    r"\u0900-\u097f\u3040-\u309f\u30a0-\u30ff]"
+)
+
+
+def _strip_reasoning_markup(content: str) -> str:
+    """Remove think/redacted_thinking blocks and stray tags."""
+    cleaned = content
+    for _ in range(32):
+        nxt = _THINK_BLOCK_RE.sub("", cleaned)
+        if nxt == cleaned:
+            break
+        cleaned = nxt
+    cleaned = _ORPHAN_REASONING_TAG_RE.sub("", cleaned)
+    cleaned = re.sub(r"[ \t]+\n", "\n", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
+def sanitize_llm_response(content: str) -> str:
+    """Strip think-tags and detect likely non-English hallucinations.
+
+    Returns cleaned content.  If the response is overwhelmingly non-Latin
+    script (>40 % of alpha chars), replaces it with a flag string so
+    downstream code can handle it.
+    """
+    if not content:
+        return ""
+    # Strip full reasoning blocks (including inner text), then stray tags
+    cleaned = _strip_reasoning_markup(str(content))
+    # Detect language drift: if >40% of characters are non-Latin script,
+    # flag the response rather than passing garbage downstream
+    alpha_chars = [c for c in cleaned if c.isalpha()]
+    if alpha_chars:
+        non_latin_count = len(_NON_LATIN_HEAVY_RE.findall(cleaned))
+        if non_latin_count / len(alpha_chars) > 0.4:
+            logger.warning(
+                "LLM response appears to be non-English (%d/%d non-Latin "
+                "chars); flagging as hallucination",
+                non_latin_count,
+                len(alpha_chars),
+            )
+            return "[HALLUCINATION_DETECTED: non-English response]"
+    return cleaned
+
+
+def parse_vote_from_response(content: str) -> str:
+    """Extract for | against | abstain from model output.
+
+    Prefer an explicit ``VOTE:`` line; fall back to word-boundary matching
+    with ``against/oppose`` checked *before* ``for`` to avoid false positives
+    like "I oppose this for good reasons" matching "for".
+    """
+    if not content or not str(content).strip():
+        return "abstain"
+    raw = sanitize_llm_response(str(content))
+    if not raw or raw.startswith("[HALLUCINATION_DETECTED"):
+        return "abstain"
+    low = raw.lower()
+    # 1. Structured VOTE: line (highest priority)
+    m = re.search(
+        r"(?im)^\s*VOTE\s*:\s*(for|against|abstain)\b",
+        raw,
+    )
+    if not m:
+        m = re.search(r"(?i)\bVOTE\s*:\s*(for|against|abstain)\b", raw)
+    if m:
+        return m.group(1).lower()
+    # 2. Fallback: word boundaries, checked in safe order
+    #    against/oppose BEFORE for to prevent "against X for Y" false positives
+    if re.search(r"\babstain\b", low):
+        return "abstain"
+    if re.search(r"\bagainst\b", low) or re.search(r"\boppose\b", low):
+        return "against"
+    if re.search(r"\b(?:vote|am|voting)\s+for\b", low) or re.search(
+        r"\byes\b", low
+    ):
+        return "for"
+    if re.search(r"\bsupport\b", low) or re.search(r"\bapprove\b", low):
+        return "for"
+    return "abstain"
+
+
+def _llm_limit_semaphore() -> asyncio.Semaphore:
+    loop = asyncio.get_running_loop()
+    key = id(loop)
+    if key not in _llm_semaphores:
+        n = max(1, int(settings.simulation_llm_parallelism))
+        _llm_semaphores[key] = asyncio.Semaphore(n)
+    return _llm_semaphores[key]
+
 
 class SimulationAgent:
     """An agent with persona, memory, and LLM-driven reasoning."""
@@ -22,13 +135,13 @@ class SimulationAgent:
         self,
         config: AgentConfig,
         archetype: ArchetypeDefinition,
-        llm_provider: LLMProvider,
+        inference_router: InferenceRouter,
         memory_manager=None,
     ):
         self.id = config.id or str(uuid.uuid4())
         self.name = config.name
         self.archetype = archetype
-        self.llm = llm_provider
+        self.router = inference_router
         self.memory = memory_manager
         self.customization = config.customization
 
@@ -46,6 +159,46 @@ class SimulationAgent:
         )
 
         logger.info(f"Initialized agent {self.name} ({archetype.role})")
+
+    async def _throttled_generate(
+        self,
+        messages: list[LLMMessage],
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+        *,
+        round_number: int = 1,
+        task_type: str = "response",
+        **kwargs,
+    ) -> LLMResponse:
+        provider = self.router.get_provider(round_number, task_type)
+        if self.router.should_inject_exemplars(
+            self.id, round_number, task_type
+        ):
+            exemplar_msgs = self.router.build_exemplar_messages(self.id)
+            if exemplar_msgs:
+                if not isinstance(messages, list):
+                    logger.warning(
+                        "Hybrid exemplar injection skipped: messages is not "
+                        "a list (%s)",
+                        type(messages).__name__,
+                    )
+                elif not messages:
+                    messages = list(exemplar_msgs)
+                elif getattr(messages[0], "role", None) == "system":
+                    messages = [messages[0]] + exemplar_msgs + messages[1:]
+                else:
+                    logger.warning(
+                        "Hybrid exemplar injection: first message is not system; "
+                        "prepending exemplar messages"
+                    )
+                    messages = list(exemplar_msgs) + list(messages)
+        async with _llm_limit_semaphore():
+            return await provider.generate(
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                **kwargs,
+            )
 
     def _build_persona_prompt(self, customization: dict) -> str:
         """Build the full system prompt from archetype template."""
@@ -79,10 +232,18 @@ class SimulationAgent:
                 f"{seed_ctx}\n"
             )
 
+        ext_ctx = customization.get("external_research_context", "")
+        if ext_ctx:
+            prompt += (
+                "\n\nEXTERNAL RESEARCH (web-sourced; do not invent facts "
+                "beyond this block):\n"
+                f"{ext_ctx}\n"
+            )
+
         # Add customization overrides
         if customization:
             prompt += "\n\nCUSTOMIZATION:\n"
-            skip = {"context", "seed_context"}
+            skip = {"context", "seed_context", "external_research_context"}
             for key, value in customization.items():
                 if key not in skip:
                     prompt += f"- {key}: {value}\n"
@@ -108,15 +269,20 @@ class SimulationAgent:
                 instruction=instruction,
             )
 
-            # Call LLM
-            response = await self.llm.generate(
+            # Call LLM (global concurrency cap across agents)
+            response = await self._throttled_generate(
                 messages=messages,
                 temperature=0.7,
                 max_tokens=1024,
+                round_number=round_number,
+                task_type="response",
             )
 
+            # Sanitize: strip think-tags, detect language hallucinations
+            cleaned = sanitize_llm_response(response.content)
+
             # Determine message type based on content
-            message_type = self._classify_message_type(response.content, phase)
+            message_type = self._classify_message_type(cleaned, phase)
 
             # Create the message
             message = SimulationMessage(
@@ -125,7 +291,7 @@ class SimulationAgent:
                 agent_id=self.id,
                 agent_name=self.name,
                 agent_role=self.archetype.role,
-                content=response.content.strip(),
+                content=cleaned,
                 message_type=message_type,
                 visibility="public",
             )
@@ -236,7 +402,11 @@ class SimulationAgent:
             return "statement"
 
     async def cast_vote(
-        self, proposal: str, arguments: list[SimulationMessage]
+        self,
+        proposal: str,
+        arguments: list[SimulationMessage],
+        *,
+        round_number: int = 1,
     ) -> dict:
         """Have the agent vote on a proposal."""
         try:
@@ -261,8 +431,8 @@ class SimulationAgent:
                 LLMMessage(
                     role="user",
                     content=(
-                        "Cast your vote. Respond with ONLY one of: "
-                        "'for', 'against', or 'abstain', followed by a "
+                        "Cast your vote in English only. Respond with ONLY "
+                        "one of: 'for', 'against', or 'abstain', followed by "
                         "brief reasoning.\n\n"
                         "Format: VOTE: [for/against/abstain]\n"
                         "REASONING: [your reasoning]"
@@ -270,25 +440,21 @@ class SimulationAgent:
                 )
             )
 
-            response = await self.llm.generate(
+            response = await self._throttled_generate(
                 messages=messages,
                 temperature=0.5,
                 max_tokens=256,
+                round_number=round_number,
+                task_type="vote",
             )
 
-            # Parse the vote
-            content = response.content.lower()
-            vote = "abstain"
-            if "for" in content or "support" in content or "yes" in content:
-                vote = "for"
-            elif ("against" in content or "oppose" in content
-                  or "no" in content):
-                vote = "against"
+            vote = parse_vote_from_response(response.content)
 
             # Extract reasoning
             reasoning = response.content
-            if "reasoning:" in content:
-                reasoning = response.content.split("reasoning:", 1)[1].strip()
+            idx = response.content.lower().find("reasoning:")
+            if idx != -1:
+                reasoning = response.content[idx + 10:].strip()
 
             result = {
                 "agent_id": self.id,
@@ -311,43 +477,99 @@ class SimulationAgent:
                 "reasoning": f"Error during voting: {str(e)}",
             }
 
-    async def update_stance(self, round_messages: list[SimulationMessage]):
-        """Update agent's current stance based on round events."""
-        try:
-            if not round_messages:
-                return
+    async def update_stance(
+        self,
+        round_messages: list[SimulationMessage],
+        *,
+        round_number: int = 1,
+        max_retries: int = 2,
+    ):
+        """Update agent's current stance based on round events.
 
-            # Build stance analysis prompt
-            conversation = "\n\n".join([
-                f"{msg.agent_name}: {msg.content}"
-                for msg in round_messages[-5:]
-            ])
+        Retries on empty/hallucinated results.  Preserves prior stance on
+        total failure rather than leaving it blank.
+        """
+        if not round_messages:
+            return
 
-            messages = [
-                LLMMessage(role="system", content=self.state.persona_prompt),
-                LLMMessage(
-                    role="user",
-                    content=(
-                        "Based on this recent conversation, briefly "
-                        "summarize your current stance/position "
-                        f"(1-2 sentences).\n\nCONVERSATION:\n{conversation}"
-                    ),
+        prior_stance = self.state.current_stance
+
+        # Use more messages for richer context (up to 10, not just 5)
+        conversation = "\n\n".join([
+            f"{msg.agent_name}: {msg.content}"
+            for msg in round_messages[-10:]
+        ])
+
+        # Include prior stance for cumulative awareness
+        stance_ctx = ""
+        if prior_stance:
+            stance_ctx = (
+                f"\n\nYOUR PREVIOUS STANCE:\n{prior_stance}\n\n"
+                "Update your stance based on what happened this round. "
+                "Build on your previous position — note what changed."
+            )
+
+        messages = [
+            LLMMessage(role="system", content=self.state.persona_prompt),
+            LLMMessage(
+                role="user",
+                content=(
+                    "Based on this round's conversation, summarize your "
+                    "current stance/position (2-3 sentences). Be specific "
+                    "about what you support or oppose and why."
+                    f"{stance_ctx}"
+                    f"\n\nCONVERSATION:\n{conversation}"
                 ),
-            ]
+            ),
+        ]
 
-            response = await self.llm.generate(
-                messages=messages,
-                temperature=0.5,
-                max_tokens=128,
+        for attempt in range(max_retries + 1):
+            try:
+                response = await self._throttled_generate(
+                    messages=messages,
+                    temperature=0.5,
+                    max_tokens=200,
+                    round_number=round_number,
+                    task_type="stance",
+                )
+
+                cleaned = sanitize_llm_response(response.content)
+                if cleaned and not cleaned.startswith("[HALLUCINATION_DETECTED"):
+                    self.state.current_stance = cleaned
+                    logger.debug(
+                        "Updated stance for %s (round %d, attempt %d): %s",
+                        self.name,
+                        round_number,
+                        attempt + 1,
+                        cleaned[:80],
+                    )
+                    return
+
+                logger.warning(
+                    "Empty/hallucinated stance for %s (round %d, attempt %d)",
+                    self.name,
+                    round_number,
+                    attempt + 1,
+                )
+
+            except Exception as e:
+                logger.error(
+                    "Failed to update stance for %s (round %d, attempt %d): %s",
+                    self.name,
+                    round_number,
+                    attempt + 1,
+                    e,
+                )
+
+        # All retries exhausted — preserve prior stance rather than blanking
+        if not self.state.current_stance and prior_stance:
+            self.state.current_stance = prior_stance
+            logger.warning(
+                "Stance update failed for %s after %d attempts; "
+                "preserving prior stance",
+                self.name,
+                max_retries + 1,
             )
-
-            self.state.current_stance = response.content.strip()
-            logger.debug(
-                f"Updated stance for {self.name}: {self.state.current_stance}"
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to update stance for agent {self.name}: {e}")
 
     async def store_memory(
         self,
