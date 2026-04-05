@@ -119,9 +119,13 @@ class ReportAgent:
                 ),
             )
 
+        # Use all messages for objective evaluation, with per-message
+        # truncation to manage context size
+        all_msgs = self._get_all_messages()
         transcript = "\n".join(
-            f"{m.agent_name}: {m.content}"
-            for m in self._get_all_messages()[-40:]
+            f"[R{m.round_number}] {m.agent_name} ({m.agent_role}): "
+            f"{m.content[:400]}"
+            for m in all_msgs
         )
 
         prompt = f"""You are evaluating whether this war-game simulation answered
