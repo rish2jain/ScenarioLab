@@ -456,45 +456,94 @@ class SimulationAgent:
         round_messages: list[SimulationMessage],
         *,
         round_number: int = 1,
+        max_retries: int = 2,
     ):
-        """Update agent's current stance based on round events."""
-        try:
-            if not round_messages:
-                return
+        """Update agent's current stance based on round events.
 
-            # Build stance analysis prompt
-            conversation = "\n\n".join([
-                f"{msg.agent_name}: {msg.content}"
-                for msg in round_messages[-5:]
-            ])
+        Retries on empty/hallucinated results.  Preserves prior stance on
+        total failure rather than leaving it blank.
+        """
+        if not round_messages:
+            return
 
-            messages = [
-                LLMMessage(role="system", content=self.state.persona_prompt),
-                LLMMessage(
-                    role="user",
-                    content=(
-                        "Based on this recent conversation, briefly "
-                        "summarize your current stance/position "
-                        f"(1-2 sentences).\n\nCONVERSATION:\n{conversation}"
-                    ),
+        prior_stance = self.state.current_stance
+
+        # Use more messages for richer context (up to 10, not just 5)
+        conversation = "\n\n".join([
+            f"{msg.agent_name}: {msg.content}"
+            for msg in round_messages[-10:]
+        ])
+
+        # Include prior stance for cumulative awareness
+        stance_ctx = ""
+        if prior_stance:
+            stance_ctx = (
+                f"\n\nYOUR PREVIOUS STANCE:\n{prior_stance}\n\n"
+                "Update your stance based on what happened this round. "
+                "Build on your previous position — note what changed."
+            )
+
+        messages = [
+            LLMMessage(role="system", content=self.state.persona_prompt),
+            LLMMessage(
+                role="user",
+                content=(
+                    "Based on this round's conversation, summarize your "
+                    "current stance/position (2-3 sentences). Be specific "
+                    "about what you support or oppose and why."
+                    f"{stance_ctx}"
+                    f"\n\nCONVERSATION:\n{conversation}"
                 ),
-            ]
+            ),
+        ]
 
-            response = await self._throttled_generate(
-                messages=messages,
-                temperature=0.5,
-                max_tokens=128,
-                round_number=round_number,
-                task_type="stance",
+        for attempt in range(max_retries + 1):
+            try:
+                response = await self._throttled_generate(
+                    messages=messages,
+                    temperature=0.5,
+                    max_tokens=200,
+                    round_number=round_number,
+                    task_type="stance",
+                )
+
+                cleaned = sanitize_llm_response(response.content)
+                if cleaned and not cleaned.startswith("[HALLUCINATION_DETECTED"):
+                    self.state.current_stance = cleaned
+                    logger.debug(
+                        "Updated stance for %s (round %d, attempt %d): %s",
+                        self.name,
+                        round_number,
+                        attempt + 1,
+                        cleaned[:80],
+                    )
+                    return
+
+                logger.warning(
+                    "Empty/hallucinated stance for %s (round %d, attempt %d)",
+                    self.name,
+                    round_number,
+                    attempt + 1,
+                )
+
+            except Exception as e:
+                logger.error(
+                    "Failed to update stance for %s (round %d, attempt %d): %s",
+                    self.name,
+                    round_number,
+                    attempt + 1,
+                    e,
+                )
+
+        # All retries exhausted — preserve prior stance rather than blanking
+        if not self.state.current_stance and prior_stance:
+            self.state.current_stance = prior_stance
+            logger.warning(
+                "Stance update failed for %s after %d attempts; "
+                "preserving prior stance",
+                self.name,
+                max_retries + 1,
             )
-
-            self.state.current_stance = response.content.strip()
-            logger.debug(
-                f"Updated stance for {self.name}: {self.state.current_stance}"
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to update stance for agent {self.name}: {e}")
 
     async def store_memory(
         self,
