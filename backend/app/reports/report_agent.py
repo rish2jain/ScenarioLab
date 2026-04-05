@@ -23,6 +23,14 @@ from app.reports.deliverables import (
 from app.reports.models import (
     ExecutiveSummary,
     KeyRecommendation,
+    ObjectiveAssessment,
+    ReportMemoryByAgent,
+    ReportMemoryToolContext,
+    ReportRoundAuditEntry,
+    ReportToolContext,
+    ReportToolContextAgent,
+    ReportToolContextLastMessage,
+    ReportToolContextSummary,
     RiskItem,
     RiskRegister,
     ScenarioMatrix,
@@ -32,6 +40,7 @@ from app.reports.models import (
     StakeholderPosition,
 )
 from app.simulation.models import SimulationState
+from app.simulation.objectives import format_simulation_objective_for_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -62,11 +71,20 @@ class ReportAgent:
 
         try:
             # Generate each section
+            report.objective_assessment = (
+                await self.generate_objective_assessment()
+            )
             report.executive_summary = await self.generate_executive_summary()
             report.risk_register = await self.generate_risk_register()
             report.scenario_matrix = await self.generate_scenario_matrix()
             report.stakeholder_heatmap = (
                 await self.generate_stakeholder_heatmap()
+            )
+            mem_ctx = await self._memory_tool_context()
+            report.tool_context = ReportToolContext(
+                summary=self.collect_tool_context(),
+                round_audit=self.tool_audit_round_summary(),
+                memory=mem_ctx,
             )
             report.status = "draft"
 
@@ -79,6 +97,86 @@ class ReportAgent:
             report.status = "draft"  # Still return partial report
 
         return report
+
+    def _objective_block_for_report(self) -> str:
+        """Objective text for prompts (description + parsed objective)."""
+        return format_simulation_objective_for_prompt(
+            self.simulation.config.description,
+            self.simulation.config.parameters,
+        )
+
+    async def generate_objective_assessment(self) -> ObjectiveAssessment:
+        """Assess whether the simulation addressed the user's stated objective."""
+        objective_block = self._objective_block_for_report()
+        oid = self.simulation.config.id
+        if not objective_block.strip():
+            return ObjectiveAssessment(
+                simulation_id=oid,
+                stated_objective="",
+                conclusion=(
+                    "No explicit simulation objective was configured; "
+                    "assessment is not applicable."
+                ),
+            )
+
+        transcript = "\n".join(
+            f"{m.agent_name}: {m.content}"
+            for m in self._get_all_messages()[-40:]
+        )
+
+        prompt = f"""You are evaluating whether this war-game simulation answered
+the user's stated objective.
+
+USER OBJECTIVE AND STRUCTURED PARSE:
+{objective_block}
+
+TRANSCRIPT EXCERPT (recent messages):
+{transcript[:12000]}
+
+Respond with valid JSON only:
+{{
+  "stated_objective": "one-paragraph restatement of what success looks like",
+  "success_metrics_addressed": ["metric or outcome where the discussion was substantive"],
+  "gaps": ["where the simulation did not resolve the objective or left key questions open"],
+  "conclusion": "2-4 sentences: did we answer the user's question, and what is still missing?"
+}}"""
+
+        try:
+            response = await self.llm.generate(
+                messages=[
+                    LLMMessage(
+                        role="system",
+                        content=(
+                            "You are a rigorous strategy consultant. "
+                            "Respond with valid JSON only."
+                        ),
+                    ),
+                    LLMMessage(role="user", content=prompt),
+                ],
+                temperature=0.25,
+                max_tokens=1200,
+            )
+            content = self._clean_json_response(response.content)
+            data = json.loads(content)
+            return ObjectiveAssessment(
+                simulation_id=oid,
+                stated_objective=str(data.get("stated_objective", "")),
+                success_metrics_addressed=list(
+                    data.get("success_metrics_addressed") or []
+                ),
+                gaps=list(data.get("gaps") or []),
+                conclusion=str(data.get("conclusion", "")),
+            )
+        except Exception as e:
+            logger.error(f"Error generating objective assessment: {e}")
+            return ObjectiveAssessment(
+                simulation_id=oid,
+                stated_objective=objective_block[:500],
+                conclusion=(
+                    "Objective assessment could not be generated automatically; "
+                    f"see stated objective above. ({e})"
+                ),
+            )
 
     async def generate_executive_summary(self) -> ExecutiveSummary:
         """Generate executive summary with max 3 key recommendations."""
@@ -98,10 +196,17 @@ class ReportAgent:
             "You are a senior strategy consultant writing an executive "
             "summary."
         )
+        objective_block = self._objective_block_for_report()
+        obj_section = ""
+        if objective_block.strip():
+            obj_section = "\n\nSTATED OBJECTIVE (primary user question):\n"
+            obj_section += objective_block
+
         prompt = f"""{prompt_start}
 
 SIMULATION CONTEXT:
 {context}
+{obj_section}
 
 KEY FINDINGS (extracted by analysis):
 {json.dumps(findings, indent=2)}
@@ -109,9 +214,10 @@ KEY FINDINGS (extracted by analysis):
 TASK:
 Write a compelling executive summary (max 1000 words) that:
 1. Provides a concise overview of the simulation and its purpose
-2. Highlights the most critical dynamics and outcomes
-3. Synthesizes stakeholder positions and key tensions
-4. Presents clear strategic implications
+2. Explicitly relates findings to the stated objective (if one was provided)
+3. Highlights the most critical dynamics and outcomes
+4. Synthesizes stakeholder positions and key tensions
+5. Presents clear strategic implications
 
 The summary should be written in a professional consulting style,
 suitable for C-suite executives.
@@ -490,15 +596,20 @@ Ensure the analysis reflects the actual dynamics observed in the simulation."""
 
     def _build_simulation_context(self) -> str:
         """Build a text summary of the simulation for LLM context."""
+        obj = self._objective_block_for_report()
         lines = [
             f"Simulation: {self.simulation.config.name}",
             f"Description: {self.simulation.config.description}",
+        ]
+        if obj.strip():
+            lines.append(f"Objective and parsed fields:\n{obj}")
+        lines.extend([
             f"Environment: {self.simulation.config.environment_type.value}",
             f"Total Rounds: {len(self.simulation.rounds)}",
             f"Status: {self.simulation.status.value}",
             "",
             "Agents:",
-        ]
+        ])
 
         for agent in self.simulation.agents:
             lines.append(f"  - {agent.name} ({agent.archetype_id})")
@@ -508,14 +619,38 @@ Ensure the analysis reflects the actual dynamics observed in the simulation."""
                 coalitions = ', '.join(agent.coalition_members)
                 lines.append(f"    Coalitions: {coalitions}")
 
-        lines.extend(["", "Key Messages by Round:"])
+        lines.extend(["", "Messages by Round:"])
 
-        for round_state in self.simulation.rounds[-3:]:  # Last 3 rounds
-            lines.append(f"\nRound {round_state.round_number}:")
-            for msg in round_state.messages[-5:]:  # Last 5 messages per round
+        for round_state in self.simulation.rounds:
+            lines.append(
+                f"\nRound {round_state.round_number} "
+                f"({len(round_state.messages)} messages):"
+            )
+            for msg in round_state.messages:
+                # 400 chars preserves substance while managing
+                # overall context size for typical 10-round sims
+                excerpt = msg.content[:400]
+                if len(msg.content) > 400:
+                    excerpt += "..."
                 lines.append(
-                    f"  [{msg.agent_name}] {msg.content[:100]}..."
+                    f"  [{msg.agent_name} ({msg.agent_role})] "
+                    f"{excerpt}"
                 )
+
+            # Include round decisions/votes if present
+            for dec in round_state.decisions:
+                ev = dec.get("evaluation", {})
+                outcome = ev.get("outcome", "")
+                if outcome:
+                    lines.append(f"  >> Outcome: {outcome}")
+                vote = ev.get("vote_result", {})
+                if vote:
+                    lines.append(
+                        f"  >> Vote: {vote.get('result', '?')} "
+                        f"(for={vote.get('for', 0)} "
+                        f"against={vote.get('against', 0)} "
+                        f"abstain={vote.get('abstain', 0)})"
+                    )
 
         return "\n".join(lines)
 
@@ -525,6 +660,75 @@ Ensure the analysis reflects the actual dynamics observed in the simulation."""
         for round_state in self.simulation.rounds:
             messages.extend(round_state.messages)
         return messages
+
+    def collect_tool_context(self) -> ReportToolContextSummary:
+        """Structured slices for interactive report tools and UI drill-down."""
+        msgs = self._get_all_messages()
+        tail = msgs[-8:] if msgs else []
+        return ReportToolContextSummary(
+            simulation_id=self.simulation.config.id,
+            simulation_name=self.simulation.config.name,
+            total_messages=len(msgs),
+            rounds_recorded=len(self.simulation.rounds),
+            agents=[
+                ReportToolContextAgent(
+                    id=a.id,
+                    name=a.name,
+                    archetype=a.archetype_id,
+                )
+                for a in self.simulation.agents
+            ],
+            last_messages_preview=[
+                ReportToolContextLastMessage.model_validate(
+                    {
+                        "from": m.agent_name,
+                        "phase": getattr(m, "phase", ""),
+                        "excerpt": (m.content or "")[:240],
+                    }
+                )
+                for m in tail
+            ],
+        )
+
+    def tool_audit_round_summary(self) -> list[ReportRoundAuditEntry]:
+        """Per-round message counts for audit-style reporting."""
+        return [
+            ReportRoundAuditEntry.model_validate(
+                {
+                    "round": rs.round_number,
+                    "phase": rs.phase,
+                    "messages": len(rs.messages),
+                }
+            )
+            for rs in self.simulation.rounds
+        ]
+
+    async def _memory_tool_context(self) -> ReportMemoryToolContext:
+        """Recent persisted agent memories for report drill-down (best-effort)."""
+        try:
+            # Lazy import to avoid circular imports / import-order issues with the db layer.
+            from app.db.memories import AgentMemoryRepository
+
+            repo = AgentMemoryRepository()
+            sid = self.simulation.config.id
+            by_agent: list[ReportMemoryByAgent] = []
+            for a in self.simulation.agents[:8]:
+                mems = await repo.get_memories(sid, a.id, limit=3)
+                if not mems:
+                    continue
+                by_agent.append(
+                    ReportMemoryByAgent(
+                        agent_id=a.id,
+                        agent_name=a.name,
+                        snippets=[
+                            (m.get("content") or "")[:300] for m in mems
+                        ],
+                    )
+                )
+            return ReportMemoryToolContext(by_agent=by_agent)
+        except Exception as e:
+            logger.debug("memory tool context skipped: %s", e)
+            return ReportMemoryToolContext(by_agent=[], skipped=str(e))
 
     def _clean_json_response(self, content: str) -> str:
         """Clean up LLM response to extract valid JSON."""
