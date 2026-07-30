@@ -5,8 +5,6 @@ import {
   writeSimulationDraftRaw,
 } from './useWizardDraft';
 
-const KEY = 'simulation_draft';
-
 afterEach(() => {
   vi.unstubAllGlobals();
 });

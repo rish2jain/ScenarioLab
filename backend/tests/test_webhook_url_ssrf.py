@@ -27,9 +27,7 @@ def test_accepts_public_https(monkeypatch: pytest.MonkeyPatch):
         ("http://[::1]/hook", "127.0.0.1", "blocked"),
     ],
 )
-def test_rejects_unsafe_urls(
-    url: str, resolver_ip: str, match: str, monkeypatch: pytest.MonkeyPatch
-):
+def test_rejects_unsafe_urls(url: str, resolver_ip: str, match: str, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         "app.api_integrations.webhook_url.socket.getaddrinfo",
         lambda *a, **k: [(0, 0, 0, "", (resolver_ip, 80))],

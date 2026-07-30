@@ -478,6 +478,7 @@ async def list_simulations(
     """List simulations with pagination (``items``, ``total``, ``limit``, ``offset``)."""
     return await simulation_engine.list_simulations(limit=limit, offset=offset)
 
+
 @router.get("/{simulation_id}", response_model=SimulationState)
 async def get_simulation(simulation_id: str) -> SimulationState:
     """Get a simulation by ID."""

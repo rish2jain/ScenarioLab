@@ -279,6 +279,7 @@ async def list_reports(
         "offset": offset,
     }
 
+
 @router.get("/reports/{report_id}", response_model=SimulationReport)
 async def get_report(report_id: str):
     """Get a specific report by ID (cache + DB fallback)."""

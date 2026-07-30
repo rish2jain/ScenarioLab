@@ -1018,9 +1018,7 @@ class SimulationEngine:
             return in_memory
         return await self._repo.get(simulation_id)
 
-    async def list_simulations(
-        self, *, limit: int | None = 50, offset: int = 0
-    ) -> dict:
+    async def list_simulations(self, *, limit: int | None = 50, offset: int = 0) -> dict:
         """List simulations (merge in-memory running + DB stored) with pagination.
 
         Returns ``{"items": [...], "total": int, "limit": int|None, "offset": int}``.
