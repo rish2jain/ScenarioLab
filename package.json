@@ -16,8 +16,8 @@
     "cleanup:full": "bash scripts/cleanup.sh --full"
   },
   "devDependencies": {
-    "@playwright/test": "^1.59.1",
-    "@types/node": "^25.5.2",
-    "concurrently": "^8.2.2"
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.1.2",
+    "concurrently": "^10.0.4"
   }
 }

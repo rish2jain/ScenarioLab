@@ -16,11 +16,8 @@ from app.db.annotations import AnnotationRepository
 from app.db.audit import AuditTrailRepository
 from app.db.branches import BranchRepository
 from app.db.chat import ChatHistoryRepository
-from app.db.connection import (
-    close_database,
-    get_db,
-    init_schema as _init_schema,
-)
+from app.db.connection import close_database, get_db
+from app.db.connection import init_schema as _init_schema
 from app.db.memories import AgentMemoryRepository
 from app.db.seeds import SeedRepository
 from app.db.simulations import SimulationRepository

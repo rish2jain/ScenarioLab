@@ -11,8 +11,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.db.audit import AuditTrailRepository
-from app.db.audit import compute_audit_event_hash
+from app.db.audit import AuditTrailRepository, compute_audit_event_hash
 
 logger = logging.getLogger(__name__)
 

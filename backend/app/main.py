@@ -10,8 +10,7 @@ from starlette.responses import JSONResponse, Response
 from app.analytics.router import router as analytics_router
 from app.api_integrations.router import router as api_v1_router
 from app.config import settings
-from app.db.connection import close_database, init_schema
-from app.db.connection import get_db
+from app.db.connection import close_database, get_db, init_schema
 from app.graph.graphiti_service import start_graphiti, stop_graphiti
 from app.graph.neo4j_client import Neo4jClient, register_application_neo4j_client
 from app.graph.router import (

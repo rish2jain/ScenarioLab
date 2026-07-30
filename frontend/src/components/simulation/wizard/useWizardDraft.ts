@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   normalizeSimulationEnvironmentType,
   type SimulationEnvironmentId,
@@ -8,6 +8,13 @@ import {
 import { INLINE_MONTE_CARLO_MAX_ITERATIONS, type ObjectiveMode } from './types';
 
 const DRAFT_KEY = 'simulation_draft';
+
+function clampMonteCarloIterations(value: number): number {
+  return Math.min(
+    INLINE_MONTE_CARLO_MAX_ITERATIONS,
+    Math.max(10, value),
+  );
+}
 
 /** Read draft JSON; returns null on missing data or storage denial. */
 export function readSimulationDraftRaw(): string | null {
@@ -44,7 +51,7 @@ export function useWizardDraft() {
   const [environmentType, setEnvironmentType] =
     useState<SimulationEnvironmentId>('boardroom');
   const [modelSelection, setModelSelection] = useState('');
-  const [monteCarloIterations, setMonteCarloIterations] = useState(20);
+  const [monteCarloIterations, setMonteCarloIterationsState] = useState(20);
   const [monteCarloEnabled, setMonteCarloEnabled] = useState(false);
   const [includePostRunReport, setIncludePostRunReport] = useState(true);
   const [includePostRunAnalytics, setIncludePostRunAnalytics] = useState(true);
@@ -52,42 +59,43 @@ export function useWizardDraft() {
   const [simulationObjective, setSimulationObjective] = useState('');
   const [objectiveMode, setObjectiveMode] = useState<ObjectiveMode>('consulting');
 
-  /** Keep draft/state in the same [10, cap] range the Monte Carlo Slider displays. */
-  useEffect(() => {
-    if (!monteCarloEnabled) return;
-    const normalized = Math.min(
-      INLINE_MONTE_CARLO_MAX_ITERATIONS,
-      Math.max(10, monteCarloIterations),
-    );
-    if (normalized !== monteCarloIterations) {
-      setMonteCarloIterations(normalized);
-    }
-  }, [monteCarloEnabled, monteCarloIterations]);
+  /** Keep iterations in the same [10, cap] range the Monte Carlo Slider displays. */
+  const setMonteCarloIterations = useCallback(
+    (value: number | ((prev: number) => number)) => {
+      setMonteCarloIterationsState((prev) =>
+        clampMonteCarloIterations(typeof value === 'function' ? value(prev) : value),
+      );
+    },
+    [],
+  );
 
+  // Hydrate from localStorage after mount (SSR-safe).
   useEffect(() => {
     const draft = readSimulationDraftRaw();
     if (!draft || draft === '{}') return;
 
     try {
-      const parsed = JSON.parse(draft);
-      if (parsed.simulationName) setSimulationName(parsed.simulationName);
-      if (parsed.rounds) setRounds(parsed.rounds);
-      if (parsed.environmentType) {
+      const parsed = JSON.parse(draft) as Record<string, unknown>;
+      /* eslint-disable react-hooks/set-state-in-effect -- one-shot localStorage hydrate */
+      if (typeof parsed.simulationName === 'string' && parsed.simulationName) {
+        setSimulationName(parsed.simulationName);
+      }
+      if (typeof parsed.rounds === 'number' && parsed.rounds) {
+        setRounds(parsed.rounds);
+      }
+      if (typeof parsed.environmentType === 'string' && parsed.environmentType) {
         setEnvironmentType(
           normalizeSimulationEnvironmentType(parsed.environmentType)
         );
       }
-      if (parsed.modelSelection) setModelSelection(parsed.modelSelection);
+      if (typeof parsed.modelSelection === 'string' && parsed.modelSelection) {
+        setModelSelection(parsed.modelSelection);
+      }
       if (typeof parsed.monteCarloEnabled === 'boolean') {
         setMonteCarloEnabled(parsed.monteCarloEnabled);
       }
       if (typeof parsed.monteCarloIterations === 'number') {
-        setMonteCarloIterations(
-          Math.min(
-            INLINE_MONTE_CARLO_MAX_ITERATIONS,
-            Math.max(10, parsed.monteCarloIterations),
-          ),
-        );
+        setMonteCarloIterations(parsed.monteCarloIterations);
       }
       if (typeof parsed.includePostRunReport === 'boolean') {
         setIncludePostRunReport(parsed.includePostRunReport);
@@ -107,13 +115,14 @@ export function useWizardDraft() {
       ) {
         setObjectiveMode(parsed.objectiveMode);
       }
+      /* eslint-enable react-hooks/set-state-in-effect */
     } catch (err) {
       console.error('Failed to parse simulation draft from localStorage.', err, {
         draftLength: typeof draft === 'string' ? draft.length : 0,
       });
       clearSimulationDraftRaw();
     }
-  }, []);
+  }, [setMonteCarloIterations]);
 
   useEffect(() => {
     const draft = {

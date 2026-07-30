@@ -77,9 +77,7 @@ class ReportRepository:
         page, _total = await self.list_page(limit=limit, offset=offset)
         return page
 
-    async def list_page(
-        self, *, limit: int | None = 50, offset: int = 0
-    ) -> tuple[list[dict], int]:
+    async def list_page(self, *, limit: int | None = 50, offset: int = 0) -> tuple[list[dict], int]:
         """Return ``(rows, total_count)`` with optional LIMIT/OFFSET."""
         db = await get_db()
         count_cursor = await db.execute("SELECT COUNT(*) FROM reports")
