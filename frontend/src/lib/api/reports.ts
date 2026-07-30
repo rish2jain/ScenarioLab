@@ -20,24 +20,63 @@ import type {
 } from '../types';
 import { API_BASE_URL, fetchApi } from './client';
 import { normalizeFairnessAudit, normalizeReport } from './normalizers';
-import { extractListItems } from './pagination';
+import {
+  API_LIST_PAGE_SIZE,
+  parsePaginatedListResponse,
+  shouldFetchNextListPage,
+} from './pagination';
+
+function reportsLoadError(status?: number, error?: string | null): Error {
+  return new Error(
+    error?.trim() ||
+      (status
+        ? `Could not load reports (HTTP ${status}).`
+        : 'Could not load reports.')
+  );
+}
 
 export const reportApi = {
   // Reports
   getReports: async (): Promise<Report[]> => {
-    const result = await fetchApi<unknown>('/api/reports');
-    if (result.success && result.data != null) {
-      const rows = extractListItems(result.data);
-      if (rows) {
-        return rows.map((report) => normalizeReport(report as Record<string, unknown>));
+    const collected: unknown[] = [];
+    let offset = 0;
+
+    for (;;) {
+      const result = await fetchApi<unknown>(
+        `/api/reports?limit=${API_LIST_PAGE_SIZE}&offset=${offset}`
+      );
+      if (!result.success || result.data == null) {
+        if (result.status === 404 && offset === 0) return [];
+        throw reportsLoadError(result.status, result.error);
       }
+
+      const parsed = parsePaginatedListResponse(result.data);
+      if (!parsed) {
+        throw reportsLoadError(result.status, result.error);
+      }
+
+      if (parsed.kind === 'legacy') {
+        return parsed.items.map((report) =>
+          normalizeReport(report as Record<string, unknown>)
+        );
+      }
+
+      collected.push(...parsed.items);
+      if (
+        !shouldFetchNextListPage({
+          itemsOnPage: parsed.items.length,
+          pageSize: API_LIST_PAGE_SIZE,
+          offset,
+          total: parsed.total,
+        })
+      ) {
+        break;
+      }
+      offset += parsed.items.length;
     }
-    if (result.status === 404) return [];
-    throw new Error(
-      result.error?.trim() ||
-        (result.status
-          ? `Could not load reports (HTTP ${result.status}).`
-          : 'Could not load reports.')
+
+    return collected.map((report) =>
+      normalizeReport(report as Record<string, unknown>)
     );
   },
 

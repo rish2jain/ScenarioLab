@@ -3,9 +3,11 @@ import type { NextRequest } from 'next/server';
 import { applySharedSecretHeader } from '@/lib/server/sharedSecret';
 
 function backendBase(): string {
-  return (
-    process.env.BACKEND_INTERNAL_URL?.replace(/\/$/, '') || 'http://127.0.0.1:5001'
-  );
+  const url = process.env.BACKEND_INTERNAL_URL?.replace(/\/$/, '');
+  if (!url && process.env.NODE_ENV !== 'development') {
+    console.warn('[middleware] BACKEND_INTERNAL_URL is unset; falling back to localhost.');
+  }
+  return url || 'http://127.0.0.1:5001';
 }
 
 /**

@@ -526,10 +526,7 @@ export function SetParameters({ w }: SetParametersProps) {
                     min={10}
                     max={INLINE_MONTE_CARLO_MAX_ITERATIONS}
                     step={1}
-                    value={Math.min(
-                      INLINE_MONTE_CARLO_MAX_ITERATIONS,
-                      Math.max(10, monteCarloIterations)
-                    )}
+                    value={monteCarloIterations}
                     onChange={setMonteCarloIterations}
                     valueFormatter={(v) => `${v} runs`}
                   />

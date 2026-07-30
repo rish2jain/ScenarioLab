@@ -16,6 +16,13 @@ function clampMonteCarloIterations(value: number): number {
   );
 }
 
+/** Normalize iterations when Monte Carlo is turned on (incl. drafts stored below 10). */
+export function normalizeMonteCarloIterationsOnEnable(value: number): number {
+  return clampMonteCarloIterations(value);
+}
+
+export { clampMonteCarloIterations };
+
 /** Read draft JSON; returns null on missing data or storage denial. */
 export function readSimulationDraftRaw(): string | null {
   try {
@@ -52,7 +59,7 @@ export function useWizardDraft() {
     useState<SimulationEnvironmentId>('boardroom');
   const [modelSelection, setModelSelection] = useState('');
   const [monteCarloIterations, setMonteCarloIterationsState] = useState(20);
-  const [monteCarloEnabled, setMonteCarloEnabled] = useState(false);
+  const [monteCarloEnabled, setMonteCarloEnabledState] = useState(false);
   const [includePostRunReport, setIncludePostRunReport] = useState(true);
   const [includePostRunAnalytics, setIncludePostRunAnalytics] = useState(true);
   const [extendedSeedContext, setExtendedSeedContext] = useState(false);
@@ -68,6 +75,16 @@ export function useWizardDraft() {
     },
     [],
   );
+
+  /** Enabling MC persists a normalized iteration count into state (drafts below 10 → 10). */
+  const setMonteCarloEnabled = useCallback((enabled: boolean) => {
+    setMonteCarloEnabledState(enabled);
+    if (enabled) {
+      setMonteCarloIterationsState((prev) =>
+        normalizeMonteCarloIterationsOnEnable(prev),
+      );
+    }
+  }, []);
 
   // Hydrate from localStorage after mount (SSR-safe).
   useEffect(() => {
@@ -92,10 +109,17 @@ export function useWizardDraft() {
         setModelSelection(parsed.modelSelection);
       }
       if (typeof parsed.monteCarloEnabled === 'boolean') {
-        setMonteCarloEnabled(parsed.monteCarloEnabled);
+        setMonteCarloEnabledState(parsed.monteCarloEnabled);
       }
       if (typeof parsed.monteCarloIterations === 'number') {
-        setMonteCarloIterations(parsed.monteCarloIterations);
+        // Preserve below-10 draft values while MC is off; clamp when already enabled.
+        if (parsed.monteCarloEnabled === true) {
+          setMonteCarloIterationsState(
+            clampMonteCarloIterations(parsed.monteCarloIterations),
+          );
+        } else {
+          setMonteCarloIterationsState(parsed.monteCarloIterations);
+        }
       }
       if (typeof parsed.includePostRunReport === 'boolean') {
         setIncludePostRunReport(parsed.includePostRunReport);
@@ -122,7 +146,7 @@ export function useWizardDraft() {
       });
       clearSimulationDraftRaw();
     }
-  }, [setMonteCarloIterations]);
+  }, []);
 
   useEffect(() => {
     const draft = {

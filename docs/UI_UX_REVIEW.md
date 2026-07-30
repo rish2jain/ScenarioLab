@@ -43,7 +43,7 @@ When a phase ships, update **only** the matching row(s) in **Remediation Trackin
 | 14 | **SimulationFeed missing `aria-live="polite"`** — new messages not announced to screen readers | `components/simulation/SimulationFeed.tsx:73-79` |
 | 15 | **No pagination/sorting** on simulations table, reports list, API keys list | Dashboard, Reports, API Keys pages |
 
-**Remediation tracking:** Backfill consolidated table rows **Phase 1** (#14), **Phase 3** (#8, #19), **Phase 4** (#7, #9), **Phase 5** (#10, #23), **Phase 6** (#6, #12, #13, #15, #26).
+**Remediation tracking:** Backfill consolidated table rows **Phase 1** (#14), **Phase 3** (#8), **Phase 4** (#7, #9), **Phase 5** (#10, #23), **Phase 6** (#6, #11, #12, #13, #15, #26).
 
 ---
 
@@ -67,7 +67,7 @@ When a phase ships, update **only** the matching row(s) in **Remediation Trackin
 | 29 | **No max-width constraint** on main content — stretches on ultra-wide monitors | `components/ClientLayout.tsx:15-23` |
 | 30 | **Sidebar section headers** use `<div>` instead of semantic `<h3>` tags | `components/Sidebar.tsx:145-147` |
 
-**Remediation tracking:** Backfill consolidated table rows **Phase 3**, **Phase 5**, and **Phase 6** (as applicable per issue).
+**Remediation tracking:** Backfill consolidated table rows **Phase 3** (#16, #18, #19), **Phase 5** (#17, #22), and **Phase 6** (#25, #27–#30 as applicable).
 
 ---
 
@@ -86,7 +86,7 @@ When a phase ships, update **only** the matching row(s) in **Remediation Trackin
 | 39 | Card hover `-translate-y-1` transition can feel janky on low-end devices | `components/ui/Card.tsx:34` |
 | 40 | No collapsible legend on network graph page — legend is very long | `app/simulations/[id]/network/page.tsx:303-357` |
 
-**Remediation tracking:** Opportunistic fixes map to **Phase 4–6** rows in **[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)**; note remaining items in Evidence or linked issues.
+**Remediation tracking:** Opportunistic fixes map to **Phase 4–6** rows in **[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)** (**Phase 6** covers **Low** #31 wizard draft with **Medium** #25); note remaining items in Evidence or linked issues.
 
 ---
 
@@ -309,6 +309,7 @@ All 9 sub-pages under `app/simulations/[id]/` share these patterns:
 - [x] Add pagination and sorting to tables
 - [x] Replace `alert()` calls with toast notifications
 - [x] Add wizard draft persistence via localStorage
+- [x] Add delete confirmation on persona designer
 - [x] Replace `Math.random()` with `crypto.getRandomValues()` for API keys
 
 ### Remediation Tracking (Consolidated)
@@ -320,16 +321,16 @@ Single table for **Section**, **Phase**, **PR/Commit**, **Merge Date**, **Author
 | Document-level (cross-cutting) | 1–6 | _Backfill:_ `https://github.com/<ORG>/<REPO>/pull/<N>` (split across PRs if needed) | _Backfill_ | _Backfill_ | **Summary:** Accessibility (modal, AgentCard, live regions, ARIA), error surfaces + boundaries, design tokens, shared loading/empty components, responsive charts/sidebar/header, polling/toasts/wizard draft/secure API key generation. **Example commits on `main` (confirm via `git log --oneline -- frontend/`):** `da42eff`, `ccb8f76`, `1e4ec77`. **Artifacts:** screenshots or fenced `diff` snippets per critical fix — `docs/research/` or PR attachments. **Audit date:** 2026-04-03 (see document header). |
 | Phase 1 — Accessibility (Critical) | 1 | _Backfill_ | _Backfill_ | _Backfill_ | Modal `role="dialog"` + focus trap; AgentCard `<button>`; SimulationFeed `aria-live`; Button/Input ARIA; breadcrumbs `<nav>` + `aria-current`. Maps to **Critical** #1, #3; **High** #14; **Component-Level** Modal, Button, Input, parts of Sidebar/Header. |
 | Phase 2 — Error handling (Critical) | 2 | _Backfill_ | _Backfill_ | _Backfill_ | Toasts/banners vs silent `console.error`; error boundaries; retry. **Critical** #2, #4; **High** #15 (partial). |
-| Phase 3 — Design tokens (High) | 3 | _Backfill_ | _Backfill_ | _Backfill_ | Token migration vs Slate; sidebar spacing/focus; custom Select. **High** #8, #19; **Medium** #16, #18. |
+| Phase 3 — Design tokens (High) | 3 | _Backfill_ | _Backfill_ | _Backfill_ | Token migration vs Slate; sidebar spacing/focus; custom Select. **High** #8; **Medium** #16, #18, #19. |
 | Phase 4 — Loading & empty (High) | 4 | _Backfill_ | _Backfill_ | _Backfill_ | Shared Spinner/EmptyState; CTAs. **High** #7, #9. |
 | Phase 5 — Responsive (Medium) | 5 | _Backfill_ | _Backfill_ | _Backfill_ | Sidebar narrow viewports; chart overflow; negative-margin containment; sticky header. **High** #10, #23; **Medium** #17, #22. |
-| Phase 6 — Interaction (Medium) | 6 | _Backfill_ | _Backfill_ | _Backfill_ | Polling 5–10s; pagination/sorting; toasts vs `alert()`; wizard `localStorage`; API key `crypto.getRandomValues`. **Critical** #5; **High** #6, #12, #13, #15, #26; **Medium** #25, #31; **Low** #31–#40 (opportunistic). May align with `feat/optimize-post-sim-pipeline` or successor — confirm in git history. |
+| Phase 6 — Interaction (Medium) | 6 | _Backfill_ | _Backfill_ | _Backfill_ | Polling 5–10s; pagination/sorting; toasts vs `alert()`; persona delete confirm; wizard `localStorage`; API key `crypto.getRandomValues`. **Critical** #5; **High** #6, #11, #12, #13, #15, #26; **Medium** #25; **Low** #31–#40 (opportunistic). May align with `feat/optimize-post-sim-pipeline` or successor — confirm in git history. |
 
 ---
 
 ## Verification
 
-This section ties each **Recommended Fix Order** phase to the numbered items in **Critical Issues**, **High Priority — UX Degradation**, and **Medium Priority — Polish & Consistency**, and records how work was validated. **PR/commit links, merge dates, authors, and before/after artifacts** are backfilled in **[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)** above (replace `<ORG>/<REPO>` and placeholders when merging).
+This section ties each **Recommended Fix Order** phase to the numbered items in **Critical Issues**, **High Priority — UX Degradation**, **Medium Priority — Polish & Consistency**, and **Low Priority — Nice to Have**, and records how work was validated. **PR/commit links, merge dates, authors, and before/after artifacts** are backfilled in **[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)** above (replace `<ORG>/<REPO>` and placeholders when merging).
 
 ### Traceability legend
 
@@ -337,10 +338,10 @@ This section ties each **Recommended Fix Order** phase to the numbered items in 
 |-------|----------------------------------|
 | Phase 1 | **Critical Issues** #1, #3; **High** #14; **Recommended Fix Order** — Phase 1; **Component-Level Issues** — Modal, Button, Input, parts of Sidebar/Header |
 | Phase 2 | **Critical Issues** #2, #4; **High** #15 (partial); **Recommended Fix Order** — Phase 2 |
-| Phase 3 | **High** #8, #9 (partial styling), #19; **Medium** #16, #18; **Recommended Fix Order** — Phase 3 |
+| Phase 3 | **High** #8, #9 (partial styling); **Medium** #16, #18, #19; **Recommended Fix Order** — Phase 3 |
 | Phase 4 | **High** #7, #9; **Recommended Fix Order** — Phase 4; **Page-by-Page** — Dashboard, Wizard, shared sub-page loading |
 | Phase 5 | **High** #10, #23; **Medium** #17, #22; **Recommended Fix Order** — Phase 5; **Simulation Sub-Pages** — Network, Sensitivity, etc. |
-| Phase 6 | **Critical Issues** #5; **High** #6, #12, #13 (partial), #26, #15; **Medium** #25, #31; **Recommended Fix Order** — Phase 6 |
+| Phase 6 | **Critical Issues** #5; **High** #6, #11, #12, #13 (partial), #15, #26; **Medium** #25; **Low** #31; **Recommended Fix Order** — Phase 6 |
 
 ### Per-phase verification record
 
@@ -403,7 +404,8 @@ This section ties each **Recommended Fix Order** phase to the numbered items in 
 | Polling interval 5–10s | #6 | Network tab: interval between polls | — |
 | Pagination / sorting on tables | #15 | Sort columns; next page | Unit/integration if table helpers tested |
 | Toasts vs `alert()` on Voice | #26 | Complete action; toast only | E2E Voice page |
-| Wizard draft (localStorage) | #25, #31 | Refresh mid-wizard; state restored | E2E or manual |
+| Persona designer delete confirmation | #11 | Attempt delete; confirm dialog required before removal | E2E or manual |
+| Wizard draft (localStorage) | **Medium** #25; **Low** #31 | Refresh mid-wizard; state restored | E2E or manual |
 | API keys: `crypto.getRandomValues` | #5 | Generate key; inspect entropy / no `Math.random` in bundle for that path | Code review + quick runtime check |
 
 **Remediation tracking:** **[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)** → row **Phase 6 — Interaction**.

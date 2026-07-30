@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/components/ui/Toast';
 import { api } from '@/lib/api';
 import type { Playbook } from '@/lib/types';
+import { shouldApplyPlaybookConfigDefaults } from './playbookConfigGate';
 
 /** Lazy-load playbook roster after selection; configure default agent counts. */
 export function usePlaybookDetail({
@@ -30,10 +31,13 @@ export function usePlaybookDetail({
   const [playbookDetailRetryToken, setPlaybookDetailRetryToken] = useState(0);
 
   const fetchedIdRef = useRef<string | null>(null);
+  /** Last playbook id for which roster defaults + default name were applied. */
+  const configuredPlaybookIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!selectedPlaybook) {
       fetchedIdRef.current = null;
+      configuredPlaybookIdRef.current = null;
       setPlaybookDetailLoading(false);
       setPlaybookDetailError(null);
       return;
@@ -57,6 +61,7 @@ export function usePlaybookDetail({
           const full = await api.getPlaybook(targetId);
           if (cancelled) return;
           if (full === null) {
+            fetchedIdRef.current = null;
             const msg =
               'Playbook details could not be loaded. It may have been removed or unavailable.';
             setPlaybookDetailError(msg);
@@ -68,6 +73,18 @@ export function usePlaybookDetail({
         }
 
         if (cancelled) return;
+
+        // Apply roster defaults / default name only when the playbook *id* changes,
+        // not when the same selection is replaced with a new object (e.g. after fetch).
+        if (
+          !shouldApplyPlaybookConfigDefaults(
+            configuredPlaybookIdRef.current,
+            playbook.id
+          )
+        ) {
+          return;
+        }
+        configuredPlaybookIdRef.current = playbook.id;
 
         const roster = playbook.roster ?? [];
         const configs: Record<string, number> = {};

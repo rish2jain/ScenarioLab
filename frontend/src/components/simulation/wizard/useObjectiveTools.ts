@@ -132,9 +132,16 @@ export function useObjectiveTools({
         lastGeneratedOntology
       );
       if (!s || typeof s !== 'object') return;
-      const ac = s.agent_configs as Record<string, number> | undefined;
+      const ac = s.agent_configs as Record<string, unknown> | undefined;
       if (ac && typeof ac === 'object') {
-        setAgentConfigs((prev) => ({ ...prev, ...ac }));
+        const clean: Record<string, number> = {};
+        for (const [role, count] of Object.entries(ac)) {
+          const n = Number(count);
+          if (Number.isFinite(n) && n >= 0) clean[role] = Math.floor(n);
+        }
+        if (Object.keys(clean).length > 0) {
+          setAgentConfigs((prev) => ({ ...prev, ...clean }));
+        }
       }
     } catch (err) {
       console.error('suggestSimulationRoster failed', err);

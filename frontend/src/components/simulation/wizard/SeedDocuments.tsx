@@ -65,6 +65,11 @@ export function SeedDocuments({
                 <FileText className="w-5 h-5 text-foreground-muted flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
+                  {file.status === 'error' ? (
+                    <p className="text-xs text-red-400" role="alert">
+                      {file.errorMessage ?? 'Upload failed'}
+                    </p>
+                  ) : null}
                   <p className="text-xs text-foreground-muted">
                     {file.size < 1024 * 1024
                       ? (file.size / 1024).toFixed(1) + ' KB'

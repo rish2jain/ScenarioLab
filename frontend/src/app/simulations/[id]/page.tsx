@@ -160,15 +160,14 @@ export default function SimulationMonitorPage() {
         ),
       ]);
 
-      let messagesData: AgentMessage[];
+      // Messages may fail independently — still apply a successful sim snapshot.
+      let messagesData: AgentMessage[] | null = null;
       if (msgRes.success && msgRes.data) {
         messagesData = msgRes.data.map((m) =>
           normalizeAgentMessage(m, messageAgentColors)
         );
       } else if (msgRes.status === 404) {
         messagesData = [];
-      } else {
-        return false;
       }
 
       if (simRes.success && simRes.data) {
@@ -176,13 +175,15 @@ export default function SimulationMonitorPage() {
           normalizeSimulation(simRes.data as Record<string, unknown>)
         );
         setNotFound(false);
-        setAgentMessages(messagesData);
+        if (messagesData !== null) {
+          setAgentMessages(messagesData);
+        }
         return true;
       }
       if (simRes.status === 404) {
         setCurrentSimulation(null);
         setNotFound(true);
-        setAgentMessages(messagesData);
+        setAgentMessages(messagesData ?? []);
         return true;
       }
       return false;

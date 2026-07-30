@@ -159,8 +159,13 @@ export function ReviewLaunch({
               <p className="text-sm text-foreground-muted">Estimated cost (API)</p>
               <p className="text-2xl font-bold text-accent tabular-nums">
                 {estimateLoading ? (
-                  <span className="inline-flex items-center gap-2 text-base text-foreground-muted">
-                    <Loader2 className="w-5 h-5 animate-spin" />
+                  <span
+                    className="inline-flex items-center gap-2 text-base text-foreground-muted"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <Loader2 className="w-5 h-5 animate-spin" aria-hidden />
+                    <span className="sr-only">Estimating cost…</span>
                   </span>
                 ) : costEstimate ? (
                   `~$${costEstimate.total_estimated_cost_usd.toFixed(2)}`

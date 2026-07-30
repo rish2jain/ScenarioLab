@@ -37,7 +37,7 @@ def test_shared_secret_allows_with_header(secret_settings: Settings):
             "/api/playbooks",
             headers={"X-ScenarioLab-Secret": "test-secret-value"},
         )
-        assert r.status_code != 401
+        assert r.status_code == 200
 
 
 def test_shared_secret_allows_bearer(secret_settings: Settings):
@@ -46,7 +46,7 @@ def test_shared_secret_allows_bearer(secret_settings: Settings):
             "/api/playbooks",
             headers={"Authorization": "Bearer test-secret-value"},
         )
-        assert r.status_code != 401
+        assert r.status_code == 200
 
 
 def test_ready_endpoint_reports_sqlite():

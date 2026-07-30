@@ -115,7 +115,7 @@ export function useSimulationWizard() {
     if (!monteCarloEnabled || rounds < 10) return 1;
     return Math.min(
       INLINE_MONTE_CARLO_MAX_ITERATIONS,
-      Math.max(1, monteCarloIterations),
+      Math.max(10, monteCarloIterations),
     );
   }, [monteCarloEnabled, monteCarloIterations, rounds]);
 
@@ -336,7 +336,9 @@ export function useSimulationWizard() {
           clientUploadId: uploadTempId,
         });
         updateFile(uploadTempId, { ...uploaded });
-        setSelectedSeedIds((prev) => [...prev, uploaded.id]);
+        setSelectedSeedIds((prev) =>
+          prev.includes(uploaded.id) ? prev : [...prev, uploaded.id]
+        );
       } catch (error) {
         console.error('Failed to upload seed file:', error);
         const msg = error instanceof Error ? error.message : 'Upload failed';

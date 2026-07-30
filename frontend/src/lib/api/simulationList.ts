@@ -1,25 +1,17 @@
-import { extractListItems } from './pagination';
+import { extractListItems, parsePaginatedListResponse, shouldFetchNextListPage, API_LIST_PAGE_SIZE } from './pagination';
 
 /** Backend GET /api/simulations max page size (`Query(..., le=200)`). */
-export const SIMULATIONS_PAGE_SIZE = 200;
+export const SIMULATIONS_PAGE_SIZE = API_LIST_PAGE_SIZE;
 
-export type ParsedSimulationList =
-  | { kind: 'legacy'; items: unknown[] }
-  | { kind: 'page'; items: unknown[]; total: number | null };
+export type ParsedSimulationList = NonNullable<
+  ReturnType<typeof parsePaginatedListResponse>
+>;
 
 /** Accept legacy array bodies or `{ items, total?, ... }` pagination envelopes. */
 export function parseSimulationListResponse(
   data: unknown
 ): ParsedSimulationList | null {
-  const items = extractListItems(data);
-  if (items == null) return null;
-  if (Array.isArray(data)) {
-    return { kind: 'legacy', items };
-  }
-  const totalRaw = (data as { total?: unknown }).total;
-  const total =
-    typeof totalRaw === 'number' && Number.isFinite(totalRaw) ? totalRaw : null;
-  return { kind: 'page', items, total };
+  return parsePaginatedListResponse(data);
 }
 
 /** Whether another GET with a higher offset is needed to load the full list. */
@@ -29,13 +21,7 @@ export function shouldFetchNextSimulationPage(opts: {
   offset: number;
   total: number | null;
 }): boolean {
-  if (opts.itemsOnPage <= 0) return false;
-  if (opts.itemsOnPage < opts.pageSize) return false;
-  if (
-    opts.total != null &&
-    opts.offset + opts.itemsOnPage >= opts.total
-  ) {
-    return false;
-  }
-  return true;
+  return shouldFetchNextListPage(opts);
 }
+
+export { extractListItems };

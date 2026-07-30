@@ -169,10 +169,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 # Middleware order: last added runs first on the request (outermost).
 # SecurityHeaders must be outermost so 401s from SharedSecretAuth still get headers.
-app.add_middleware(RequestIdMiddleware)
 app.add_middleware(SharedSecretAuthMiddleware)
+app.add_middleware(RequestIdMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
-
 
 @app.get("/api/health", tags=["health"])
 async def health_check():

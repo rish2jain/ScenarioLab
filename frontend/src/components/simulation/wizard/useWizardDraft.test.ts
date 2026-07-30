@@ -1,12 +1,29 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   clearSimulationDraftRaw,
+  normalizeMonteCarloIterationsOnEnable,
   readSimulationDraftRaw,
   writeSimulationDraftRaw,
 } from './useWizardDraft';
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('normalizeMonteCarloIterationsOnEnable', () => {
+  it('raises drafts below 10 to 10', () => {
+    expect(normalizeMonteCarloIterationsOnEnable(5)).toBe(10);
+    expect(normalizeMonteCarloIterationsOnEnable(0)).toBe(10);
+  });
+
+  it('preserves values already in the slider range', () => {
+    expect(normalizeMonteCarloIterationsOnEnable(10)).toBe(10);
+    expect(normalizeMonteCarloIterationsOnEnable(20)).toBe(20);
+  });
+
+  it('caps values above the inline max', () => {
+    expect(normalizeMonteCarloIterationsOnEnable(100)).toBe(25);
+  });
 });
 
 describe('wizard draft localStorage helpers', () => {

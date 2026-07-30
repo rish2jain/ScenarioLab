@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FileText, Calendar } from 'lucide-react';
+import { AlertCircle, FileText, Calendar } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -14,31 +14,29 @@ import { api } from '@/lib/api';
 
 export default function ReportsPage() {
   const router = useRouter();
-  const { reports, isLoading, setReports, setLoading, setError } = useReportStore();
+  const { reports, isLoading, error, setReports, setLoading, setError } =
+    useReportStore();
   const { addToast } = useToast();
 
-  useEffect(() => {
-    let mounted = true;
-    const loadReports = async () => {
-      setLoading(true);
-      try {
-        const data = await api.getReports();
-        if (mounted) setReports(data);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to load reports';
-        if (mounted) {
-          setError(message);
-          addToast(message, 'error');
-        }
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-
-    loadReports();
-
-    return () => { mounted = false; };
+  const loadReports = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await api.getReports();
+      setReports(data);
+      setError(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load reports';
+      setError(message);
+      addToast(message, 'error');
+    } finally {
+      setLoading(false);
+    }
   }, [setReports, setLoading, setError, addToast]);
+
+  useEffect(() => {
+    void loadReports();
+  }, [loadReports]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -71,6 +69,20 @@ export default function ReportsPage() {
           <div className="p-10 flex justify-center">
             <Spinner message="Loading reports…" />
           </div>
+        </Card>
+      ) : error ? (
+        <Card>
+          <EmptyState
+            title="Could not load reports"
+            description={error}
+            icon={<AlertCircle className="w-8 h-8" />}
+            action={{
+              label: 'Retry',
+              onClick: () => {
+                void loadReports();
+              },
+            }}
+          />
         </Card>
       ) : reports.length > 0 ? (
         <div className="grid grid-cols-1 gap-4">
