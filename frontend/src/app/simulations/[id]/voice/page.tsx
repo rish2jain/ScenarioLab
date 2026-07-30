@@ -12,6 +12,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Spinner } from "@/components/ui/Spinner";
 import { useToast } from "@/components/ui/Toast";
 import { api } from "@/lib/api";
 import { archetypeColors } from "@/lib/archetypeColors";
@@ -48,6 +49,7 @@ export default function VoiceChatPage() {
   const { addToast } = useToast();
 
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [isLoadingAgents, setIsLoadingAgents] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -62,6 +64,7 @@ export default function VoiceChatPage() {
 
   useEffect(() => {
     const fetchAgents = async () => {
+      setIsLoadingAgents(true);
       try {
         const agentsData = await api.getSimulationAgents(simulationId);
         if (agentsData && agentsData.length > 0) {
@@ -96,6 +99,8 @@ export default function VoiceChatPage() {
       } catch (error) {
         console.error("Failed to fetch agents:", error);
         setAgents([]);
+      } finally {
+        setIsLoadingAgents(false);
       }
     };
     fetchAgents();
@@ -227,6 +232,14 @@ export default function VoiceChatPage() {
       }
     };
   }, []);
+
+  if (isLoadingAgents) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Spinner message="Loading voice chat…" />
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col -m-6">

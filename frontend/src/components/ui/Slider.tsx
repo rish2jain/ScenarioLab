@@ -1,5 +1,6 @@
 'use client';
 
+import { useId } from 'react';
 import { clsx } from 'clsx';
 
 interface SliderProps {
@@ -25,6 +26,7 @@ export function Slider({
   valueFormatter = (v) => v.toString(),
   className,
 }: SliderProps) {
+  const inputId = useId();
   const percentage = ((value - min) / (max - min)) * 100;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -36,43 +38,52 @@ export function Slider({
       {(label || showValue) && (
         <div className="flex items-center justify-between mb-2">
           {label && (
-            <label className="text-sm font-medium text-slate-300">{label}</label>
+            <label htmlFor={inputId} className="text-sm font-medium text-foreground-muted">
+              {label}
+            </label>
           )}
           {showValue && (
-            <span className="text-sm font-medium text-accent">
+            <span className="text-sm font-medium text-accent" aria-hidden="true">
               {valueFormatter(value)}
             </span>
           )}
         </div>
       )}
-      <div className="relative h-2 bg-slate-700 rounded-full">
-        {/* Track Fill */}
+      <div className="relative h-2 bg-background-tertiary rounded-full">
         <div
           className="absolute h-full bg-accent rounded-full"
           style={{ width: `${percentage}%` }}
+          aria-hidden="true"
         />
-        {/* Input */}
         <input
+          id={inputId}
           type="range"
           min={min}
           max={max}
           step={step}
           value={value}
           onChange={handleChange}
+          aria-valuenow={value}
+          aria-valuemin={min}
+          aria-valuemax={max}
+          aria-label={label}
           className={clsx(
-            'absolute inset-0 w-full h-full opacity-0 cursor-pointer',
+            'peer absolute inset-0 w-full h-full opacity-0 cursor-pointer',
             'focus:outline-none'
           )}
         />
-        {/* Thumb */}
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-accent rounded-full shadow-lg pointer-events-none transition-transform"
+          className={clsx(
+            'absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-accent rounded-full shadow-lg pointer-events-none transition-transform',
+            'peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background'
+          )}
           style={{ left: `calc(${percentage}% - 8px)` }}
+          aria-hidden="true"
         />
       </div>
-      <div className="flex justify-between mt-1">
-        <span className="text-xs text-slate-500">{valueFormatter(min)}</span>
-        <span className="text-xs text-slate-500">{valueFormatter(max)}</span>
+      <div className="flex justify-between mt-1" aria-hidden="true">
+        <span className="text-xs text-foreground-subtle">{valueFormatter(min)}</span>
+        <span className="text-xs text-foreground-subtle">{valueFormatter(max)}</span>
       </div>
     </div>
   );

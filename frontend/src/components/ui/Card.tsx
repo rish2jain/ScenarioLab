@@ -19,6 +19,8 @@ export function Card({
   hover = false,
   onClick,
 }: CardProps) {
+  const isClickable = Boolean(onClick);
+
   const paddings = {
     none: '',
     sm: 'p-3',
@@ -26,12 +28,24 @@ export function Card({
     lg: 'p-6',
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!onClick) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onClick();
+    }
+  };
+
   return (
     <div
       onClick={onClick}
+      onKeyDown={isClickable ? handleKeyDown : undefined}
+      role={isClickable ? 'button' : undefined}
+      tabIndex={isClickable ? 0 : undefined}
       className={clsx(
         'bg-background-card backdrop-blur-md border border-border rounded-xl shadow-lg shadow-black/20 overflow-hidden',
-        hover && 'hover:border-border-glow hover:shadow-accent/10 hover:-translate-y-1 transition-all duration-300 cursor-pointer',
+        hover && 'hover:border-border-glow hover:shadow-accent/10 motion-safe:hover:-translate-y-1 transition-all duration-300 cursor-pointer',
+        isClickable && 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         className
       )}
     >

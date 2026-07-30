@@ -27,6 +27,7 @@ export default function PlaybooksPage() {
   const { playbooks, setPlaybooks } = usePlaybookStore();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPlaybook, setSelectedPlaybook] = useState<Playbook | null>(null);
@@ -43,27 +44,48 @@ export default function PlaybooksPage() {
     setIsLoadingDetails(false);
   };
 
+  const loadPlaybooks = async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const data = await api.getPlaybooks();
+      setPlaybooks(data);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'Could not load playbooks. Check that the backend is running, then retry.';
+      setLoadError(message);
+      addToast(message, 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
-    const loadPlaybooks = async () => {
+    void (async () => {
       setIsLoading(true);
+      setLoadError(null);
       try {
         const data = await api.getPlaybooks();
         if (mounted) setPlaybooks(data);
       } catch (err) {
         if (mounted) {
-          addToast(
-            err instanceof Error ? err.message : 'Failed to load playbooks.',
-            'error'
-          );
+          const message =
+            err instanceof Error
+              ? err.message
+              : 'Could not load playbooks. Check that the backend is running, then retry.';
+          setLoadError(message);
+          addToast(message, 'error');
         }
       } finally {
         if (mounted) setIsLoading(false);
       }
+    })();
+    return () => {
+      mounted = false;
     };
-
-    loadPlaybooks();
-    return () => { mounted = false; };
   }, [setPlaybooks, addToast]);
 
   const filteredPlaybooks = playbooks.filter(
@@ -188,7 +210,17 @@ export default function PlaybooksPage() {
         </div>
       ) : (
         <Card>
-          {searchQuery.trim().length > 0 ? (
+          {loadError ? (
+            <EmptyState
+              title="Could not load playbooks"
+              description={loadError}
+              icon={<BookOpen className="w-8 h-8" />}
+              action={{
+                label: 'Retry',
+                onClick: () => void loadPlaybooks(),
+              }}
+            />
+          ) : searchQuery.trim().length > 0 ? (
             <EmptyState
               title="No playbooks found"
               description={`No playbooks match your search for "${searchQuery}".`}

@@ -22,7 +22,7 @@ interface TableHeadProps {
 
 export function TableHead({ children, className }: TableHeadProps) {
   return (
-    <thead className={clsx('bg-slate-800/80', className)}>
+    <thead className={clsx('bg-background-tertiary/80', className)}>
       {children}
     </thead>
   );
@@ -45,14 +45,27 @@ interface TableRowProps {
 }
 
 export function TableRow({ children, className, onClick, hover = false }: TableRowProps) {
+  const isClickable = Boolean(onClick);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTableRowElement>) => {
+    if (!onClick) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onClick();
+    }
+  };
+
   return (
     <tr
       className={clsx(
-        'border-b border-slate-700 last:border-b-0',
-        hover && 'hover:bg-slate-800/50 cursor-pointer transition-colors',
+        'border-b border-border last:border-b-0',
+        hover && 'hover:bg-background-tertiary/50 cursor-pointer transition-colors',
+        isClickable && 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
         className
       )}
       onClick={onClick}
+      onKeyDown={isClickable ? handleKeyDown : undefined}
+      tabIndex={isClickable ? 0 : undefined}
     >
       {children}
     </tr>
@@ -72,8 +85,8 @@ export function TableCell({ children, className, isHeader = false }: TableCellPr
       className={clsx(
         'px-4 py-3 text-sm',
         isHeader
-          ? 'font-medium text-slate-300 uppercase tracking-wider'
-          : 'text-slate-300',
+          ? 'font-medium text-foreground-muted uppercase tracking-wider'
+          : 'text-foreground-muted',
         className
       )}
     >

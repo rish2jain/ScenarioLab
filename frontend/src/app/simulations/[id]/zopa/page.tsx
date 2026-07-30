@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Spinner } from '@/components/ui/Spinner';
 import { api } from '@/lib/api';
 import type {
   ZOPAResult,
@@ -57,7 +58,7 @@ export default function ZOPAPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-slate-400">Analyzing negotiation positions...</div>
+        <Spinner message="Analyzing negotiation positions…" />
       </div>
     );
   }

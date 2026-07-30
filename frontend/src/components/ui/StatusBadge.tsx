@@ -43,8 +43,8 @@ const statusBadgeConfig: Record<SimulationStatus, BadgeEntry> = {
   },
   failed: {
     label: 'Failed',
-    className: 'bg-danger/20 text-danger border-danger/30',
-    dot: 'bg-danger',
+    className: 'bg-error/20 text-error border-error/30',
+    dot: 'bg-error',
   },
   cancelled: {
     label: 'Cancelled',

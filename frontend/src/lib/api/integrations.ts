@@ -110,47 +110,74 @@ export const integrationsApi = {
 
   createCustomPersona: async (
     config: Record<string, unknown>
-  ): Promise<CustomPersonaConfig | null> => {
+  ): Promise<CustomPersonaConfig> => {
     const result = await fetchApi<CustomPersonaConfig>('/api/personas/designer', {
       method: 'POST',
       body: JSON.stringify(config),
     });
     if (result.success && result.data) return result.data;
-    return null;
+    throw new Error(
+      result.error?.trim() ||
+        (result.status
+          ? `Could not create persona (HTTP ${result.status}).`
+          : 'Could not create persona.')
+    );
   },
 
   listCustomPersonas: async (): Promise<CustomPersonaConfig[]> => {
     const result = await fetchApi<CustomPersonaConfig[]>('/api/personas/designer');
     if (result.success && result.data) return result.data;
-    return [];
+    throw new Error(
+      result.error?.trim() ||
+        (result.status
+          ? `Could not load personas (HTTP ${result.status}).`
+          : 'Could not load personas.')
+    );
   },
 
   updateCustomPersona: async (
     personaId: string,
     updates: Record<string, unknown>
-  ): Promise<CustomPersonaConfig | null> => {
+  ): Promise<CustomPersonaConfig> => {
     const result = await fetchApi<CustomPersonaConfig>(
       `/api/personas/designer/${personaId}`,
       { method: 'PUT', body: JSON.stringify(updates) }
     );
     if (result.success && result.data) return result.data;
-    return null;
+    throw new Error(
+      result.error?.trim() ||
+        (result.status
+          ? `Could not update persona (HTTP ${result.status}).`
+          : 'Could not update persona.')
+    );
   },
 
   refreshDesignerPersonaResearch: async (
     personaId: string
-  ): Promise<CustomPersonaConfig | null> => {
+  ): Promise<CustomPersonaConfig> => {
     const result = await fetchApi<CustomPersonaConfig>(
       `/api/personas/designer/${personaId}/refresh-research`,
       { method: 'POST' }
     );
     if (result.success && result.data) return result.data;
-    return null;
+    throw new Error(
+      result.error?.trim() ||
+        (result.status
+          ? `Could not refresh research (HTTP ${result.status}).`
+          : 'Could not refresh research.')
+    );
   },
 
-  deleteCustomPersona: async (personaId: string): Promise<boolean> => {
+  deleteCustomPersona: async (personaId: string): Promise<void> => {
     const result = await fetchApi<{ status: string }>(`/api/personas/designer/${personaId}`, { method: 'DELETE' });
-    return result.success;
+    if (!result.success) {
+      throw new Error(
+        result.error?.trim() ||
+          (result.status
+            ? `Could not delete persona (HTTP ${result.status}).`
+            : 'Could not delete persona.')
+      );
+    }
   },
 
   validatePersonaCoherence: async (
@@ -164,7 +191,12 @@ export const integrationsApi = {
     );
     if (signal?.aborted) return { warnings: [] };
     if (result.success && result.data) return result.data;
-    return { warnings: [] };
+    throw new Error(
+      result.error?.trim() ||
+        (result.status
+          ? `Could not validate persona (HTTP ${result.status}).`
+          : 'Could not validate persona.')
+    );
   },
 
   /** Map string warnings from validate to CoherenceWarning for UI. */

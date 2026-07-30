@@ -36,8 +36,13 @@ export const WIZARD_STEPS = [
   { id: 'playbook', label: 'Select Playbook' },
   { id: 'agents', label: 'Configure Agents' },
   { id: 'documents', label: 'Seed Documents' },
-  { id: 'parameters', label: 'Set Parameters' },
+  { id: 'objective', label: 'Objective' },
+  { id: 'engine', label: 'Engine Settings' },
   { id: 'review', label: 'Review & Launch' },
-];
+] as const;
+
+export type WizardStepId = (typeof WIZARD_STEPS)[number]['id'];
+
+export type WizardStep = (typeof WIZARD_STEPS)[number];
 
 export type ObjectiveMode = 'consulting' | 'general_prediction';

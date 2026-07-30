@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Users, Share2, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { Spinner } from '@/components/ui/Spinner';
 import { Modal } from '@/components/ui/Modal';
 import dynamic from 'next/dynamic';
 
@@ -144,7 +145,7 @@ export default function NetworkGraphPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-slate-400">Loading network visualization...</div>
+        <Spinner message="Loading network visualization…" />
       </div>
     );
   }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import Link from 'next/link';
 import {
   FileText,
   Loader2,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DropZone } from '@/components/ui/DropZone';
 import { useToast } from '@/components/ui/Toast';
 import { useUploadStore } from '@/lib/store';
@@ -65,6 +67,8 @@ export default function UploadPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [pendingSingleDeleteId, setPendingSingleDeleteId] = useState<string | null>(null);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
   const uploadAbortByClientIdRef = useRef(new Map<string, AbortController>());
   const uploadCancelledClientIdsRef = useRef(new Set<string>());
@@ -86,13 +90,15 @@ export default function UploadPage() {
         const seeds = await api.listSeeds();
         if (!cancelled && seeds.length > 0) mergeSeedsFromApi(seeds);
       } catch {
-        /* offline */
+        if (!cancelled) {
+          addToast('Could not load saved seed files from the server.', 'error');
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [mergeSeedsFromApi]);
+  }, [mergeSeedsFromApi, addToast]);
 
   // --- Selection ---
   const toggleSelect = useCallback((id: string) => {
@@ -122,6 +128,7 @@ export default function UploadPage() {
   // --- Bulk delete ---
   const handleBulkDelete = useCallback(async () => {
     if (selectedIds.size === 0) return;
+    setShowBulkDeleteConfirm(false);
     setIsBulkDeleting(true);
 
     // Split into persisted (server) and client-only
@@ -180,7 +187,17 @@ export default function UploadPage() {
 
   // --- Single delete ---
   const handleSingleDelete = useCallback(
-    async (id: string) => {
+    (id: string) => {
+      setPendingSingleDeleteId(id);
+    },
+    [],
+  );
+
+  const confirmSingleDelete = useCallback(
+    async () => {
+      if (pendingSingleDeleteId == null) return;
+      const id = pendingSingleDeleteId;
+      setPendingSingleDeleteId(null);
       if (!isPersistedSeedId(id)) {
         cancelInFlightClientUpload(id);
         removeFile(id);
@@ -193,8 +210,9 @@ export default function UploadPage() {
         return;
       }
       removeFile(id);
+      addToast('File deleted', 'success');
     },
-    [removeFile, addToast, cancelInFlightClientUpload],
+    [pendingSingleDeleteId, removeFile, addToast, cancelInFlightClientUpload],
   );
 
   // --- Upload ---
@@ -302,6 +320,14 @@ export default function UploadPage() {
           progress: 0,
         });
       }
+
+      const successCount = processed.length + requeued.length;
+      if (successCount > 0) {
+        addToast(
+          `Processed ${successCount} seed${successCount !== 1 ? 's' : ''}`,
+          'success',
+        );
+      }
     } catch {
       processableFiles.forEach((file) => {
         updateFile(file.id, {
@@ -399,7 +425,7 @@ export default function UploadPage() {
                 <Button
                   variant="danger"
                   size="sm"
-                  onClick={handleBulkDelete}
+                  onClick={() => setShowBulkDeleteConfirm(true)}
                   isLoading={isBulkDeleting}
                   leftIcon={!isBulkDeleting ? <Trash2 className="w-4 h-4" /> : undefined}
                 >
@@ -484,6 +510,8 @@ export default function UploadPage() {
             <Button
               onClick={handleProcessSeeds}
               isLoading={isProcessing}
+              aria-busy={isProcessing}
+              aria-label={isProcessing ? 'Processing seeds' : 'Process seeds'}
               leftIcon={!isProcessing ? <CheckCircle className="w-4 h-4" /> : undefined}
               className="w-full sm:w-auto"
             >
@@ -491,7 +519,36 @@ export default function UploadPage() {
             </Button>
           </div>
         )}
+
+        {files.length > 0 && (
+          <div className="mt-6 flex justify-end">
+            <Link href="/simulations/new">
+              <Button variant="secondary">Use in a simulation</Button>
+            </Link>
+          </div>
+        )}
       </Card>
+
+      <ConfirmDialog
+        isOpen={showBulkDeleteConfirm}
+        onClose={() => setShowBulkDeleteConfirm(false)}
+        onConfirm={() => void handleBulkDelete()}
+        title={`Delete ${selectionCount} file${selectionCount !== 1 ? 's' : ''}?`}
+        description="This cannot be undone. Persisted files will also be removed from the server."
+        confirmLabel="Delete"
+        variant="danger"
+        isLoading={isBulkDeleting}
+      />
+
+      <ConfirmDialog
+        isOpen={pendingSingleDeleteId !== null}
+        onClose={() => setPendingSingleDeleteId(null)}
+        onConfirm={() => void confirmSingleDelete()}
+        title="Delete this file?"
+        description="This cannot be undone. If the file was saved on the server, it will be removed there too."
+        confirmLabel="Delete"
+        variant="danger"
+      />
 
       {/* Info Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

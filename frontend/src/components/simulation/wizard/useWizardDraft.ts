@@ -1,11 +1,21 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   normalizeSimulationEnvironmentType,
   type SimulationEnvironmentId,
 } from '@/lib/environment-types';
-import { INLINE_MONTE_CARLO_MAX_ITERATIONS, type ObjectiveMode } from './types';
+import {
+  INLINE_MONTE_CARLO_MAX_ITERATIONS,
+  WIZARD_STEPS,
+  type ObjectiveMode,
+} from './types';
+import {
+  hasMeaningfulWizardDraft,
+  parseSimulationDraftPayload,
+  serializeSimulationDraftPayload,
+  type SimulationDraftPayload,
+} from './wizardDraftSchema';
 
 const DRAFT_KEY = 'simulation_draft';
 
@@ -51,8 +61,96 @@ export function clearSimulationDraftRaw(): void {
   }
 }
 
+function applyParameterFieldsFromDraft(
+  parsed: SimulationDraftPayload,
+  setters: {
+    setSimulationName: (value: string) => void;
+    setRounds: (value: number) => void;
+    setEnvironmentType: (value: SimulationEnvironmentId) => void;
+    setModelSelection: (value: string) => void;
+    setMonteCarloEnabledState: (value: boolean) => void;
+    setMonteCarloIterationsState: (value: number) => void;
+    setIncludePostRunReport: (value: boolean) => void;
+    setIncludePostRunAnalytics: (value: boolean) => void;
+    setExtendedSeedContext: (value: boolean) => void;
+    setSimulationObjective: (value: string) => void;
+    setObjectiveMode: (value: ObjectiveMode) => void;
+  },
+): void {
+  if (typeof parsed.simulationName === 'string' && parsed.simulationName) {
+    setters.setSimulationName(parsed.simulationName);
+  }
+  if (typeof parsed.rounds === 'number' && parsed.rounds) {
+    setters.setRounds(parsed.rounds);
+  }
+  if (typeof parsed.environmentType === 'string' && parsed.environmentType) {
+    setters.setEnvironmentType(
+      normalizeSimulationEnvironmentType(parsed.environmentType),
+    );
+  }
+  if (typeof parsed.modelSelection === 'string' && parsed.modelSelection) {
+    setters.setModelSelection(parsed.modelSelection);
+  }
+  if (typeof parsed.monteCarloEnabled === 'boolean') {
+    setters.setMonteCarloEnabledState(parsed.monteCarloEnabled);
+  }
+  if (typeof parsed.monteCarloIterations === 'number') {
+    if (parsed.monteCarloEnabled === true) {
+      setters.setMonteCarloIterationsState(
+        clampMonteCarloIterations(parsed.monteCarloIterations),
+      );
+    } else {
+      setters.setMonteCarloIterationsState(parsed.monteCarloIterations);
+    }
+  }
+  if (typeof parsed.includePostRunReport === 'boolean') {
+    setters.setIncludePostRunReport(parsed.includePostRunReport);
+  }
+  if (typeof parsed.includePostRunAnalytics === 'boolean') {
+    setters.setIncludePostRunAnalytics(parsed.includePostRunAnalytics);
+  }
+  if (typeof parsed.extendedSeedContext === 'boolean') {
+    setters.setExtendedSeedContext(parsed.extendedSeedContext);
+  }
+  if (typeof parsed.simulationObjective === 'string') {
+    setters.setSimulationObjective(parsed.simulationObjective);
+  }
+  if (
+    parsed.objectiveMode === 'consulting' ||
+    parsed.objectiveMode === 'general_prediction'
+  ) {
+    setters.setObjectiveMode(parsed.objectiveMode);
+  }
+}
+
+function resetParameterDefaults(setters: {
+  setSimulationName: (value: string) => void;
+  setRounds: (value: number) => void;
+  setEnvironmentType: (value: SimulationEnvironmentId) => void;
+  setModelSelection: (value: string) => void;
+  setMonteCarloEnabledState: (value: boolean) => void;
+  setMonteCarloIterationsState: (value: number) => void;
+  setIncludePostRunReport: (value: boolean) => void;
+  setIncludePostRunAnalytics: (value: boolean) => void;
+  setExtendedSeedContext: (value: boolean) => void;
+  setSimulationObjective: (value: string) => void;
+  setObjectiveMode: (value: ObjectiveMode) => void;
+}): void {
+  setters.setSimulationName('');
+  setters.setRounds(10);
+  setters.setEnvironmentType('boardroom');
+  setters.setModelSelection('');
+  setters.setMonteCarloEnabledState(false);
+  setters.setMonteCarloIterationsState(20);
+  setters.setIncludePostRunReport(true);
+  setters.setIncludePostRunAnalytics(true);
+  setters.setExtendedSeedContext(false);
+  setters.setSimulationObjective('');
+  setters.setObjectiveMode('consulting');
+}
+
 /** Draft-persisted wizard fields + localStorage load/save. */
-export function useWizardDraft() {
+export function useWizardDraft(playbookId?: string | null) {
   const [simulationName, setSimulationName] = useState('');
   const [rounds, setRounds] = useState(10);
   const [environmentType, setEnvironmentType] =
@@ -65,6 +163,33 @@ export function useWizardDraft() {
   const [extendedSeedContext, setExtendedSeedContext] = useState(false);
   const [simulationObjective, setSimulationObjective] = useState('');
   const [objectiveMode, setObjectiveMode] = useState<ObjectiveMode>('consulting');
+  const [currentStep, setCurrentStepState] = useState(0);
+  const [agentConfigs, setAgentConfigs] = useState<Record<string, number>>({});
+  const [selectedSeedIds, setSelectedSeedIds] = useState<string[]>([]);
+  const [pendingPlaybookId, setPendingPlaybookId] = useState<string | null>(null);
+  const [showDraftBanner, setShowDraftBanner] = useState(false);
+  const pendingDraftRef = useRef<SimulationDraftPayload | null>(null);
+  const parametersHydratedRef = useRef(false);
+
+  const parameterSetters = {
+    setSimulationName,
+    setRounds,
+    setEnvironmentType,
+    setModelSelection,
+    setMonteCarloEnabledState,
+    setMonteCarloIterationsState,
+    setIncludePostRunReport,
+    setIncludePostRunAnalytics,
+    setExtendedSeedContext,
+    setSimulationObjective,
+    setObjectiveMode,
+  };
+
+  const setCurrentStep = useCallback((step: number) => {
+    setCurrentStepState(
+      Math.min(Math.max(0, step), WIZARD_STEPS.length - 1),
+    );
+  }, []);
 
   /** Keep iterations in the same [10, cap] range the Monte Carlo Slider displays. */
   const setMonteCarloIterations = useCallback(
@@ -86,70 +211,66 @@ export function useWizardDraft() {
     }
   }, []);
 
-  // Hydrate from localStorage after mount (SSR-safe).
-  useEffect(() => {
-    const draft = readSimulationDraftRaw();
-    if (!draft || draft === '{}') return;
+  const applyNavigationFields = useCallback((parsed: SimulationDraftPayload) => {
+    if (typeof parsed.currentStep === 'number') {
+      setCurrentStep(parsed.currentStep);
+    }
+    if (parsed.agentConfigs && typeof parsed.agentConfigs === 'object') {
+      setAgentConfigs(parsed.agentConfigs);
+    }
+    if (Array.isArray(parsed.selectedSeedIds)) {
+      setSelectedSeedIds(parsed.selectedSeedIds);
+    }
+    if (typeof parsed.playbookId === 'string' && parsed.playbookId) {
+      setPendingPlaybookId(parsed.playbookId);
+    }
+  }, [setCurrentStep]);
 
-    try {
-      const parsed = JSON.parse(draft) as Record<string, unknown>;
-      /* eslint-disable react-hooks/set-state-in-effect -- one-shot localStorage hydrate */
-      if (typeof parsed.simulationName === 'string' && parsed.simulationName) {
-        setSimulationName(parsed.simulationName);
-      }
-      if (typeof parsed.rounds === 'number' && parsed.rounds) {
-        setRounds(parsed.rounds);
-      }
-      if (typeof parsed.environmentType === 'string' && parsed.environmentType) {
-        setEnvironmentType(
-          normalizeSimulationEnvironmentType(parsed.environmentType)
-        );
-      }
-      if (typeof parsed.modelSelection === 'string' && parsed.modelSelection) {
-        setModelSelection(parsed.modelSelection);
-      }
-      if (typeof parsed.monteCarloEnabled === 'boolean') {
-        setMonteCarloEnabledState(parsed.monteCarloEnabled);
-      }
-      if (typeof parsed.monteCarloIterations === 'number') {
-        // Preserve below-10 draft values while MC is off; clamp when already enabled.
-        if (parsed.monteCarloEnabled === true) {
-          setMonteCarloIterationsState(
-            clampMonteCarloIterations(parsed.monteCarloIterations),
-          );
-        } else {
-          setMonteCarloIterationsState(parsed.monteCarloIterations);
-        }
-      }
-      if (typeof parsed.includePostRunReport === 'boolean') {
-        setIncludePostRunReport(parsed.includePostRunReport);
-      }
-      if (typeof parsed.includePostRunAnalytics === 'boolean') {
-        setIncludePostRunAnalytics(parsed.includePostRunAnalytics);
-      }
-      if (typeof parsed.extendedSeedContext === 'boolean') {
-        setExtendedSeedContext(parsed.extendedSeedContext);
-      }
-      if (typeof parsed.simulationObjective === 'string') {
-        setSimulationObjective(parsed.simulationObjective);
-      }
-      if (
-        parsed.objectiveMode === 'consulting' ||
-        parsed.objectiveMode === 'general_prediction'
-      ) {
-        setObjectiveMode(parsed.objectiveMode);
-      }
-      /* eslint-enable react-hooks/set-state-in-effect */
-    } catch (err) {
-      console.error('Failed to parse simulation draft from localStorage.', err, {
-        draftLength: typeof draft === 'string' ? draft.length : 0,
-      });
+  // Hydrate parameters from localStorage after mount (SSR-safe).
+  useEffect(() => {
+    const raw = readSimulationDraftRaw();
+    const parsed = parseSimulationDraftPayload(raw);
+
+    if (parsed && hasMeaningfulWizardDraft(parsed)) {
+      pendingDraftRef.current = parsed;
+      setShowDraftBanner(true);
+      applyParameterFieldsFromDraft(parsed, parameterSetters);
+    } else if (parsed) {
+      applyParameterFieldsFromDraft(parsed, parameterSetters);
+    } else if (raw) {
       clearSimulationDraftRaw();
     }
+
+    parametersHydratedRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot hydrate
   }, []);
 
+  const resumeDraft = useCallback(() => {
+    const parsed = pendingDraftRef.current;
+    if (!parsed) {
+      setShowDraftBanner(false);
+      return;
+    }
+    applyParameterFieldsFromDraft(parsed, parameterSetters);
+    applyNavigationFields(parsed);
+    setShowDraftBanner(false);
+  }, [applyNavigationFields]);
+
+  const discardDraft = useCallback(() => {
+    clearSimulationDraftRaw();
+    pendingDraftRef.current = null;
+    setShowDraftBanner(false);
+    setCurrentStep(0);
+    setAgentConfigs({});
+    setSelectedSeedIds([]);
+    setPendingPlaybookId(null);
+    resetParameterDefaults(parameterSetters);
+  }, [setCurrentStep]);
+
   useEffect(() => {
-    const draft = {
+    if (!parametersHydratedRef.current) return;
+
+    const draft: SimulationDraftPayload = {
       simulationName,
       rounds,
       environmentType,
@@ -161,10 +282,14 @@ export function useWizardDraft() {
       extendedSeedContext,
       simulationObjective,
       objectiveMode,
+      currentStep,
+      agentConfigs,
+      selectedSeedIds,
+      ...(playbookId ? { playbookId } : {}),
     };
 
     const timeoutId = window.setTimeout(() => {
-      writeSimulationDraftRaw(JSON.stringify(draft));
+      writeSimulationDraftRaw(serializeSimulationDraftPayload(draft));
     }, 400);
 
     return () => {
@@ -182,6 +307,10 @@ export function useWizardDraft() {
     extendedSeedContext,
     simulationObjective,
     objectiveMode,
+    currentStep,
+    agentConfigs,
+    selectedSeedIds,
+    playbookId,
   ]);
 
   return {
@@ -207,5 +336,16 @@ export function useWizardDraft() {
     setSimulationObjective,
     objectiveMode,
     setObjectiveMode,
+    currentStep,
+    setCurrentStep,
+    agentConfigs,
+    setAgentConfigs,
+    selectedSeedIds,
+    setSelectedSeedIds,
+    pendingPlaybookId,
+    setPendingPlaybookId,
+    showDraftBanner,
+    resumeDraft,
+    discardDraft,
   };
 }

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ChevronLeft, TrendingUp, Newspaper, DollarSign, RefreshCw, Settings, Zap } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Spinner } from '@/components/ui/Spinner';
 import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { api } from '@/lib/api';
@@ -83,7 +84,7 @@ export default function MarketIntelPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-slate-400">Loading market intelligence...</div>
+        <Spinner message="Loading market intelligence…" />
       </div>
     );
   }

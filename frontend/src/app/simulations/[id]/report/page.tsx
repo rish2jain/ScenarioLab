@@ -7,6 +7,7 @@ import { clsx } from 'clsx';
 import { ChevronLeft, Lightbulb } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Spinner } from '@/components/ui/Spinner';
 import { Tabs } from '@/components/ui/Tabs';
 import { ExportButtons } from '@/components/reports/ExportButtons';
 import { RiskRegisterTable } from '@/components/reports/RiskRegisterTable';
@@ -126,7 +127,7 @@ export default function ReportPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-slate-400">Loading report...</div>
+        <Spinner message="Loading report…" />
       </div>
     );
   }

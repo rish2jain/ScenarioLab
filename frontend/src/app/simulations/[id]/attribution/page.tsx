@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, PieChart, Info, Users, Database } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Spinner } from '@/components/ui/Spinner';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { api } from '@/lib/api';
 import type { AttributionResult } from '@/lib/types';
 
@@ -18,30 +20,52 @@ export default function AttributionPage() {
   const params = useParams();
   const rawId = params.id;
   const simulationId = Array.isArray(rawId) ? rawId[0] : rawId ?? '';
+  const router = useRouter();
 
   const [attribution, setAttribution] = useState<AttributionResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const loadAttribution = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const result = await api.getAttribution(simulationId);
+      setAttribution(result ?? null);
+    } catch (err) {
+      console.error('Failed to load attribution analysis', err);
+      setAttribution(null);
+      setLoadError(
+        err instanceof Error ? err.message : 'Failed to load attribution analysis.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, [simulationId]);
 
   useEffect(() => {
-    const loadAttribution = async () => {
-      setIsLoading(true);
-      try {
-        const result = await api.getAttribution(simulationId);
-        setAttribution(result ?? null);
-      } catch (err) {
-        console.error('Failed to load attribution analysis', err);
-        setAttribution(null);
-      }
-      setIsLoading(false);
-    };
-
-    loadAttribution();
-  }, [simulationId]);
+    void loadAttribution();
+  }, [loadAttribution]);
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-slate-400">Loading attribution analysis...</div>
+        <Spinner message="Loading attribution analysis…" />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 px-4">
+        <EmptyState
+          title="Could not load attribution analysis"
+          description={loadError}
+          action={{
+            label: 'Retry',
+            onClick: () => void loadAttribution(),
+          }}
+        />
       </div>
     );
   }
@@ -50,18 +74,16 @@ export default function AttributionPage() {
 
   if (!attribution || agents.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-96 text-center space-y-4">
-        <div className="w-16 h-16 bg-slate-800/50 rounded-full flex items-center justify-center mb-2">
-          <Database className="w-8 h-8 text-slate-500" />
-        </div>
-        <h2 className="text-xl font-semibold text-slate-200">Insufficient Data for Attribution Analysis</h2>
-        <p className="text-slate-400 max-w-md">
-          Not enough simulation rounds have been completed to generate statistically significant Shapley values.
-          Please wait for the simulation to progress further.
-        </p>
-        <Link href={`/simulations/${simulationId}`}>
-          <Button variant="secondary" className="mt-4">Return to Overview</Button>
-        </Link>
+      <div className="flex flex-col items-center justify-center h-96 text-center space-y-4 px-4">
+        <EmptyState
+          icon={<Database className="w-8 h-8 text-slate-500" />}
+          title="Insufficient Data for Attribution Analysis"
+          description="Not enough simulation rounds have been completed to generate statistically significant Shapley values. Please wait for the simulation to progress further."
+          action={{
+            label: 'Return to Overview',
+            onClick: () => router.push(`/simulations/${simulationId}`),
+          }}
+        />
       </div>
     );
   }

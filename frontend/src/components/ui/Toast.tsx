@@ -85,9 +85,9 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
   };
 
   const bgs = {
-    success: 'bg-green-500/10 border-green-500/20',
-    error: 'bg-red-500/10 border-red-500/20',
-    info: 'bg-blue-500/10 border-blue-500/20',
+    success: 'bg-success/10 border-success/20',
+    error: 'bg-error/10 border-error/20',
+    info: 'bg-info/10 border-info/20',
   };
 
   return (

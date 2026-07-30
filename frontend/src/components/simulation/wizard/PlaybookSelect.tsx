@@ -57,6 +57,18 @@ export function PlaybookSelect({
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-semibold text-foreground">Select a Playbook</h2>
+      {playbooks.length === 0 ? (
+        <div
+          className="rounded-lg border border-border bg-background-secondary/50 p-8 text-center space-y-2"
+          role="status"
+        >
+          <p className="font-medium text-foreground">No playbooks available</p>
+          <p className="text-sm text-foreground-muted">
+            Could not load playbook templates. Check that the backend is running, then refresh
+            the page.
+          </p>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {playbooks.map((playbook) => (
           <button
@@ -98,6 +110,7 @@ export function PlaybookSelect({
           </button>
         ))}
       </div>
+      )}
       {selectedPlaybook && playbookDetailLoading && (
         <div
           className="flex items-center gap-3 text-sm text-foreground-muted"

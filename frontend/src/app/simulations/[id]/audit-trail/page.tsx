@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ChevronLeft, Shield, CheckCircle, XCircle, FileJson, FileSpreadsheet } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { api } from '@/lib/api';
 import type { AuditTrail, AuditEventType } from '@/lib/types';
@@ -142,7 +143,7 @@ export default function AuditTrailPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-slate-400">Loading audit trail...</div>
+        <Spinner message="Loading audit trail…" />
       </div>
     );
   }

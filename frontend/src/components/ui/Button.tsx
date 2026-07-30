@@ -28,7 +28,7 @@ export function Button({
     ghost:
       'bg-transparent hover:bg-background-tertiary text-foreground-muted border-transparent',
     danger:
-      'bg-red-600 hover:bg-red-700 text-white border-transparent',
+      'bg-error hover:brightness-90 text-white border-transparent',
   };
 
   const sizes = {

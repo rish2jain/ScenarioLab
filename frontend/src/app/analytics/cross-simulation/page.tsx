@@ -1,9 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Brain, TrendingUp, Shield, Lightbulb, Users, BarChart3, CheckCircle } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { api, loadSimulationsFromApi } from '@/lib/api';
 import type { CrossSimulationPattern, PrivacyReport, ArchetypeImprovement } from '@/lib/types';
@@ -22,6 +25,7 @@ function classifyCrossSimulationLoadError(error: unknown): ApiLoadErrorKind {
 }
 
 export default function CrossSimulationPage() {
+  const router = useRouter();
   const { addToast } = useToast();
   const [patterns, setPatterns] = useState<CrossSimulationPattern | null>(null);
   const [privacyReport, setPrivacyReport] = useState<PrivacyReport | null>(null);
@@ -107,6 +111,9 @@ export default function CrossSimulationPage() {
               shared_at: new Date().toISOString(),
             }
       );
+      if (result.opted_in) {
+        addToast('Opted in to cross-simulation data sharing.', 'success');
+      }
     } catch (error) {
       console.error('Opt-in failed:', error);
       const message =
@@ -123,7 +130,7 @@ export default function CrossSimulationPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-slate-400">Loading cross-simulation analytics...</div>
+        <Spinner message="Loading cross-simulation analytics…" />
       </div>
     );
   }
@@ -176,26 +183,25 @@ export default function CrossSimulationPage() {
 
       <Card padding="md">
         <p className="text-sm text-slate-400">
-          Compare two environment presets with the same roster and seeds: call{' '}
-          <code className="text-slate-300">POST /api/simulations/dual-run-preset</code>{' '}
-          (returns <code className="text-slate-300">batch_parent_id</code> and two create payloads),
-          then create both simulations and analyze them here. Start from{' '}
+          Compare two environment presets with the same roster and seeds. Start from{' '}
           <Link href="/simulations/new" className="text-accent hover:underline">
             New simulation
           </Link>
-          .
+          , then analyze completed runs here to spot patterns across scenarios.
         </p>
       </Card>
 
       {!hasData ? (
         <Card padding="lg">
-          <div className="flex flex-col items-center justify-center p-8 text-center">
-            <Brain className="w-12 h-12 text-slate-500 mb-4" />
-            <h2 className="text-xl font-bold text-slate-200">Insufficient Data</h2>
-            <p className="text-slate-400 mt-2 max-w-md">
-              Cross-simulation learning requires completed simulations to identify patterns and insights. Check back once more simulations have finished.
-            </p>
-          </div>
+          <EmptyState
+            icon={<Brain className="w-8 h-8 text-slate-500" />}
+            title="Insufficient Data"
+            description="Cross-simulation learning requires completed simulations to identify patterns and insights. Check back once more simulations have finished."
+            action={{
+              label: 'Create Simulation',
+              onClick: () => router.push('/simulations/new'),
+            }}
+          />
         </Card>
       ) : (
         <>
@@ -219,7 +225,12 @@ export default function CrossSimulationPage() {
           </div>
           <div className="p-4 bg-slate-700/20 rounded-lg text-center">
             <div className="text-2xl font-bold text-slate-100">ε = {privacyReport?.privacy_epsilon || 0}</div>
-            <div className="text-sm text-slate-400">Privacy Budget</div>
+            <div className="text-sm text-slate-400">
+              Privacy budget
+              <span className="block text-xs mt-1 text-slate-500">
+                Lower ε means stronger anonymity protection for shared insights.
+              </span>
+            </div>
           </div>
           <div className="p-4 bg-slate-700/20 rounded-lg text-center">
             <div className="text-2xl font-bold text-green-400">

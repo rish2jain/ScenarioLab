@@ -12,6 +12,7 @@ export function usePlaybookDetail({
   setSelectedPlaybook,
   setSimulationName,
   setAgentConfigs,
+  agentConfigs,
 }: {
   selectedPlaybook: Playbook | null;
   setSelectedPlaybook: (p: Playbook) => void;
@@ -21,6 +22,7 @@ export function usePlaybookDetail({
       | Record<string, number>
       | ((prev: Record<string, number>) => Record<string, number>),
   ) => void;
+  agentConfigs: Record<string, number>;
 }) {
   const { addToast } = useToast();
   /** True while lazy-loading full playbook (roster) after selection — blocks Next on step 0. */
@@ -86,6 +88,16 @@ export function usePlaybookDetail({
         }
         configuredPlaybookIdRef.current = playbook.id;
 
+        const hasExistingAgentCounts = Object.values(agentConfigs).some(
+          (count) => count > 0,
+        );
+        if (hasExistingAgentCounts) {
+          setSimulationName((prev) =>
+            prev ? prev : `${playbook.name} - ${new Date().toLocaleDateString()}`
+          );
+          return;
+        }
+
         const roster = playbook.roster ?? [];
         const configs: Record<string, number> = {};
         roster.forEach((role) => {
@@ -117,7 +129,7 @@ export function usePlaybookDetail({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stable setters/addToast omitted; deps are playbook + retry only
-  }, [selectedPlaybook, playbookDetailRetryToken]);
+  }, [selectedPlaybook, playbookDetailRetryToken, agentConfigs]);
 
   const retryPlaybookDetail = () => setPlaybookDetailRetryToken((t) => t + 1);
 

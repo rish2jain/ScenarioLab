@@ -74,6 +74,8 @@ export function DropZone({
 
   return (
     <div
+      role="group"
+      aria-label="Upload seed materials"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -81,7 +83,7 @@ export function DropZone({
         'relative border-2 border-dashed rounded-xl p-8 text-center transition-all duration-200',
         isDragOver
           ? 'border-accent bg-accent/10'
-          : 'border-slate-600 hover:border-slate-500 bg-slate-800/30',
+          : 'border-border hover:border-border-hover bg-background-tertiary/30',
         className
       )}
     >
@@ -90,27 +92,28 @@ export function DropZone({
         multiple
         accept={accept}
         onChange={handleFileInput}
+        aria-label="Choose seed material files to upload"
         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
       />
       <div className="flex flex-col items-center gap-3">
         <div
           className={clsx(
             'w-16 h-16 rounded-full flex items-center justify-center transition-colors',
-            isDragOver ? 'bg-accent/20' : 'bg-slate-700'
+            isDragOver ? 'bg-accent/20' : 'bg-background-tertiary'
           )}
         >
           <Upload
             className={clsx(
               'w-8 h-8 transition-colors',
-              isDragOver ? 'text-accent' : 'text-slate-400'
+              isDragOver ? 'text-accent' : 'text-foreground-muted'
             )}
           />
         </div>
         <div>
-          <p className="text-slate-200 font-medium">
+          <p className="text-foreground font-medium">
             Drop seed materials here
           </p>
-          <p className="text-slate-400 text-sm mt-1">
+          <p className="text-foreground-muted text-sm mt-1">
             or click to browse files
           </p>
         </div>
@@ -118,13 +121,13 @@ export function DropZone({
           {acceptDisplayTokens.map((ext) => (
             <span
               key={ext}
-              className="px-2 py-1 bg-slate-700 rounded text-xs text-slate-300"
+              className="px-2 py-1 bg-background-tertiary rounded text-xs text-foreground-muted"
             >
               {ext}
             </span>
           ))}
         </div>
-        <p className="text-slate-500 text-xs">
+        <p className="text-foreground-subtle text-xs">
           Max file size: {(maxSize / 1024 / 1024).toFixed(0)}MB
         </p>
       </div>
@@ -157,18 +160,18 @@ export function FileList({ files, onRemove }: FileListProps) {
       {files.map((file) => (
         <div
           key={file.id}
-          className="flex items-center gap-3 p-3 bg-slate-800 rounded-lg border border-slate-700"
+          className="flex items-center gap-3 p-3 bg-background-secondary rounded-lg border border-border"
         >
-          <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center flex-shrink-0">
-            <File className="w-5 h-5 text-slate-400" />
+          <div className="w-10 h-10 rounded-lg bg-background-tertiary flex items-center justify-center flex-shrink-0">
+            <File className="w-5 h-5 text-foreground-muted" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-slate-200 truncate">
+            <p className="text-sm font-medium text-foreground truncate">
               {file.name}
             </p>
-            <p className="text-xs text-slate-400">{formatSize(file.size)}</p>
+            <p className="text-xs text-foreground-muted">{formatSize(file.size)}</p>
             {file.status === 'uploading' && (
-              <div className="mt-2 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+              <div className="mt-2 h-1.5 bg-background-tertiary rounded-full overflow-hidden">
                 <div
                   className="h-full bg-accent transition-all duration-300"
                   style={{ width: `${file.progress}%` }}
@@ -177,10 +180,12 @@ export function FileList({ files, onRemove }: FileListProps) {
             )}
           </div>
           <button
+            type="button"
             onClick={() => onRemove(file.id)}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-400/10 transition-colors"
+            aria-label={`Remove ${file.name}`}
+            className="p-1.5 rounded-lg text-foreground-muted hover:text-error hover:bg-error/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
       ))}

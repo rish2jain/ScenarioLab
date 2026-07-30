@@ -112,21 +112,21 @@ export default function BacktestPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-background p-8">
       <div className="max-w-7xl mx-auto">
         <header className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold text-foreground">
             Simulation Backtesting
           </h1>
-          <p className="mt-2 text-gray-600">
+          <p className="mt-2 text-foreground-muted">
             Validate simulation accuracy against historical case studies
           </p>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Case Selection */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold mb-4">Select Test Case</h2>
+          <div className="bg-background-secondary border border-border rounded-lg shadow p-6">
+            <h2 className="text-xl font-semibold mb-4 text-foreground">Select Test Case</h2>
 
             <div className="flex gap-4 mb-4">
               <button
@@ -136,8 +136,8 @@ export default function BacktestPage() {
                 }}
                 className={`px-4 py-2 rounded ${
                   !customMode
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700'
+                    ? 'bg-accent text-white'
+                    : 'bg-background-tertiary text-foreground-muted'
                 }`}
               >
                 Bundled Cases
@@ -149,8 +149,8 @@ export default function BacktestPage() {
                 }}
                 className={`px-4 py-2 rounded ${
                   customMode
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700'
+                    ? 'bg-accent text-white'
+                    : 'bg-background-tertiary text-foreground-muted'
                 }`}
               >
                 Custom Case

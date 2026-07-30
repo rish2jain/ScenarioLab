@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Plus, Settings, Play, CheckCircle, Clock, BarChart3, Activity, Trash2 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { fetchApi } from '@/lib/api';
 
@@ -68,6 +70,7 @@ export default function FineTuningPage() {
   const [adapters, setAdapters] = useState<Adapter[]>([]);
   const [adapterToggleError, setAdapterToggleError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -79,96 +82,115 @@ export default function FineTuningPage() {
     learning_rate: 0.0001,
   });
 
-  useEffect(() => {
-    const loadFineTuningData = async () => {
-      setIsLoading(true);
-      try {
-        const [jobsResult, adaptersResult] = await Promise.all([
-          fetchApi<Array<{
-            job_id: string;
-            dataset_id: string;
-            base_model: string;
-            status: string;
-            progress: number;
-            created_at: string;
-            completed_at?: string;
-            num_examples?: number | null;
-            metrics?: {
-              loss?: number;
-              accuracy?: number;
-            };
-          }>>('/api/llm/fine-tune/jobs'),
-          fetchApi<Array<{
-            adapter_id: string;
-            job_id: string;
-            base_model: string;
-            domain: string;
-            active: boolean;
-            created_at: string;
-            performance_metrics?: {
-              accuracy?: number;
-            };
-          }>>('/api/llm/fine-tune/adapters'),
-        ]);
+  const loadFineTuningData = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const [jobsResult, adaptersResult] = await Promise.all([
+        fetchApi<Array<{
+          job_id: string;
+          dataset_id: string;
+          base_model: string;
+          status: string;
+          progress: number;
+          created_at: string;
+          completed_at?: string;
+          num_examples?: number | null;
+          metrics?: {
+            loss?: number;
+            accuracy?: number;
+          };
+        }>>('/api/llm/fine-tune/jobs'),
+        fetchApi<Array<{
+          adapter_id: string;
+          job_id: string;
+          base_model: string;
+          domain: string;
+          active: boolean;
+          created_at: string;
+          performance_metrics?: {
+            accuracy?: number;
+          };
+        }>>('/api/llm/fine-tune/adapters'),
+      ]);
 
-        if (jobsResult.success && jobsResult.data) {
-          setJobs(
-            jobsResult.data.map((job) => {
-              const src = job.metrics;
-              let metrics: { loss?: number; accuracy?: number } | undefined =
-                undefined;
-              if (src) {
-                const out: { loss?: number; accuracy?: number } = {};
-                if (src.loss !== undefined) out.loss = src.loss;
-                if (src.accuracy !== undefined) out.accuracy = src.accuracy;
-                metrics = Object.keys(out).length ? out : undefined;
-              }
-              return {
-                id: job.job_id,
-                name: `${job.base_model} adapter`,
-                status:
-                  job.status === 'queued'
-                    ? 'pending'
-                    : job.status === 'training'
-                    ? 'running'
-                    : job.status === 'completed'
-                    ? 'completed'
-                    : 'failed',
-                base_model: job.base_model,
-                dataset_size:
-                  typeof job.num_examples === 'number' ? job.num_examples : undefined,
-                progress: Math.round(job.progress),
-                created_at: job.created_at,
-                completed_at: job.completed_at,
-                metrics,
-              };
-            })
-          );
-        }
-
-        if (adaptersResult.success && adaptersResult.data) {
-          setAdapters(
-            adaptersResult.data.map((adapter) => ({
-              id: adapter.adapter_id,
-              name: adapter.domain,
-              job_id: adapter.job_id,
-              is_active: adapter.active,
-              created_at: adapter.created_at,
-              performance_score: adapter.performance_metrics?.accuracy,
-            }))
-          );
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to load fine-tuning data';
-        console.error('[loadFineTuningData]', err);
-        addToast(`${message}. Check that the API is running.`, 'error');
-      } finally {
-        setIsLoading(false);
+      const errors: string[] = [];
+      if (jobsResult.success && jobsResult.data) {
+        setJobs(
+          jobsResult.data.map((job) => {
+            const src = job.metrics;
+            let metrics: { loss?: number; accuracy?: number } | undefined =
+              undefined;
+            if (src) {
+              const out: { loss?: number; accuracy?: number } = {};
+              if (src.loss !== undefined) out.loss = src.loss;
+              if (src.accuracy !== undefined) out.accuracy = src.accuracy;
+              metrics = Object.keys(out).length ? out : undefined;
+            }
+            return {
+              id: job.job_id,
+              name: `${job.base_model} adapter`,
+              status:
+                job.status === 'queued'
+                  ? 'pending'
+                  : job.status === 'training'
+                  ? 'running'
+                  : job.status === 'completed'
+                  ? 'completed'
+                  : 'failed',
+              base_model: job.base_model,
+              dataset_size:
+                typeof job.num_examples === 'number' ? job.num_examples : undefined,
+              progress: Math.round(job.progress),
+              created_at: job.created_at,
+              completed_at: job.completed_at,
+              metrics,
+            };
+          })
+        );
+      } else {
+        errors.push(
+          jobsResult.error?.trim() ||
+            'Could not load training jobs. Check that the API is running.'
+        );
       }
-    };
 
-    loadFineTuningData();
+      if (adaptersResult.success && adaptersResult.data) {
+        setAdapters(
+          adaptersResult.data.map((adapter) => ({
+            id: adapter.adapter_id,
+            name: adapter.domain,
+            job_id: adapter.job_id,
+            is_active: adapter.active,
+            created_at: adapter.created_at,
+            performance_score: adapter.performance_metrics?.accuracy,
+          }))
+        );
+      } else {
+        errors.push(
+          adaptersResult.error?.trim() ||
+            'Could not load adapters. Check that the API is running.'
+        );
+      }
+
+      if (errors.length > 0) {
+        const message = errors.join(' ');
+        setLoadError(message);
+        addToast(message, 'error');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load fine-tuning data';
+      console.error('[loadFineTuningData]', err);
+      setLoadError(`${message}. Check that the API is running.`);
+      addToast(`${message}. Check that the API is running.`, 'error');
+    } finally {
+      setIsLoading(false);
+    }
   }, [addToast]);
+
+  useEffect(() => {
+    void loadFineTuningData();
+  }, [loadFineTuningData]);
 
   const handleCreateJob = async () => {
     if (isCreating) return;
@@ -270,6 +292,7 @@ export default function FineTuningPage() {
           is_active: adapter.id === adapterId,
         }))
       );
+      addToast('Adapter activated', 'success');
     } catch (err) {
       console.error('Adapter activation failed', err);
       const msg =
@@ -308,7 +331,30 @@ export default function FineTuningPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-slate-400">Loading fine-tuning jobs...</div>
+        <Spinner message="Loading fine-tuning jobs…" />
+      </div>
+    );
+  }
+
+  if (loadError && jobs.length === 0 && adapters.length === 0) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-100">Fine-Tuning Management</h1>
+          <p className="text-slate-400 mt-1 text-sm sm:text-base">
+            Manage custom model adapters and training jobs
+          </p>
+        </div>
+        <Card>
+          <EmptyState
+            title="Could not load fine-tuning data"
+            description={loadError}
+            action={{
+              label: 'Retry',
+              onClick: () => void loadFineTuningData(),
+            }}
+          />
+        </Card>
       </div>
     );
   }
@@ -449,23 +495,28 @@ export default function FineTuningPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleToggleAdapter(adapter.id)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    adapter.is_active
-                      ? 'bg-green-500/20 text-green-400'
-                      : 'bg-slate-600/20 text-slate-400 hover:bg-slate-600/40'
-                  }`}
-                >
-                  {adapter.is_active ? 'Active' : 'Inactive'}
-                </button>
+                {adapter.is_active ? (
+                  <span className="px-3 py-1.5 rounded-lg text-sm font-medium bg-green-500/20 text-green-400">
+                    Active
+                  </span>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => void handleToggleAdapter(adapter.id)}
+                  >
+                    Activate
+                  </Button>
+                )}
               </div>
             </div>
           ))}
           {adapters.length === 0 && (
-            <div className="text-center py-8 text-slate-500">
-              No adapters created yet
-            </div>
+            <EmptyState
+              icon={<Settings className="w-8 h-8 text-slate-500" />}
+              title="No adapters created yet"
+              description="Complete a fine-tuning job to create an adapter you can activate here."
+            />
           )}
         </div>
       </Card>
@@ -480,7 +531,18 @@ export default function FineTuningPage() {
         }
       >
         <div className="space-y-4">
-          {jobs.map((job) => (
+          {jobs.length === 0 ? (
+            <EmptyState
+              icon={<Play className="w-8 h-8 text-slate-500" />}
+              title="No training jobs yet"
+              description="Start a fine-tuning job to train a custom adapter on your scenario data."
+              action={{
+                label: 'New Fine-Tuning Job',
+                onClick: () => setShowCreateForm(true),
+              }}
+            />
+          ) : (
+          jobs.map((job) => (
             <div key={job.id} className="p-4 bg-slate-700/20 rounded-lg">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
@@ -545,7 +607,8 @@ export default function FineTuningPage() {
                 {job.completed_at && ` • Completed: ${new Date(job.completed_at).toLocaleString()}`}
               </div>
             </div>
-          ))}
+          ))
+          )}
         </div>
       </Card>
     </div>

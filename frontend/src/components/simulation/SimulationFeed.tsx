@@ -18,9 +18,24 @@ const getContrastTextColor = (bgColor?: string): string => {
 interface SimulationFeedProps {
   messages: AgentMessage[];
   className?: string;
+  /** Simulation status — drives empty-state copy when there are no messages. */
+  status?: string;
 }
 
-export function SimulationFeed({ messages, className }: SimulationFeedProps) {
+function emptyFeedCopy(status?: string): string {
+  if (status === 'pending') {
+    return 'Ready to start — press Start when you are ready.';
+  }
+  if (status === 'running' || status === 'paused') {
+    return 'Waiting for first agent message…';
+  }
+  if (status === 'completed') {
+    return 'No messages were recorded for this simulation.';
+  }
+  return 'No messages yet.';
+}
+
+export function SimulationFeed({ messages, className, status }: SimulationFeedProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -123,7 +138,7 @@ export function SimulationFeed({ messages, className }: SimulationFeedProps) {
 
       {messages.length === 0 && (
         <div className="flex items-center justify-center h-32 text-foreground-subtle">
-          No messages yet. Simulation will begin shortly.
+          {emptyFeedCopy(status)}
         </div>
       )}
     </div>

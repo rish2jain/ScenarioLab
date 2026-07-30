@@ -80,7 +80,7 @@ export function Header({
         {/* Hamburger menu button for mobile */}
         <button
           onClick={onMenuClick}
-          className="flex-shrink-0 p-2 -ml-2 rounded-lg text-foreground-muted hover:text-foreground hover:bg-background-tertiary md:hidden"
+          className="flex-shrink-0 p-2 -ml-2 rounded-lg text-foreground-muted hover:text-foreground hover:bg-background-tertiary md:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           aria-label="Open menu"
         >
           <Menu className="w-5 h-5" />
@@ -102,7 +102,7 @@ export function Header({
               ? `View notifications, ${unreadNotificationCount} unread`
               : "View notifications"
           }
-          className="relative p-2 text-foreground-muted hover:text-foreground transition-colors rounded-lg hover:bg-background-tertiary"
+          className="relative p-2 text-foreground-muted hover:text-foreground transition-colors rounded-lg hover:bg-background-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <Bell className="w-5 h-5" aria-hidden />
           {unreadNotificationCount > 0 && (
@@ -116,7 +116,7 @@ export function Header({
         {/* User menu */}
         <button 
           aria-label="User profile"
-          className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-background-tertiary transition-colors"
+          className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-background-tertiary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <div className="w-8 h-8 rounded-full bg-background-tertiary border border-border flex items-center justify-center">
             <User className="w-4 h-4 text-foreground-muted" />

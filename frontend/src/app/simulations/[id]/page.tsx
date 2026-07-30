@@ -12,13 +12,7 @@ import {
   ChevronLeft,
   Clock,
   Users,
-  Mic,
-  Target,
-  Users2,
-  History,
-  PieChart,
-  BarChart3,
-  Network,
+  X,
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -50,25 +44,6 @@ const POLL_MAX_DELAY_MS = 60_000;
 const POLL_BACKOFF_FACTOR = 2;
 const POLL_FAILURES_TOAST = 3;
 const POLL_MAX_FAILURES = 10;
-
-function FeatureCard({
-  href,
-  icon,
-  label,
-}: {
-  href: string;
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <Link href={href}>
-      <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-slate-700/30 hover:bg-slate-700/50 transition-colors cursor-pointer">
-        <div className="text-slate-400">{icon}</div>
-        <span className="text-xs text-slate-300">{label}</span>
-      </div>
-    </Link>
-  );
-}
 
 export default function SimulationMonitorPage() {
   const params = useParams();
@@ -385,7 +360,7 @@ export default function SimulationMonitorPage() {
   }
 
   return (
-    <div className="h-full flex flex-col -m-4 md:-m-6">
+    <div className="h-full flex flex-col min-w-0 overflow-x-hidden">
       {/* Header */}
       <div className="px-4 md:px-6 py-3 md:py-4 border-b border-slate-700 bg-slate-800/50">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
@@ -455,49 +430,22 @@ export default function SimulationMonitorPage() {
           </div>
         )}
 
-        {/* Feature Navigation Cards */}
-        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
-          <FeatureCard
-            href={`/simulations/${simulationId}/network`}
-            icon={<Network className="w-4 h-4" />}
-            label="Network"
-          />
-          <FeatureCard
-            href={`/simulations/${simulationId}/timeline`}
-            icon={<Clock className="w-4 h-4" />}
-            label="Timeline"
-          />
-          <FeatureCard
-            href={`/simulations/${simulationId}/sensitivity`}
-            icon={<BarChart3 className="w-4 h-4" />}
-            label="Sensitivity"
-          />
-          <FeatureCard
-            href={`/simulations/${simulationId}/voice`}
-            icon={<Mic className="w-4 h-4" />}
-            label="Voice"
-          />
-          <FeatureCard
-            href={`/simulations/${simulationId}/zopa`}
-            icon={<Target className="w-4 h-4" />}
-            label="ZOPA"
-          />
-          <FeatureCard
-            href={`/simulations/${simulationId}/rehearsal`}
-            icon={<Users2 className="w-4 h-4" />}
-            label="Rehearsal"
-          />
-          <FeatureCard
-            href={`/simulations/${simulationId}/audit-trail`}
-            icon={<History className="w-4 h-4" />}
-            label="Audit"
-          />
-          <FeatureCard
-            href={`/simulations/${simulationId}/attribution`}
-            icon={<PieChart className="w-4 h-4" />}
-            label="Attribution"
-          />
-        </div>
+        {currentSimulation.status === 'completed' && (
+          <div
+            className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-accent/30 bg-accent/10 px-4 py-3"
+            role="status"
+          >
+            <div>
+              <p className="font-medium text-foreground">Simulation complete</p>
+              <p className="text-sm text-foreground-muted">
+                Review the analysis report for findings and recommendations.
+              </p>
+            </div>
+            <Link href={`/simulations/${simulationId}/report`}>
+              <Button leftIcon={<FileText className="w-4 h-4" />}>View Report</Button>
+            </Link>
+          </div>
+        )}
 
         {/* Progress Bar */}
         <div className="mt-4">
@@ -512,7 +460,31 @@ export default function SimulationMonitorPage() {
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         {/* Feed */}
         <div className="flex-1 flex flex-col min-w-0 order-2 lg:order-1">
-          <SimulationFeed messages={agentMessages} />
+          {selectedAgentId ? (
+            <div className="px-4 md:px-6 pt-3 flex items-center gap-2">
+              <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background-secondary px-3 py-1 text-xs text-foreground">
+                Showing:{' '}
+                {currentSimulation.agents?.find((a) => a.id === selectedAgentId)?.name ??
+                  'selected agent'}
+                <button
+                  type="button"
+                  className="rounded-full p-0.5 hover:bg-background-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  aria-label="Clear agent filter"
+                  onClick={() => setSelectedAgentId(null)}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </span>
+            </div>
+          ) : null}
+          <SimulationFeed
+            messages={
+              selectedAgentId
+                ? agentMessages.filter((m) => m.agentId === selectedAgentId)
+                : agentMessages
+            }
+            status={currentSimulation.status}
+          />
           
           {/* Controls */}
           <div className="px-4 md:px-6 py-3 md:py-4 border-t border-slate-700 bg-slate-800/50">
@@ -586,7 +558,9 @@ export default function SimulationMonitorPage() {
                   key={agent.id}
                   agent={agent}
                   isSelected={selectedAgentId === agent.id}
-                  onClick={() => setSelectedAgentId(agent.id)}
+                  onClick={() =>
+                    setSelectedAgentId((prev) => (prev === agent.id ? null : agent.id))
+                  }
                 />
               ))
             ) : (

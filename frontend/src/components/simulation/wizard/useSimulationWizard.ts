@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
 import { usePlaybookStore, useSimulationStore, useUploadStore } from '@/lib/store';
@@ -20,6 +20,11 @@ import { useWizardDraft } from './useWizardDraft';
 import { useWizardModels } from './useWizardModels';
 import { usePlaybookDetail } from './usePlaybookDetail';
 import { useObjectiveTools } from './useObjectiveTools';
+import {
+  applyAgentCountDelta,
+  canProceedFromReason,
+  getCanProceedReason,
+} from './wizardProgress';
 
 export function useSimulationWizard() {
   const router = useRouter();
@@ -29,16 +34,15 @@ export function useSimulationWizard() {
   const { files: uploadedFiles, addFile, updateFile, mergeSeedsFromApi } =
     useUploadStore();
 
-  const [currentStep, setCurrentStep] = useState(0);
-  const [selectedSeedIds, setSelectedSeedIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [costEstimate, setCostEstimate] = useState<SimulationCostEstimate | null>(null);
   const [estimateLoading, setEstimateLoading] = useState(false);
-  const [agentConfigs, setAgentConfigs] = useState<Record<string, number>>({});
+  const [estimateFailed, setEstimateFailed] = useState(false);
   const [hybridAvailable, setHybridAvailable] = useState(false);
   const [hybridLocalEnabled, setHybridLocalEnabled] = useState(false);
+  const [maxVisitedStep, setMaxVisitedStep] = useState(0);
 
-  const draft = useWizardDraft();
+  const draft = useWizardDraft(selectedPlaybook?.id ?? null);
   const {
     simulationName,
     setSimulationName,
@@ -62,6 +66,17 @@ export function useSimulationWizard() {
     setSimulationObjective,
     objectiveMode,
     setObjectiveMode,
+    currentStep,
+    setCurrentStep,
+    agentConfigs,
+    setAgentConfigs,
+    selectedSeedIds,
+    setSelectedSeedIds,
+    pendingPlaybookId,
+    setPendingPlaybookId,
+    showDraftBanner,
+    resumeDraft,
+    discardDraft,
   } = draft;
 
   const {
@@ -78,6 +93,7 @@ export function useSimulationWizard() {
       setSelectedPlaybook,
       setSimulationName,
       setAgentConfigs,
+      agentConfigs,
     });
 
   const {
@@ -118,6 +134,19 @@ export function useSimulationWizard() {
       Math.max(10, monteCarloIterations),
     );
   }, [monteCarloEnabled, monteCarloIterations, rounds]);
+
+  useEffect(() => {
+    setMaxVisitedStep((prev) => Math.max(prev, currentStep));
+  }, [currentStep]);
+
+  useEffect(() => {
+    if (!pendingPlaybookId || playbooks.length === 0) return;
+    const playbook = playbooks.find((p) => p.id === pendingPlaybookId);
+    if (playbook) {
+      setSelectedPlaybook(playbook);
+      setPendingPlaybookId(null);
+    }
+  }, [pendingPlaybookId, playbooks, setSelectedPlaybook, setPendingPlaybookId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -167,6 +196,29 @@ export function useSimulationWizard() {
     void loadPlaybooks();
   }, [setPlaybooks, addToast]);
 
+  const canProceedReason = useMemo(
+    () =>
+      getCanProceedReason({
+        currentStep,
+        selectedPlaybook,
+        playbookDetailLoading,
+        agentConfigs,
+        simulationName,
+      }),
+    [
+      currentStep,
+      selectedPlaybook,
+      playbookDetailLoading,
+      agentConfigs,
+      simulationName,
+    ],
+  );
+
+  const canProceed = useCallback(
+    () => canProceedFromReason(canProceedReason),
+    [canProceedReason],
+  );
+
   const handleNext = () => {
     if (!canProceed()) return;
     if (currentStep < WIZARD_STEPS.length - 1) {
@@ -180,9 +232,15 @@ export function useSimulationWizard() {
     }
   };
 
+  const handleStartOver = () => {
+    discardDraft();
+    setSelectedPlaybook(null);
+    setMaxVisitedStep(0);
+  };
+
   const validSeedIds = useMemo(
     () => filterValidSeedIds(selectedSeedIds, uploadedFiles),
-    [selectedSeedIds, uploadedFiles]
+    [selectedSeedIds, uploadedFiles],
   );
 
   const handleLaunch = async () => {
@@ -197,7 +255,6 @@ export function useSimulationWizard() {
         playbookName: selectedPlaybook.name,
         status: 'pending',
         seedIds: validSeedIds,
-        // Pass extra fields so api.createSimulation can build the backend body
         agentConfigs,
         playbook: selectedPlaybook,
         config: {
@@ -232,6 +289,19 @@ export function useSimulationWizard() {
 
       localStorage.removeItem('simulation_draft');
       addSimulation(newSimulation);
+
+      try {
+        await api.controlSimulation(newSimulation.id, 'start');
+      } catch (startErr) {
+        console.error('Failed to auto-start simulation:', startErr);
+        addToast(
+          startErr instanceof Error
+            ? `Simulation created, but could not start: ${startErr.message}`
+            : 'Simulation created, but could not start automatically. Press Start on the monitor.',
+          'error'
+        );
+      }
+
       router.push(`/simulations/${newSimulation.id}`);
     } catch (error) {
       console.error('Failed to create simulation:', error);
@@ -258,10 +328,9 @@ export function useSimulationWizard() {
   };
 
   const updateAgentCount = (role: string, delta: number) => {
-    setAgentConfigs((prev) => ({
-      ...prev,
-      [role]: Math.max(0, (prev[role] || 0) + delta),
-    }));
+    setAgentConfigs((prev) =>
+      applyAgentCountDelta(prev, role, delta, selectedPlaybook?.roster),
+    );
   };
 
   const totalAgents = Object.values(agentConfigs).reduce((a, b) => a + b, 0);
@@ -269,12 +338,14 @@ export function useSimulationWizard() {
   useEffect(() => {
     if (totalAgents < 1) {
       setCostEstimate(null);
+      setEstimateFailed(false);
       return;
     }
 
     const handle = window.setTimeout(() => {
       void (async () => {
         setEstimateLoading(true);
+        setEstimateFailed(false);
         try {
           const est = await api.estimateSimulationCost({
             agent_count: totalAgents,
@@ -288,8 +359,10 @@ export function useSimulationWizard() {
             ),
           });
           setCostEstimate(est);
+          setEstimateFailed(est === null);
         } catch {
           setCostEstimate(null);
+          setEstimateFailed(true);
         } finally {
           setEstimateLoading(false);
         }
@@ -354,28 +427,15 @@ export function useSimulationWizard() {
     }
   };
 
-  const canProceed = () => {
-    switch (currentStep) {
-      case 0:
-        return (
-          !!selectedPlaybook &&
-          !playbookDetailLoading &&
-          (selectedPlaybook.roster?.length ?? 0) > 0
-        );
-      case 1:
-        return totalAgents > 0;
-      case 2:
-        return true; // Documents step is optional
-      case 3:
-        return simulationName.trim().length > 0 && simulationName.trim().length <= 50;
-      default:
-        return true;
-    }
+  const handleResumeDraft = () => {
+    resumeDraft();
   };
 
   return {
     steps: WIZARD_STEPS,
     currentStep,
+    setCurrentStep,
+    maxVisitedStep,
     playbooks,
     selectedPlaybook,
     setSelectedPlaybook,
@@ -409,6 +469,7 @@ export function useSimulationWizard() {
     setExtendedSeedContext,
     costEstimate,
     estimateLoading,
+    estimateFailed,
     wizardLlmModels,
     wizardLlmProvider,
     simulationObjective,
@@ -445,7 +506,11 @@ export function useSimulationWizard() {
     handleBack,
     handleLaunch,
     canProceed,
+    canProceedReason,
     isLoading,
+    showDraftBanner,
+    resumeDraft: handleResumeDraft,
+    discardDraft: handleStartOver,
   };
 }
 

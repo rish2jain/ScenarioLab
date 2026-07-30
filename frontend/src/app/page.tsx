@@ -44,6 +44,8 @@ export default function DashboardPage() {
   const setSimulations = useSimulationStore((state) => state.setSimulations);
   const [stats, setStats] = useState<DashboardStats>(defaultStats);
   const [simulationsLoadOk, setSimulationsLoadOk] = useState(true);
+  const [statsLoadOk, setStatsLoadOk] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const { addToast } = useToast();
   const lastPollHealthyRef = useRef<boolean | null>(null);
@@ -71,6 +73,7 @@ export default function DashboardPage() {
         }
         lastPollHealthyRef.current = healthy;
         setSimulationsLoadOk(simRes.ok);
+        setStatsLoadOk(statsRes.success);
         const sims = simRes.simulations;
         setSimulations(sims);
         setStats(stats);
@@ -82,7 +85,10 @@ export default function DashboardPage() {
           }
           lastPollHealthyRef.current = false;
           setSimulationsLoadOk(false);
+          setStatsLoadOk(false);
         }
+      } finally {
+        if (mounted) setInitialLoading(false);
       }
     };
 
@@ -154,35 +160,50 @@ export default function DashboardPage() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Simulations"
-          value={stats.totalSimulations}
-          icon={<Activity className="w-5 h-5" />}
-          trend={totalTrend}
-          trendUp={createdThisWeek > 0}
-        />
-        <StatCard
-          title="Active Simulations"
-          value={stats.activeSimulations}
-          icon={<Play className="w-5 h-5" />}
-          trend={activeTrend}
-          trendUp={stats.activeSimulations > 0}
-          highlight
-        />
-        <StatCard
-          title="Reports generated"
-          value={stats.reportsGenerated}
-          icon={<FileText className="w-5 h-5" />}
-          trend={reportsTrend}
-          trendUp={stats.reportsGenerated > 0}
-        />
-        <StatCard
-          title="Playbooks Available"
-          value={stats.playbooksAvailable}
-          icon={<BookOpen className="w-5 h-5" />}
-          trend={playbooksTrend}
-          trendTone="muted"
-        />
+        {initialLoading ? (
+          <>
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+          </>
+        ) : (
+          <>
+            <StatCard
+              title="Total Simulations"
+              value={
+                !simulationsLoadOk && !statsLoadOk
+                  ? '—'
+                  : stats.totalSimulations
+              }
+              icon={<Activity className="w-5 h-5" />}
+              trend={!simulationsLoadOk ? 'Unavailable' : totalTrend}
+              trendUp={simulationsLoadOk && createdThisWeek > 0}
+            />
+            <StatCard
+              title="Active Simulations"
+              value={!statsLoadOk && !simulationsLoadOk ? '—' : stats.activeSimulations}
+              icon={<Play className="w-5 h-5" />}
+              trend={!simulationsLoadOk ? 'Unavailable' : activeTrend}
+              trendUp={simulationsLoadOk && stats.activeSimulations > 0}
+              highlight
+            />
+            <StatCard
+              title="Reports generated"
+              value={!statsLoadOk ? '—' : stats.reportsGenerated}
+              icon={<FileText className="w-5 h-5" />}
+              trend={!statsLoadOk ? 'Unavailable' : reportsTrend}
+              trendUp={statsLoadOk && stats.reportsGenerated > 0}
+            />
+            <StatCard
+              title="Playbooks Available"
+              value={!statsLoadOk ? '—' : stats.playbooksAvailable}
+              icon={<BookOpen className="w-5 h-5" />}
+              trend={!statsLoadOk ? 'Unavailable' : playbooksTrend}
+              trendTone="muted"
+            />
+          </>
+        )}
       </div>
 
       {/* Recent Simulations */}
@@ -329,6 +350,21 @@ export default function DashboardPage() {
   );
 }
 
+function StatCardSkeleton() {
+  return (
+    <Card padding="lg" className="animate-pulse">
+      <div className="flex items-start justify-between">
+        <div className="w-10 h-10 rounded-lg bg-background-tertiary" />
+        <div className="h-3 w-16 rounded bg-background-tertiary" />
+      </div>
+      <div className="mt-4 space-y-2">
+        <div className="h-8 w-16 rounded bg-background-tertiary" />
+        <div className="h-4 w-28 rounded bg-background-tertiary" />
+      </div>
+    </Card>
+  );
+}
+
 function StatCard({
   title,
   value,
@@ -339,7 +375,7 @@ function StatCard({
   highlight = false,
 }: {
   title: string;
-  value: number;
+  value: number | string;
   icon: React.ReactNode;
   trend: string;
   trendUp?: boolean;

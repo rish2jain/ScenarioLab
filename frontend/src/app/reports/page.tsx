@@ -124,8 +124,8 @@ export default function ReportsPage() {
             description="Complete a simulation to generate an analysis report"
             icon={<FileText className="w-8 h-8" />}
             action={{
-              label: 'View Simulations',
-              onClick: () => router.push('/simulations'),
+              label: 'Create Simulation',
+              onClick: () => router.push('/simulations/new'),
             }}
           />
         </Card>

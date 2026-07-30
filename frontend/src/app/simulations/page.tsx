@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Plus, Search, Filter, Clock, Trash2, X } from 'lucide-react';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import { Plus, Search, Clock, Trash2, X } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -19,6 +19,13 @@ import {
 import { useSimulationStore } from '@/lib/store';
 import { loadSimulationsFromApi, simulationApi } from '@/lib/api';
 import { useToast } from '@/components/ui/Toast';
+import {
+  filterSimulations,
+  parseStatusFilter,
+  simulationProgressPercent,
+  SIMULATION_STATUS_FILTERS,
+  type SimulationStatusFilter,
+} from '@/lib/simulationFilters';
 
 /** Max parallel DELETE calls during bulk delete to avoid overwhelming the API. */
 const BULK_DELETE_CONCURRENCY = 5;
@@ -28,6 +35,8 @@ const MAX_TOASTS = 5;
 
 export default function SimulationsPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { addToast } = useToast();
   const {
     simulations,
@@ -42,6 +51,29 @@ export default function SimulationsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
+  const searchQuery = searchParams.get('q') ?? '';
+  const statusFilter = parseStatusFilter(searchParams.get('status'));
+
+  const setListParams = useCallback(
+    (next: { q?: string; status?: SimulationStatusFilter }) => {
+      const params = new URLSearchParams(searchParams.toString());
+      const q = next.q !== undefined ? next.q : searchQuery;
+      const status = next.status !== undefined ? next.status : statusFilter;
+      if (q.trim()) params.set('q', q);
+      else params.delete('q');
+      if (status && status !== 'all') params.set('status', status);
+      else params.delete('status');
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams, searchQuery, statusFilter]
+  );
+
+  const filteredSimulations = useMemo(
+    () => filterSimulations(simulations, searchQuery, statusFilter),
+    [simulations, searchQuery, statusFilter]
+  );
+
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -53,11 +85,11 @@ export default function SimulationsPage() {
 
   const toggleSelectAll = useCallback(() => {
     setSelectedIds((prev) =>
-      prev.size === simulations.length
+      prev.size === filteredSimulations.length && filteredSimulations.length > 0
         ? new Set()
-        : new Set(simulations.map((s) => s.id))
+        : new Set(filteredSimulations.map((s) => s.id))
     );
-  }, [simulations]);
+  }, [filteredSimulations]);
 
   const handleBulkDelete = useCallback(async () => {
     const ids = Array.from(selectedIds);
@@ -205,13 +237,32 @@ export default function SimulationsPage() {
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1">
           <Input
-            placeholder="Search simulations..."
+            placeholder="Search simulations…"
             leftIcon={<Search className="w-4 h-4" />}
+            value={searchQuery}
+            onChange={(e) => setListParams({ q: e.target.value })}
+            aria-label="Search simulations"
           />
         </div>
-        <Button variant="secondary" leftIcon={<Filter className="w-4 h-4" />}>
-          Filter
-        </Button>
+        <label className="sr-only" htmlFor="simulation-status-filter">
+          Filter by status
+        </label>
+        <select
+          id="simulation-status-filter"
+          value={statusFilter}
+          onChange={(e) =>
+            setListParams({ status: parseStatusFilter(e.target.value) })
+          }
+          className="rounded-lg border border-border bg-background-secondary px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+        >
+          {SIMULATION_STATUS_FILTERS.map((status) => (
+            <option key={status} value={status}>
+              {status === 'all'
+                ? 'All statuses'
+                : status.charAt(0).toUpperCase() + status.slice(1)}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Bulk Actions Bar */}
@@ -243,7 +294,7 @@ export default function SimulationsPage() {
 
       {/* Simulations Table */}
       <Card>
-        {simulations.length > 0 ? (
+        {filteredSimulations.length > 0 ? (
           <div className="overflow-x-auto">
           <Table>
             <TableHead>
@@ -251,7 +302,10 @@ export default function SimulationsPage() {
                 <TableCell isHeader className="w-10">
                   <input
                     type="checkbox"
-                    checked={selectedIds.size === simulations.length && simulations.length > 0}
+                    checked={
+                      selectedIds.size === filteredSimulations.length &&
+                      filteredSimulations.length > 0
+                    }
                     onChange={toggleSelectAll}
                     className="rounded border-slate-600 bg-slate-800 text-accent focus:ring-accent/50"
                     aria-label="Select all simulations"
@@ -268,7 +322,7 @@ export default function SimulationsPage() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {simulations.map((sim) => (
+              {filteredSimulations.map((sim) => (
                 <TableRow key={sim.id} hover className={selectedIds.has(sim.id) ? 'bg-accent/5' : ''}>
                   <TableCell>
                     <input
@@ -283,7 +337,7 @@ export default function SimulationsPage() {
                     <span className="font-medium text-slate-200">{sim.name}</span>
                   </TableCell>
                   <TableCell>
-                    <span className="text-slate-400">{sim.playbookName}</span>
+                    <span className="text-slate-400">{sim.playbookName || '—'}</span>
                   </TableCell>
                   <TableCell>
                     <StatusBadge status={sim.status} size="sm" />
@@ -297,7 +351,7 @@ export default function SimulationsPage() {
                         <div
                           className="h-full bg-accent rounded-full"
                           style={{
-                            width: `${(sim.currentRound / sim.totalRounds) * 100}%`,
+                            width: `${simulationProgressPercent(sim.status, sim.currentRound, sim.totalRounds)}%`,
                           }}
                         />
                       </div>
@@ -347,13 +401,21 @@ export default function SimulationsPage() {
           </div>
         ) : (
           <EmptyState
-            title="No simulations yet"
+            title={
+              isLoading
+                ? 'Loading…'
+                : simulations.length > 0
+                  ? 'No matching simulations'
+                  : 'No simulations yet'
+            }
             description={
               isLoading
                 ? 'Loading…'
                 : loadError
                   ? 'Could not load simulations from the server. Check that the backend is running.'
-                  : 'Create your first war-gaming simulation to get started'
+                  : simulations.length > 0
+                    ? 'Try a different search or status filter.'
+                    : 'Create your first war-gaming simulation to get started'
             }
             action={{
               label: 'Create Simulation',

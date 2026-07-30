@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  hasMeaningfulWizardDraft,
+  parseSimulationDraftPayload,
+  serializeSimulationDraftPayload,
+} from './wizardDraftSchema';
+import {
   clearSimulationDraftRaw,
   normalizeMonteCarloIterationsOnEnable,
   readSimulationDraftRaw,
@@ -75,5 +80,41 @@ describe('wizard draft localStorage helpers', () => {
     expect(readSimulationDraftRaw()).toBe('{"simulationName":"Alpha"}');
     clearSimulationDraftRaw();
     expect(readSimulationDraftRaw()).toBeNull();
+  });
+});
+
+describe('extended wizard draft payload', () => {
+  it('serializes navigation and selection fields', () => {
+    const payload = serializeSimulationDraftPayload({
+      simulationName: 'Q3 war game',
+      currentStep: 4,
+      playbookId: 'pb-ma',
+      agentConfigs: { CEO: 1, CFO: 1 },
+      selectedSeedIds: ['seed-a', 'seed-b'],
+      rounds: 15,
+    });
+    const parsed = parseSimulationDraftPayload(payload);
+    expect(parsed).toMatchObject({
+      simulationName: 'Q3 war game',
+      currentStep: 4,
+      playbookId: 'pb-ma',
+      agentConfigs: { CEO: 1, CFO: 1 },
+      selectedSeedIds: ['seed-a', 'seed-b'],
+      rounds: 15,
+    });
+    expect(hasMeaningfulWizardDraft(parsed)).toBe(true);
+  });
+
+  it('treats default-only parameter drafts as not meaningful', () => {
+    expect(
+      hasMeaningfulWizardDraft(
+        parseSimulationDraftPayload(
+          serializeSimulationDraftPayload({
+            rounds: 10,
+            objectiveMode: 'consulting',
+          }),
+        ),
+      ),
+    ).toBe(false);
   });
 });

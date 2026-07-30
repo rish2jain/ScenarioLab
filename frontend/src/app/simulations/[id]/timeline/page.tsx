@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Star, Download, Share2, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { Spinner } from '@/components/ui/Spinner';
 import dynamic from 'next/dynamic';
 
 const TimelineSlider = dynamic(
@@ -155,7 +156,7 @@ export default function TimelinePage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-slate-400">Loading timeline...</div>
+        <Spinner message="Loading timeline…" />
       </div>
     );
   }

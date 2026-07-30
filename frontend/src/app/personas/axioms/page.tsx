@@ -108,7 +108,7 @@ export default function BehavioralAxiomsPage() {
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link href="/">
+        <Link href="/personas/designer">
           <Button variant="ghost" size="sm" leftIcon={<ChevronLeft className="w-4 h-4" />}>
             Back
           </Button>
@@ -217,11 +217,22 @@ export default function BehavioralAxiomsPage() {
           {axioms.length > 0 ? (
             <Card
               header={
-                <div className="flex items-center gap-2">
-                  <Brain className="w-5 h-5 text-accent" />
-                  <h2 className="text-lg font-semibold text-slate-100">
-                    Extracted Axioms ({axioms.length})
-                  </h2>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Brain className="w-5 h-5 text-accent" />
+                    <h2 className="text-lg font-semibold text-slate-100">
+                      Extracted Axioms ({axioms.length})
+                    </h2>
+                  </div>
+                  <Link
+                    href={`/personas/designer?axioms=${encodeURIComponent(
+                      axioms.map((a) => a.statement).join('\n')
+                    )}`}
+                  >
+                    <Button size="sm" variant="secondary">
+                      Apply to persona
+                    </Button>
+                  </Link>
                 </div>
               }
             >

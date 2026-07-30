@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   ChevronLeft,
   User,
@@ -16,8 +17,10 @@ import {
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
+import { useToast } from '@/components/ui/Toast';
 import { api } from '@/lib/api';
 import type { CustomPersonaConfig, CoherenceWarning } from '@/lib/types';
 
@@ -50,6 +53,8 @@ const informationBiasOptions = ['qualitative', 'quantitative', 'balanced'];
 const decisionSpeedOptions = ['fast', 'moderate', 'slow'];
 
 export default function PersonaDesignerPage() {
+  const { addToast } = useToast();
+  const searchParams = useSearchParams();
   const [personas, setPersonas] = useState<CustomPersonaConfig[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState('');
@@ -61,6 +66,35 @@ export default function PersonaDesignerPage() {
   const [newAxiom, setNewAxiom] = useState('');
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [isDeletingPersona, setIsDeletingPersona] = useState(false);
+  const [savedSnapshot, setSavedSnapshot] = useState<string>(() =>
+    JSON.stringify(emptyPersona()),
+  );
+  const [pendingNavigation, setPendingNavigation] = useState<
+    { type: 'new' } | { type: 'load'; persona: CustomPersonaConfig } | null
+  >(null);
+
+  const isDirty =
+    JSON.stringify(currentPersona) !== savedSnapshot;
+
+  useEffect(() => {
+    const raw = searchParams.get('axioms');
+    if (!raw) return;
+    const imported = raw
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (imported.length === 0) return;
+    setCurrentPersona((prev) => {
+      const merged = Array.from(
+        new Set([...(prev.behavioral_axioms || []), ...imported])
+      );
+      return { ...prev, behavioral_axioms: merged };
+    });
+    addToast(
+      `Imported ${imported.length} axiom${imported.length === 1 ? '' : 's'} from extractor.`,
+      'success'
+    );
+  }, [searchParams, addToast]);
 
   const loadList = useCallback(async () => {
     setListLoading(true);
@@ -120,6 +154,8 @@ export default function PersonaDesignerPage() {
         if (updated) {
           setPersonas((p) => p.map((x) => (x.id === updated.id ? updated : x)));
           setCurrentPersona(updated);
+          setSavedSnapshot(JSON.stringify(updated));
+          addToast('Persona saved', 'success');
         }
       } else {
         const rest = Object.fromEntries(
@@ -129,6 +165,8 @@ export default function PersonaDesignerPage() {
         if (created?.id) {
           setPersonas((p) => [...p, created]);
           setCurrentPersona(created);
+          setSavedSnapshot(JSON.stringify(created));
+          addToast('Persona saved', 'success');
         }
       }
     } catch {
@@ -137,12 +175,35 @@ export default function PersonaDesignerPage() {
     setIsSaving(false);
   };
 
+  const applyNavigation = (nav: NonNullable<typeof pendingNavigation>) => {
+    if (nav.type === 'new') {
+      const next = emptyPersona();
+      setCurrentPersona(next);
+      setSavedSnapshot(JSON.stringify(next));
+    } else {
+      setCurrentPersona({ ...nav.persona });
+      setSavedSnapshot(JSON.stringify(nav.persona));
+    }
+    setPendingNavigation(null);
+  };
+
   const handleLoadPersona = (persona: CustomPersonaConfig) => {
+    if (isDirty) {
+      setPendingNavigation({ type: 'load', persona });
+      return;
+    }
     setCurrentPersona({ ...persona });
+    setSavedSnapshot(JSON.stringify(persona));
   };
 
   const handleNewPersona = () => {
-    setCurrentPersona(emptyPersona());
+    if (isDirty) {
+      setPendingNavigation({ type: 'new' });
+      return;
+    }
+    const next = emptyPersona();
+    setCurrentPersona(next);
+    setSavedSnapshot(JSON.stringify(next));
   };
 
   const handleDeletePersona = (id: string) => {
@@ -160,14 +221,10 @@ export default function PersonaDesignerPage() {
     const id = pendingDeleteId;
     setIsDeletingPersona(true);
     try {
-      const ok = await api.deleteCustomPersona(id);
-      if (ok) {
-        setPersonas((p) => p.filter((x) => x.id !== id));
-        setCurrentPersona((cur) => (cur.id === id ? emptyPersona() : cur));
-        setPendingDeleteId(null);
-      } else {
-        setListError('Delete failed — try again.');
-      }
+      await api.deleteCustomPersona(id);
+      setPersonas((p) => p.filter((x) => x.id !== id));
+      setCurrentPersona((cur) => (cur.id === id ? emptyPersona() : cur));
+      setPendingDeleteId(null);
     } catch {
       setListError('Delete failed — try again.');
     } finally {
@@ -605,6 +662,16 @@ export default function PersonaDesignerPage() {
       >
         <p className="text-sm text-slate-400">This action cannot be undone.</p>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={pendingNavigation !== null}
+        onClose={() => setPendingNavigation(null)}
+        onConfirm={() => pendingNavigation && applyNavigation(pendingNavigation)}
+        title="Discard unsaved changes?"
+        description="You have unsaved edits to this persona. Continue without saving?"
+        confirmLabel="Discard changes"
+        variant="danger"
+      />
     </div>
   );
 }

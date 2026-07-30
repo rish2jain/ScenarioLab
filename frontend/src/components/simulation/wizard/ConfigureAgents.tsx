@@ -2,6 +2,7 @@
 
 import { Plus, Minus } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
+import { humanizeRole } from '@/lib/humanizeRole';
 import type { Playbook } from '@/lib/types';
 
 export interface ConfigureAgentsProps {
@@ -43,7 +44,7 @@ export function ConfigureAgents({
               <p className="text-sm text-foreground-muted mt-1">{role.description}</p>
               <div className="flex items-center gap-2 mt-2">
                 <Badge variant="default" size="sm">
-                  {role.archetype}
+                  {humanizeRole(role.archetype)}
                 </Badge>
               </div>
             </div>
@@ -52,7 +53,9 @@ export function ConfigureAgents({
                 type="button"
                 aria-label={`Decrease ${role.role} count`}
                 onClick={() => updateAgentCount(role.role, -1)}
-                disabled={(agentConfigs[role.role] ?? 0) <= 0}
+                disabled={
+                  (agentConfigs[role.role] ?? 0) <= (role.required ? 1 : 0)
+                }
                 className="w-8 h-8 rounded-lg bg-background-tertiary flex items-center justify-center text-foreground-muted hover:bg-border disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Minus className="w-4 h-4" />

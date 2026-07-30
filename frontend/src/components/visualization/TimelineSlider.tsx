@@ -184,14 +184,16 @@ export function TimelineSlider({
           <button
             onClick={handleStepBackward}
             disabled={currentRound <= 1}
-            className="p-2 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            aria-label="Previous round"
+            className="p-2 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <SkipBack className="w-4 h-4" />
           </button>
           
           <button
             onClick={handlePlayPause}
-            className="p-2 rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors"
+            aria-label={isPlaying ? 'Pause playback' : 'Play playback'}
+            className="p-2 rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800"
           >
             {isPlaying ? (
               <Pause className="w-4 h-4" />
@@ -203,7 +205,8 @@ export function TimelineSlider({
           <button
             onClick={handleStepForward}
             disabled={currentRound >= totalRounds}
-            className="p-2 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            aria-label="Next round"
+            className="p-2 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <SkipForward className="w-4 h-4" />
           </button>

@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import { Plus, Key, Trash2, Copy, Check, Webhook, Globe } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { fetchApi } from '@/lib/api';
 import { fetchAdminBackend } from '@/lib/adminBackendFetch';
@@ -110,6 +113,10 @@ export default function ApiKeysPage() {
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [adminInput, setAdminInput] = useState('');
   const [adminGateError, setAdminGateError] = useState<string | null>(null);
+  const [pendingRevokeKeyId, setPendingRevokeKeyId] = useState<string | null>(null);
+  const [pendingDeleteWebhookId, setPendingDeleteWebhookId] = useState<string | null>(null);
+  const [isRevokingKey, setIsRevokingKey] = useState(false);
+  const [isDeletingWebhook, setIsDeletingWebhook] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -226,6 +233,7 @@ export default function ApiKeysPage() {
   };
 
   const handleRevokeKey = async (keyId: string) => {
+    setIsRevokingKey(true);
     const result = await fetchAdminBackend(`/v1/api-keys/${keyId}`, {
       method: 'DELETE',
     });
@@ -235,6 +243,7 @@ export default function ApiKeysPage() {
         result.message ||
         'Failed to revoke API key.';
       addToast(detail, 'error');
+      setIsRevokingKey(false);
       return;
     }
     const stored = readStoredIntegrationKey();
@@ -244,6 +253,9 @@ export default function ApiKeysPage() {
       setWebhooks([]);
     }
     setApiKeys((prev) => prev.filter((key) => key.key_id !== keyId));
+    setPendingRevokeKeyId(null);
+    setIsRevokingKey(false);
+    addToast('API key revoked', 'success');
   };
 
   const handleCopyKey = async (keyId: string) => {
@@ -300,6 +312,7 @@ export default function ApiKeysPage() {
 
   const handleDeleteWebhook = async (webhookId: string) => {
     if (!sessionApiKey) return;
+    setIsDeletingWebhook(true);
     const result = await fetchApi(`/api/v1/webhooks/${webhookId}`, {
       method: 'DELETE',
       headers: {
@@ -312,9 +325,13 @@ export default function ApiKeysPage() {
         result.message ||
         'Failed to delete webhook.';
       addToast(detail, 'error');
+      setIsDeletingWebhook(false);
       return;
     }
     setWebhooks((prev) => prev.filter((webhook) => webhook.webhook_id !== webhookId));
+    setPendingDeleteWebhookId(null);
+    setIsDeletingWebhook(false);
+    addToast('Webhook deleted', 'success');
   };
 
   const togglePermission = (permission: string) => {
@@ -369,7 +386,7 @@ export default function ApiKeysPage() {
   if (!sessionReady) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-slate-400">Checking session...</div>
+        <Spinner message="Checking session…" />
       </div>
     );
   }
@@ -414,7 +431,7 @@ export default function ApiKeysPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="text-slate-400">Loading API keys...</div>
+        <Spinner message="Loading API keys…" />
       </div>
     );
   }
@@ -577,9 +594,10 @@ export default function ApiKeysPage() {
                   {copiedId === key.key_id ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
                 </button>
                 <button
-                  onClick={() => handleRevokeKey(key.key_id)}
-                  className="p-2 text-slate-400 hover:text-red-400 transition-colors"
+                  onClick={() => setPendingRevokeKeyId(key.key_id)}
+                  className="p-2 text-slate-400 hover:text-red-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-lg"
                   title="Revoke key"
+                  aria-label={`Revoke ${key.name}`}
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -588,9 +606,15 @@ export default function ApiKeysPage() {
             );
           })}
           {apiKeys.length === 0 && (
-            <div className="text-center py-8 text-slate-500">
-              No API keys generated yet
-            </div>
+            <EmptyState
+              icon={<Key className="w-8 h-8 text-foreground-subtle" />}
+              title="No API keys yet"
+              description="Generate a key to authenticate integrations with the ScenarioLab API."
+              action={{
+                label: 'Generate Key',
+                onClick: () => setShowKeyForm(true),
+              }}
+            />
           )}
         </div>
       </Card>
@@ -703,9 +727,10 @@ export default function ApiKeysPage() {
                   {webhook.active ? 'Active' : 'Inactive'}
                 </span>
                 <button
-                  onClick={() => handleDeleteWebhook(webhook.webhook_id)}
-                  className="p-2 text-slate-400 hover:text-red-400 transition-colors"
+                  onClick={() => setPendingDeleteWebhookId(webhook.webhook_id)}
+                  className="p-2 text-slate-400 hover:text-red-400 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-lg"
                   title="Delete webhook"
+                  aria-label={`Delete webhook ${webhook.url}`}
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -713,12 +738,50 @@ export default function ApiKeysPage() {
             </div>
           ))}
           {webhooks.length === 0 && (
-            <div className="text-center py-8 text-slate-500">
-              No webhooks registered yet
-            </div>
+            <EmptyState
+              icon={<Webhook className="w-8 h-8 text-foreground-subtle" />}
+              title="No webhooks registered"
+              description={
+                sessionApiKey
+                  ? 'Register a webhook to receive simulation and report events.'
+                  : 'Generate an API key first, then register webhooks for event delivery.'
+              }
+              action={
+                sessionApiKey
+                  ? {
+                      label: 'Add Webhook',
+                      onClick: () => setShowWebhookForm(true),
+                    }
+                  : undefined
+              }
+            />
           )}
         </div>
       </Card>
+
+      <ConfirmDialog
+        isOpen={pendingRevokeKeyId !== null}
+        onClose={() => setPendingRevokeKeyId(null)}
+        onConfirm={() => pendingRevokeKeyId && void handleRevokeKey(pendingRevokeKeyId)}
+        title="Revoke API key?"
+        description="Integrations using this key will stop working immediately. This cannot be undone."
+        confirmLabel="Revoke"
+        variant="danger"
+        isLoading={isRevokingKey}
+      />
+
+      <ConfirmDialog
+        isOpen={pendingDeleteWebhookId !== null}
+        onClose={() => setPendingDeleteWebhookId(null)}
+        onConfirm={() =>
+          pendingDeleteWebhookId && void handleDeleteWebhook(pendingDeleteWebhookId)
+        }
+        title="Delete webhook?"
+        description="Event delivery to this URL will stop. You can register it again later."
+        confirmLabel="Delete"
+        variant="danger"
+        isLoading={isDeletingWebhook}
+      />
     </div>
   );
 }

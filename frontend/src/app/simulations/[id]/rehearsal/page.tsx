@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { useToast } from "@/components/ui/Toast";
 import { api } from "@/lib/api";
 import { parseObjectionsResponse } from "@/lib/api/normalizers";
 import type {
@@ -26,6 +27,8 @@ export default function RehearsalPage() {
   const params = useParams();
   const rawId = params.id;
   const simulationId = Array.isArray(rawId) ? rawId[0] : rawId ?? "";
+
+  const { addToast } = useToast();
 
   const [step, setStep] = useState<"setup" | "rehearsal" | "feedback">("setup");
   const [brief, setBrief] = useState("");
@@ -66,7 +69,7 @@ export default function RehearsalPage() {
       setStep("rehearsal");
     } catch (error) {
       console.error("Failed to create counterpart:", error);
-      alert("Failed to create counterpart. Please try again.");
+      addToast("Failed to create counterpart. Please try again.", "error");
     } finally {
       setIsCreating(false);
     }
@@ -103,7 +106,7 @@ export default function RehearsalPage() {
       setMessages((prev) => [...prev, agentMessage]);
     } catch (error) {
       console.error("Failed to send message:", error);
-      alert("Failed to get response. Please try again.");
+      addToast("Failed to get response. Please try again.", "error");
     } finally {
       setIsSending(false);
     }
@@ -121,13 +124,13 @@ export default function RehearsalPage() {
       const parsed = parseObjectionsResponse(result);
       if (!parsed.ok) {
         console.error(parsed.message, result);
-        alert(parsed.message);
+        addToast(parsed.message, "error");
         return;
       }
       setObjections(parsed.objections);
     } catch (error) {
       console.error("Failed to generate objections:", error);
-      alert("Failed to generate objections. Please try again.");
+      addToast("Failed to generate objections. Please try again.", "error");
     } finally {
       setIsGeneratingObjections(false);
     }
@@ -143,7 +146,7 @@ export default function RehearsalPage() {
       setStep("feedback");
     } catch (error) {
       console.error("Failed to get feedback:", error);
-      alert("Failed to get feedback. Please try again.");
+      addToast("Failed to get feedback. Please try again.", "error");
     } finally {
       setIsGettingFeedback(false);
     }

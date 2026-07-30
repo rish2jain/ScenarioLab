@@ -1,6 +1,4 @@
 @tailwind base;
-
-@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -8,6 +6,10 @@
   --foreground-rgb: 248, 250, 252;
   --background-start-rgb: 9, 9, 11;
   --background-end-rgb: 24, 24, 27;
+  /* Zinc-aligned scrollbar tokens (match tailwind background/border theme) */
+  --scrollbar-track: #18181b;
+  --scrollbar-thumb: #3f3f46;
+  --scrollbar-thumb-hover: #52525b;
 }
 
 * {
@@ -20,7 +22,6 @@ html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
-  font-family: 'Outfit', system-ui, sans-serif;
 }
 
 body {
@@ -39,15 +40,15 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #18181b;
+  background: var(--scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3f3f46;
+  background: var(--scrollbar-thumb);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #52525b;
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* Utility classes */
@@ -68,5 +69,25 @@ body {
   }
   to {
     opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-fade-in,
+  .animate-slide-in,
+  .animate-float,
+  .animate-pulse,
+  .animate-pulse-slow,
+  .animate-spin {
+    animation: none !important;
   }
 }
