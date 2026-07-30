@@ -6,7 +6,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.database import BranchRepository
+from app.db.branches import BranchRepository
 
 logger = logging.getLogger(__name__)
 

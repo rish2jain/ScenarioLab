@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from pydantic import BaseModel
 
 from app.config import settings
@@ -243,20 +243,20 @@ async def get_miro_status():
     )
 
 
-@router.get("/reports", response_model=list[SimulationReport])
-async def list_reports():
-    """List all generated reports (from cache + DB).
+@router.get("/reports")
+async def list_reports(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    """List generated reports with pagination.
 
-    Returns:
-        List of all simulation reports
+    Returns ``{"items": [...], "total": int, "limit": int, "offset": int}``.
     """
-    # Start with in-memory cache
     seen_ids = {r.id for r in _report_store.values()}
     results = list(_report_store.values())
 
-    # Add any DB-only reports not in cache
     try:
-        db_list = await _report_repo.list_all()
+        db_list, db_total = await _report_repo.list_page(limit=None, offset=0)
         for meta in db_list:
             if meta["id"] not in seen_ids:
                 db_data = await _report_repo.get(meta["id"])
@@ -264,11 +264,20 @@ async def list_reports():
                     report = SimulationReport.model_validate(db_data)
                     _report_store[report.id] = report
                     results.append(report)
+                    seen_ids.add(report.id)
+        total = max(db_total, len(results))
     except Exception:
         logger.debug("DB report list failed", exc_info=True)
+        total = len(results)
 
-    return results
-
+    results.sort(key=lambda r: r.updated_at or r.created_at or "", reverse=True)
+    page = results[offset : offset + limit]
+    return {
+        "items": page,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
 
 @router.get("/reports/{report_id}", response_model=SimulationReport)
 async def get_report(report_id: str):

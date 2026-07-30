@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     llm_concurrency_default: int = 3
     # JSON object mapping provider key -> cap, e.g. {"cli-claude":2,"openai":8}
     llm_concurrency_overrides: str = ""
+    # HTTP timeout (seconds) for cloud OpenAI/Anthropic clients
+    llm_http_timeout: float = 120.0
     # cli-gemini: subprocess timeouts (seconds); env overridable
     gemini_cli_timeout: float = 120.0
     gemini_cli_version_check_timeout: float = 5.0
@@ -37,10 +39,10 @@ class Settings(BaseSettings):
     claude_cli_timeout: float = 120.0
     claude_cli_version_check_timeout: float = 10.0
 
-    # Neo4j
+    # Neo4j — change NEO4J_PASSWORD in .env; weak defaults are rejected at startup
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
-    neo4j_password: str = "password"
+    neo4j_password: str = ""
 
     # Miro
     miro_api_token: str = ""
@@ -75,10 +77,23 @@ class Settings(BaseSettings):
     # Simulation guardrails
     simulation_max_agents: int = 48
     simulation_llm_parallelism: int = 4
+    # Cap for SimulationCreateRequest / SimulationConfig.total_rounds
+    simulation_max_rounds: int = 50
+    # Cap for MonteCarloConfig.iterations (standalone MC endpoint)
+    monte_carlo_max_iterations: int = 50
+    # Cap for BatchConfig.scenarios length
+    batch_max_scenarios: int = 20
+    # Cap for BatchConfig.monte_carlo_iterations
+    batch_max_monte_carlo_iterations: int = 50
     # Wizard inline Monte Carlo (post-primary batch); must match UI cap in simulations/new
     inline_monte_carlo_max_iterations: int = 25
     # 0 = disabled; otherwise each round is wrapped in asyncio.wait_for
     simulation_round_timeout_seconds: int = 0
+    # Max upload size for seed documents and voice audio (bytes)
+    upload_max_bytes: int = 25 * 1024 * 1024
+    # When set, all /api/* routes (except health) require this shared secret
+    # via X-ScenarioLab-Secret or Authorization: Bearer <secret>
+    api_shared_secret: str = ""
 
     # Voice Settings
     whisper_model: str = "whisper-1"

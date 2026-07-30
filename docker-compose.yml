@@ -2,11 +2,12 @@ services:
   neo4j:
     image: neo4j:5.15-community
     container_name: scenariolab-neo4j
-    ports:
-      - "7474:7474"
-      - "7687:7687"
+    # Host ports are not published by default (use docker-compose.override.yml for local UI).
+    expose:
+      - "7474"
+      - "7687"
     environment:
-      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-password}
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env}
       - NEO4J_PLUGINS=["apoc"]
     volumes:
       - neo4j_data:/data
@@ -34,6 +35,11 @@ services:
     volumes:
       - ./backend:/app
     command: uv run uvicorn app.main:app --host 0.0.0.0 --port 5001
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/api/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
   frontend:
     build:
@@ -47,7 +53,10 @@ services:
     depends_on:
       - backend
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:5001
+      # Server-side proxy target (Docker network). Browser uses same-origin /api.
+      - BACKEND_INTERNAL_URL=http://backend:5001
+      # Keep empty / unset so the client does not bypass Next middleware.
+      - NEXT_PUBLIC_API_URL=
     volumes:
       - ./frontend:/app
       - /app/node_modules

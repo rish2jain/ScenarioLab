@@ -75,13 +75,36 @@ class SimulationRepository:
             return None
         return _SimulationState.model_validate_json(row[0])
 
-    async def list_all(self) -> list[dict]:
-        """List summary info for all simulations."""
+    async def list_all(self, *, limit: int | None = None, offset: int = 0) -> list[dict]:
+        """List summary info for simulations (newest first).
+
+        When ``limit`` is set, returns a page; otherwise returns all rows
+        (legacy callers). Prefer ``list_page`` for new code.
+        """
+        page, _total = await self.list_page(limit=limit, offset=offset)
+        return page
+
+    async def list_page(
+        self, *, limit: int | None = 50, offset: int = 0
+    ) -> tuple[list[dict], int]:
+        """Return ``(summaries, total_count)`` with optional LIMIT/OFFSET."""
         db = await get_db()
-        cursor = await db.execute(
+        count_cursor = await db.execute("SELECT COUNT(*) FROM simulations")
+        count_row = await count_cursor.fetchone()
+        total = int(count_row[0]) if count_row else 0
+
+        offset = max(0, int(offset))
+        sql = (
             "SELECT id, name, status, config, state, created_at, updated_at "
             "FROM simulations ORDER BY updated_at DESC"
         )
+        params: list[object] = []
+        if limit is not None:
+            limit = max(1, min(int(limit), 200))
+            sql += " LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+
+        cursor = await db.execute(sql, params)
         rows = await cursor.fetchall()
         summaries: list[dict] = []
         for row in rows:
@@ -92,7 +115,6 @@ class SimulationRepository:
             except json.JSONDecodeError:
                 logger.warning("Invalid state JSON for simulation %s", row[0])
                 state = {}
-            # Progress from persisted state; config.total_rounds is only the cap.
             current_round = int(state.get("current_round", 0) or 0)
             total_rounds = int(config.get("total_rounds", 0) or 0)
             summaries.append(
@@ -108,7 +130,7 @@ class SimulationRepository:
                     "updated_at": row[6],
                 }
             )
-        return summaries
+        return summaries, total
 
     async def delete(self, simulation_id: str) -> bool:
         """Delete a simulation by ID. Returns True if a row was deleted."""

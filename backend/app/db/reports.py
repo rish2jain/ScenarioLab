@@ -72,14 +72,33 @@ class ReportRepository:
             return None
         return json.loads(row[0])
 
-    async def list_all(self) -> list[dict]:
-        """List all reports (metadata only, no full JSON)."""
+    async def list_all(self, *, limit: int | None = None, offset: int = 0) -> list[dict]:
+        """List reports (metadata only). Prefer ``list_page`` for new code."""
+        page, _total = await self.list_page(limit=limit, offset=offset)
+        return page
+
+    async def list_page(
+        self, *, limit: int | None = 50, offset: int = 0
+    ) -> tuple[list[dict], int]:
+        """Return ``(rows, total_count)`` with optional LIMIT/OFFSET."""
         db = await get_db()
-        cursor = await db.execute(
+        count_cursor = await db.execute("SELECT COUNT(*) FROM reports")
+        count_row = await count_cursor.fetchone()
+        total = int(count_row[0]) if count_row else 0
+
+        offset = max(0, int(offset))
+        sql = (
             "SELECT id, simulation_id, simulation_name, "
             "status, created_at, updated_at FROM reports "
             "ORDER BY updated_at DESC"
         )
+        params: list[object] = []
+        if limit is not None:
+            limit = max(1, min(int(limit), 200))
+            sql += " LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+
+        cursor = await db.execute(sql, params)
         rows = await cursor.fetchall()
         return [
             {
@@ -91,7 +110,7 @@ class ReportRepository:
                 "updated_at": r[5],
             }
             for r in rows
-        ]
+        ], total
 
     async def delete(self, report_id: str) -> bool:
         """Delete a report by ID."""

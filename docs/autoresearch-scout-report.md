@@ -2,8 +2,9 @@
 
 **Scope:** Full ScenarioLab repo (backend + frontend)
 **Domain:** all
-**Date:** 2026-04-03 (rescan)
-**Candidates found:** 9 scored 6+ / ~130 files scanned
+**Date:** 2026-04-03 (**pre-PR baseline** scout rankings — not a full 2026-07-30 rescan)
+**Health summary updated:** 2026-07-30 (test inventory only; ranked targets below remain the April baseline)
+**Candidates found:** 9 scored 6+ / ~130 files scanned *(at baseline)*
 
 ## Terminology
 
@@ -72,7 +73,7 @@ Throughout this report, **Suggested mode** and **Estimated rounds** refer to the
 |-----------|-------|----------|
 | Improvable | 3/3 | Core orchestrator pulling from 10+ modules. Turn execution, agent coordination, scenario branching all in one class. No separation of concerns |
 | Impactful | 3/3 | THE critical path — every simulation runs through this. 10 files import it including backtesting, routers, monte carlo, batch |
-| Measurable | 2/3 | Can add integration tests, measure turn execution correctness, validate agent output format. Only basic backend tests exist (5 files, 497 total lines) |
+| Measurable | 2/3 | Can add integration tests, measure turn execution correctness, validate agent output format. At baseline only basic backend tests existed (5 files, 497 total lines); see [Key Observations](#key-observations) for post-PR inventory |
 
 **Suggested eval criteria:**
 1. Test coverage >80%
@@ -212,12 +213,14 @@ Throughout this report, **Suggested mode** and **Estimated rounds** refer to the
 
 ## Key Observations
 
-- **Zero project-specific TODOs/FIXMEs** — the codebase looks clean on the surface
-- **Severely under-tested**: 5 test files (497 total test lines) for ~130 source files
-- **God files** remain the biggest wins: `api.ts` (1485), `api_integrations/database.py` (1040), `miro.py` (951)
-- **No frontend tests at all** — entire UI layer is untested
-- **Database layer fragmentation**: 3 separate DB files (`database.py`, `api_integrations/database.py`, `llm/database.py`) totaling 2,566 lines with duplicated connection patterns — consolidation would be high-impact
-- **NEW since last scan**: `api_integrations/database.py` (1040 lines) and `llm/database.py` (732 lines) are significant new god files
+*Repository health below reflects the working tree as of 2026-07-30. Ranked targets above remain the **2026-04-03 pre-PR baseline** and may cite stale file sizes or coverage.*
+
+- **Zero project-specific TODOs/FIXMEs** — the codebase looks clean on the surface *(baseline observation)*
+- **Test inventory (post-PR, not the old “5 files / 497 lines” claim):** ~58 backend `test_*.py` files (~7.4k lines). Frontend unit tests now exist: `frontend/src/lib/api/normalizers.test.ts`, `frontend/src/lib/store.chat.test.ts`. PR-added backend coverage includes (among others) `test_webhook_url_ssrf.py`, `test_upload_limits.py`, `test_usage_tracker.py`, `test_shared_secret_and_ready.py`, `test_simulation_input_caps.py`, `test_list_pagination.py`, `test_playbooks_manager.py`, `test_playbooks_router.py`
+- **God files** remain high-value targets at baseline: `api.ts` (1485), `api_integrations/database.py` (1040), `miro.py` (951) — re-verify sizes before running `/autoresearch`
+- **Frontend tests:** no longer “none”; coverage is still thin (API normalizers + chat store) versus full UI surface
+- **Database layer fragmentation**: 3 separate DB files (`database.py`, `api_integrations/database.py`, `llm/database.py`) totaling 2,566 lines with duplicated connection patterns — consolidation would be high-impact *(baseline observation; layout may have changed)*
+- **NEW since prior scan (baseline):** `api_integrations/database.py` (1040 lines) and `llm/database.py` (732 lines) were significant new god files
 
 ---
 

@@ -90,3 +90,25 @@ class TestApplicationNeo4jSingleton:
         assert "Failed to close Neo4j client during unregister" in caplog.text
         assert get_application_neo4j_client() is None
         assert is_application_neo4j_registered() is False
+
+
+@pytest.mark.asyncio
+async def test_verify_connectivity_raises_when_disconnected():
+    from app.graph.neo4j_client import Neo4jClient
+
+    client = Neo4jClient("bolt://localhost:7687", "neo4j", "password")
+    assert client.is_connected is False
+    with pytest.raises(RuntimeError, match="not connected"):
+        await client.verify_connectivity()
+
+
+@pytest.mark.asyncio
+async def test_verify_connectivity_delegates_to_driver():
+    from app.graph.neo4j_client import Neo4jClient
+
+    client = Neo4jClient("bolt://localhost:7687", "neo4j", "password")
+    driver = MagicMock()
+    driver.verify_connectivity = AsyncMock()
+    client._driver = driver
+    await client.verify_connectivity()
+    driver.verify_connectivity.assert_awaited_once()

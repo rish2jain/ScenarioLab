@@ -20,13 +20,17 @@ import type {
 } from '../types';
 import { API_BASE_URL, fetchApi } from './client';
 import { normalizeFairnessAudit, normalizeReport } from './normalizers';
+import { extractListItems } from './pagination';
 
 export const reportApi = {
   // Reports
   getReports: async (): Promise<Report[]> => {
-    const result = await fetchApi<unknown[]>('/api/reports');
-    if (result.success && Array.isArray(result.data)) {
-      return result.data.map((report) => normalizeReport(report as Record<string, unknown>));
+    const result = await fetchApi<unknown>('/api/reports');
+    if (result.success && result.data != null) {
+      const rows = extractListItems(result.data);
+      if (rows) {
+        return rows.map((report) => normalizeReport(report as Record<string, unknown>));
+      }
     }
     if (result.status === 404) return [];
     throw new Error(

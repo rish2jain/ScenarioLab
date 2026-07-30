@@ -28,6 +28,7 @@ from app.graph.seed_processor import (
     is_seed_graph_tombstoned,
 )
 from app.llm.factory import get_llm_provider
+from app.upload_limits import read_upload_limited
 
 logger = logging.getLogger(__name__)
 
@@ -532,8 +533,8 @@ async def upload_seed_file(
     """Upload seed material file, process it, extract entities, build graph."""
     processor = get_seed_processor()
 
-    # Read file content
-    content = await file.read()
+    # Read file content (hard size cap)
+    content = await read_upload_limited(file, settings.upload_max_bytes)
     if await request.is_disconnected():
         logger.info(
             "Seed upload discarded after read (client disconnected): %s",

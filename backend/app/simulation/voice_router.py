@@ -8,8 +8,10 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app.config import settings
 from app.llm.database import VoiceRepository, init_llm_tables
 from app.simulation.voice_chat import voice_chat_manager
+from app.upload_limits import read_upload_limited
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +77,7 @@ async def transcribe_audio(
         Transcribed text
     """
     try:
-        audio_data = await audio.read()
+        audio_data = await read_upload_limited(audio, settings.upload_max_bytes)
         text = await voice_chat_manager.transcribe_audio(audio_data)
         return TranscribeResponse(text=text)
     except Exception as e:
@@ -161,7 +163,7 @@ async def voice_conversation(
                 logger.warning(f"Failed to get conversation from DB: {e}")
 
         # Read audio data
-        audio_data = await audio.read()
+        audio_data = await read_upload_limited(audio, settings.upload_max_bytes)
 
         # Process conversation turn
         result = await voice_chat_manager.voice_conversation(

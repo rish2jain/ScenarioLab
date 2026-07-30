@@ -4,9 +4,10 @@ import logging
 import time
 import uuid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.analytics.analytics_agent import AnalyticsAgent, SimulationMetrics
+from app.config import settings
 from app.simulation.engine import SimulationEngine
 from app.simulation.models import SimulationConfig
 from app.simulation.monte_carlo import (
@@ -37,6 +38,26 @@ class BatchConfig(BaseModel):
         "policy_adoption_rate",
         "compliance_violation_rate",
     ]
+
+    @field_validator("scenarios")
+    @classmethod
+    def _validate_scenarios(cls, v: list[BatchScenario]) -> list[BatchScenario]:
+        if not v:
+            raise ValueError("scenarios must not be empty")
+        max_n = settings.batch_max_scenarios
+        if len(v) > max_n:
+            raise ValueError(f"scenarios length must be <= {max_n}")
+        return v
+
+    @field_validator("monte_carlo_iterations")
+    @classmethod
+    def _validate_mc_iterations(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError("monte_carlo_iterations must be >= 0")
+        max_i = settings.batch_max_monte_carlo_iterations
+        if v > max_i:
+            raise ValueError(f"monte_carlo_iterations must be <= {max_i}")
+        return v
 
 
 class ScenarioComparison(BaseModel):

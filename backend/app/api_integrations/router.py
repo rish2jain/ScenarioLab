@@ -80,7 +80,7 @@ async def list_api_keys():
 @router.delete("/api-keys/{key_id}", dependencies=_api_key_admin_deps)
 async def revoke_api_key(key_id: str):
     """Revoke an API key."""
-    success = api_key_manager.revoke_key(key_id)
+    success = await api_key_manager.revoke_key(key_id)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

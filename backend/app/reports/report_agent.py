@@ -224,7 +224,8 @@ class ReportAgent:
 
         except Exception as e:
             logger.error(f"Error generating report: {e}")
-            report.status = "draft"  # Still return partial report
+            report.status = "failed"
+            report.updated_at = datetime.now(timezone.utc).isoformat()
 
         return report
 

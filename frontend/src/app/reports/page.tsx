@@ -7,13 +7,14 @@ import { FileText, Calendar } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { useReportStore } from '@/lib/store';
 import { api } from '@/lib/api';
 
 export default function ReportsPage() {
   const router = useRouter();
-  const { reports, setReports, setLoading, setError } = useReportStore();
+  const { reports, isLoading, setReports, setLoading, setError } = useReportStore();
   const { addToast } = useToast();
 
   useEffect(() => {
@@ -65,7 +66,13 @@ export default function ReportsPage() {
       </div>
 
       {/* Reports List */}
-      {reports.length > 0 ? (
+      {isLoading ? (
+        <Card>
+          <div className="p-10 flex justify-center">
+            <Spinner message="Loading reports…" />
+          </div>
+        </Card>
+      ) : reports.length > 0 ? (
         <div className="grid grid-cols-1 gap-4">
           {reports.map((report) => (
             <Card key={report.id} hover className="group">

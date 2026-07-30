@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from app.db.chat import (
@@ -184,9 +184,7 @@ async def _create_simulation_core(request: SimulationCreateRequest) -> Simulatio
 
     desc = objective_text_for_stale_check(request.description, params)
     po = params.get("parsedObjective") or params.get("parsed_objective")
-    if isinstance(po, dict) and po and not parsed_objective_matches_description(
-        po, request.description, params
-    ):
+    if isinstance(po, dict) and po and not parsed_objective_matches_description(po, request.description, params):
         params.pop("parsedObjective", None)
         params.pop("parsed_objective", None)
 
@@ -473,10 +471,12 @@ async def dual_run_preset_create(
 
 
 @router.get("")
-async def list_simulations() -> list[dict]:
-    """List all simulations."""
-    return await simulation_engine.list_simulations()
-
+async def list_simulations(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    """List simulations with pagination (``items``, ``total``, ``limit``, ``offset``)."""
+    return await simulation_engine.list_simulations(limit=limit, offset=offset)
 
 @router.get("/{simulation_id}", response_model=SimulationState)
 async def get_simulation(simulation_id: str) -> SimulationState:
@@ -664,7 +664,20 @@ async def stop_simulation(simulation_id: str) -> dict:
 
 @router.delete("/{simulation_id}")
 async def delete_simulation(simulation_id: str) -> dict:
-    """Delete a simulation."""
+    """Delete a simulation and cancel any in-flight background run."""
+    # Cancel first so run_simulation cannot re-persist after delete.
+    if simulation_id in _background_tasks:
+        task = _background_tasks[simulation_id]
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"Error cancelling task for delete of {simulation_id}: {e}")
+        finally:
+            _background_tasks.pop(simulation_id, None)
+
     success = await simulation_engine.delete_simulation(simulation_id)
     if not success:
         raise HTTPException(status_code=404, detail="Simulation not found")

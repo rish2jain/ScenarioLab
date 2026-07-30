@@ -145,6 +145,11 @@ async def init_schema(extra_ddl: str = "") -> None:
             conn.row_factory = aiosqlite.Row
             await conn.execute("PRAGMA journal_mode=WAL")
             await conn.executescript(_CORE_DDL + extra_ddl)
+            # Record schema version for future ordered migrations (indexes live in _CORE_DDL).
+            await conn.execute(
+                "INSERT OR IGNORE INTO schema_version (version, applied_at) VALUES (?, ?)",
+                (1, utc_now_iso()),
+            )
             await conn.commit()
             logger.info("Database schema initialized")
             _db = conn
@@ -258,6 +263,21 @@ CREATE TABLE IF NOT EXISTS reports (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_events_simulation_id ON audit_events(simulation_id);
+CREATE INDEX IF NOT EXISTS idx_chat_history_simulation_id ON chat_history(simulation_id);
+CREATE INDEX IF NOT EXISTS idx_agent_memories_simulation_id ON agent_memories(simulation_id);
+CREATE INDEX IF NOT EXISTS idx_agent_memories_sim_agent ON agent_memories(simulation_id, agent_id);
+CREATE INDEX IF NOT EXISTS idx_reports_simulation_id ON reports(simulation_id);
+CREATE INDEX IF NOT EXISTS idx_annotations_simulation_id ON annotations(simulation_id);
+CREATE INDEX IF NOT EXISTS idx_scenario_branches_root_id ON scenario_branches(root_id);
+CREATE INDEX IF NOT EXISTS idx_simulations_status ON simulations(status);
+CREATE INDEX IF NOT EXISTS idx_simulations_updated_at ON simulations(updated_at);
 """
 
 # ---------------------------------------------------------------------------

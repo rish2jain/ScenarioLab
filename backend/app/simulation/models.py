@@ -5,7 +5,10 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.config import settings
+from app.simulation.validation import validate_int_bounds
 
 
 def _utc_now_iso() -> str:
@@ -62,6 +65,16 @@ class SimulationConfig(BaseModel):
     seed_id: str | None = None  # Legacy single seed reference
     seed_ids: list[str] = []  # References to uploaded seed materials
     parameters: dict = {}  # Additional parameters
+
+    @field_validator("total_rounds")
+    @classmethod
+    def _validate_total_rounds(cls, v: int) -> int:
+        return validate_int_bounds(
+            v,
+            minimum=1,
+            maximum=settings.simulation_max_rounds,
+            field_name="total_rounds",
+        )
 
     def model_post_init(self, __context):
         """Generate ID if not provided."""
@@ -174,6 +187,16 @@ class SimulationCreateRequest(BaseModel):
     seed_id: str | None = None  # Legacy single seed reference
     seed_ids: list[str] = []  # Multiple seed document references
     parameters: dict = {}
+
+    @field_validator("total_rounds")
+    @classmethod
+    def _validate_total_rounds(cls, v: int) -> int:
+        return validate_int_bounds(
+            v,
+            minimum=1,
+            maximum=settings.simulation_max_rounds,
+            field_name="total_rounds",
+        )
 
 
 class DualCreateRequest(BaseModel):

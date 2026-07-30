@@ -196,7 +196,7 @@ class SimulationReport(BaseModel):
             "round_audit (per-round counts), memory (persisted snippets or skipped)."
         ),
     )
-    status: Literal["generating", "draft", "in_review", "final"] = "generating"
+    status: Literal["generating", "draft", "in_review", "final", "failed"] = "generating"
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 

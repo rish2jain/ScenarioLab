@@ -1,8 +1,8 @@
 # ScenarioLab UI/UX Review — End-to-End Findings
 
-**Date:** 2026-04-03
-**Scope:** Full frontend audit across all pages, components, and layouts
-**Status:** Remediation complete in code (6 phases) — **audit documentation pending** (**[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)** `_Backfill:_` cells await real PR links, merge dates, authors, and evidence per **Maintainers** at end of document).
+**Date:** 2026-04-03 (**historical baseline** — not a current re-audit)
+**Scope:** Full frontend audit across all pages, components, and layouts (as of the baseline date above)
+**Status:** Historical findings; remediation complete in code (6 phases). **Evidence backfill still pending** in **[Remediation Tracking (Consolidated)](#remediation-tracking-consolidated)** (`_Backfill:_` cells await real PR links, merge dates, authors, and evidence per **Maintainers** at end of document).
 
 ## Audit remediation (document-level)
 

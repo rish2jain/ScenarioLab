@@ -30,6 +30,7 @@ import { SimulationFeed } from '@/components/simulation/SimulationFeed';
 import { AgentCard } from '@/components/simulation/AgentCard';
 import { useSimulationStore } from '@/lib/store';
 import { useElapsedTimer } from '@/hooks/useElapsedTimer';
+import { useSimulationSocket } from '@/hooks/useSimulationSocket';
 import { api } from '@/lib/api';
 import { fetchApi } from '@/lib/api/client';
 import {
@@ -38,8 +39,13 @@ import {
   normalizeAgentMessage,
 } from '@/lib/api/normalizers';
 import type { AgentMessage } from '@/lib/types';
+import {
+  coalesceInFlight,
+  type InFlightHolder,
+} from '@/lib/coalesceInFlight';
 
 const POLL_BASE_MS = 2000;
+const POLL_BASE_MS_WITH_WS = 8000;
 const POLL_MAX_DELAY_MS = 60_000;
 const POLL_BACKOFF_FACTOR = 2;
 const POLL_FAILURES_TOAST = 3;
@@ -76,6 +82,7 @@ export default function SimulationMonitorPage() {
     setCurrentSimulation,
     agentMessages,
     setAgentMessages,
+    addAgentMessage,
   } = useSimulationStore();
 
   const [isLoading, setIsLoading] = useState(true);
@@ -83,12 +90,15 @@ export default function SimulationMonitorPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [pollError, setPollError] = useState<string | null>(null);
+  const [wsLive, setWsLive] = useState(false);
   const [controlLoading, setControlLoading] = useState<
     'start' | 'pause' | 'resume' | 'stop' | null
   >(null);
   const pollFailuresRef = useRef(0);
   const pollDelayMsRef = useRef(POLL_BASE_MS);
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wsLiveRef = useRef(false);
+  const pollInFlightRef = useRef<InFlightHolder<boolean>>({ current: null });
 
   const elapsedStorageKey = `scenariolab-sim-elapsed-${simulationId}`;
   const elapsedSeconds = useElapsedTimer(currentSimulation, elapsedStorageKey);
@@ -139,38 +149,44 @@ export default function SimulationMonitorPage() {
   }, [simulationId, messageAgentColors, setCurrentSimulation, setAgentMessages]);
 
   /** Poll refresh using raw fetch results so transient API failures can be detected (fetchApi does not throw). */
-  const pollSimulation = useCallback(async (): Promise<boolean> => {
-    const [simRes, msgRes] = await Promise.all([
-      fetchApi<unknown>(`/api/simulations/${simulationId}`),
-      fetchApi<Record<string, unknown>[]>(`/api/simulations/${simulationId}/messages`),
-    ]);
+  const pollSimulation = useCallback((): Promise<boolean> => {
+    // Coalesce WS-triggered + scheduled polls so overlapping fetches cannot
+    // apply out-of-order responses and overwrite newer state with stale data.
+    return coalesceInFlight(pollInFlightRef.current, async () => {
+      const [simRes, msgRes] = await Promise.all([
+        fetchApi<unknown>(`/api/simulations/${simulationId}`),
+        fetchApi<Record<string, unknown>[]>(
+          `/api/simulations/${simulationId}/messages`
+        ),
+      ]);
 
-    let messagesData: AgentMessage[];
-    if (msgRes.success && msgRes.data) {
-      messagesData = msgRes.data.map((m) =>
-        normalizeAgentMessage(m, messageAgentColors)
-      );
-    } else if (msgRes.status === 404) {
-      messagesData = [];
-    } else {
+      let messagesData: AgentMessage[];
+      if (msgRes.success && msgRes.data) {
+        messagesData = msgRes.data.map((m) =>
+          normalizeAgentMessage(m, messageAgentColors)
+        );
+      } else if (msgRes.status === 404) {
+        messagesData = [];
+      } else {
+        return false;
+      }
+
+      if (simRes.success && simRes.data) {
+        setCurrentSimulation(
+          normalizeSimulation(simRes.data as Record<string, unknown>)
+        );
+        setNotFound(false);
+        setAgentMessages(messagesData);
+        return true;
+      }
+      if (simRes.status === 404) {
+        setCurrentSimulation(null);
+        setNotFound(true);
+        setAgentMessages(messagesData);
+        return true;
+      }
       return false;
-    }
-
-    if (simRes.success && simRes.data) {
-      setCurrentSimulation(
-        normalizeSimulation(simRes.data as Record<string, unknown>)
-      );
-      setNotFound(false);
-      setAgentMessages(messagesData);
-      return true;
-    }
-    if (simRes.status === 404) {
-      setCurrentSimulation(null);
-      setNotFound(true);
-      setAgentMessages(messagesData);
-      return true;
-    }
-    return false;
+    });
   }, [simulationId, messageAgentColors, setCurrentSimulation, setAgentMessages]);
 
   // Initial load
@@ -183,14 +199,48 @@ export default function SimulationMonitorPage() {
     load();
   }, [refreshSimulation]);
 
+  const liveStatuses =
+    currentSimulation?.status === 'running' ||
+    currentSimulation?.status === 'paused' ||
+    currentSimulation?.status === 'generating_report';
+
+  useSimulationSocket(simulationId, liveStatuses && !notFound, {
+    onOpen: () => {
+      wsLiveRef.current = true;
+      setWsLive(true);
+      pollDelayMsRef.current = POLL_BASE_MS_WITH_WS;
+    },
+    onClose: () => {
+      wsLiveRef.current = false;
+      setWsLive(false);
+    },
+    onError: () => {
+      wsLiveRef.current = false;
+      setWsLive(false);
+    },
+    onMessage: (payload) => {
+      if (!payload || typeof payload !== 'object') return;
+      const row = payload as Record<string, unknown>;
+      if (typeof row.status === 'string' && row.type === 'status') {
+        void pollSimulation().catch(() => {});
+        return;
+      }
+      if (!row.content && !row.agent_id && !row.agentId) return;
+      const msg = normalizeAgentMessage(row, messageAgentColors);
+      if (!msg.id || !msg.content) return;
+      const exists = useSimulationStore
+        .getState()
+        .agentMessages.some((m) => m.id === msg.id);
+      if (!exists) addAgentMessage(msg);
+    },
+  });
+
   // Poll while running/paused with backoff + error handling (fetchApi does not throw)
   useEffect(() => {
-    if (notFound) return;
-    const status = currentSimulation?.status;
-    if (status !== 'running' && status !== 'paused' && status !== 'generating_report') return;
+    if (notFound || !liveStatuses) return;
 
     pollFailuresRef.current = 0;
-    pollDelayMsRef.current = POLL_BASE_MS;
+    pollDelayMsRef.current = wsLiveRef.current ? POLL_BASE_MS_WITH_WS : POLL_BASE_MS;
     setPollError(null);
 
     let cancelled = false;
@@ -208,7 +258,9 @@ export default function SimulationMonitorPage() {
 
         if (ok) {
           pollFailuresRef.current = 0;
-          pollDelayMsRef.current = POLL_BASE_MS;
+          pollDelayMsRef.current = wsLiveRef.current
+            ? POLL_BASE_MS_WITH_WS
+            : POLL_BASE_MS;
           setPollError(null);
         } else {
           pollFailuresRef.current += 1;
@@ -252,7 +304,7 @@ export default function SimulationMonitorPage() {
     };
   }, [
     addToast,
-    currentSimulation?.status,
+    liveStatuses,
     notFound,
     pollSimulation,
   ]);
@@ -388,6 +440,11 @@ export default function SimulationMonitorPage() {
           </div>
         </div>
 
+        {wsLive && !pollError && (
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
+            Live WebSocket connected — polling slowed as backup.
+          </div>
+        )}
         {pollError && (
           <div
             className="mt-3 px-3 py-2 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-200 text-sm"

@@ -13,6 +13,7 @@ from app.api_integrations.database import (
     ensure_tables,
     webhook_repo,
 )
+from app.api_integrations.webhook_url import validate_webhook_url
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,7 @@ class WebhookManager:
 
         if not url.startswith(("http://", "https://")):
             raise ValueError("URL must start with http:// or https://")
+        url = validate_webhook_url(url)
 
         webhook = Webhook(
             url=url,
@@ -301,6 +303,8 @@ class WebhookManager:
         success = False
 
         try:
+            # Re-check at delivery time (DNS may have changed since registration).
+            validate_webhook_url(webhook.url)
             client = await self._get_client()
 
             response = await client.post(

@@ -7,13 +7,14 @@ import time
 import uuid
 from typing import Any, Protocol
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.analytics.analytics_agent import AnalyticsAgent, SimulationMetrics
 from app.config import settings
 from app.inference_modes import InferenceMode, normalize_inference_mode
 from app.llm.inference_router import InferenceRouter
 from app.simulation.models import SimulationConfig, SimulationState
+from app.simulation.validation import validate_int_bounds
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,16 @@ class MonteCarloConfig(BaseModel):
     variation_parameters: dict = {}
     # LLM temperature variation
     temperature_range: tuple[float, float] = (0.5, 0.9)
+
+    @field_validator("iterations")
+    @classmethod
+    def _validate_iterations(cls, v: int) -> int:
+        return validate_int_bounds(
+            v,
+            minimum=1,
+            maximum=settings.monte_carlo_max_iterations,
+            field_name="iterations",
+        )
 
 
 class MonteCarloResult(BaseModel):

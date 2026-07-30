@@ -5,12 +5,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 
 from app.analytics.router import router as analytics_router
 from app.api_integrations.router import router as api_v1_router
 from app.config import settings
-from app.database import close_database, init_database
+from app.db.connection import close_database, init_schema
+from app.db.connection import get_db
 from app.graph.graphiti_service import start_graphiti, stop_graphiti
 from app.graph.neo4j_client import Neo4jClient, register_application_neo4j_client
 from app.graph.router import (
@@ -25,6 +26,8 @@ from app.llm.database import init_llm_tables
 from app.llm.router import router as llm_router
 from app.mcp.router import router as mcp_router
 from app.mcp.server import mcp_server
+from app.middleware_auth import SharedSecretAuthMiddleware
+from app.middleware_request_id import RequestIdMiddleware
 from app.personas.router import router as personas_router
 from app.playbooks.router import router as playbooks_router
 from app.reports.router import router as reports_router
@@ -39,7 +42,7 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
 ]
 
-# Configure logging
+# Configure logging (request middleware adds structured request lines)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -49,6 +52,8 @@ logger = logging.getLogger(__name__)
 # Global Neo4j client instance
 neo4j_client: Neo4jClient | None = None
 
+_WEAK_NEO4J_PASSWORDS = frozenset({"", "password", "changeme", "neo4j"})
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -57,7 +62,8 @@ async def lifespan(app: FastAPI):
     logger.info("ScenarioLab backend starting up...")
 
     # Initialize SQLite database
-    await init_database()
+    await init_schema()
+    logger.info("Database tables initialized")
 
     # Initialize LLM tables
     try:
@@ -67,18 +73,26 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Failed to initialize LLM tables: {e}")
 
     # Initialize Neo4j connection (shared with graph router via register_application_neo4j_client)
-    try:
-        neo4j_client = Neo4jClient(
-            uri=settings.neo4j_uri,
-            user=settings.neo4j_user,
-            password=settings.neo4j_password,
+    neo4j_password = (settings.neo4j_password or "").strip()
+    if neo4j_password.lower() in _WEAK_NEO4J_PASSWORDS:
+        logger.warning(
+            "NEO4J_PASSWORD is unset or weak; skipping Neo4j connect. "
+            "Set a strong NEO4J_PASSWORD in .env to enable graph features."
         )
-        await neo4j_client.connect()
-        logger.info("Neo4j connection established")
-    except Exception as e:
-        logger.error(f"Failed to connect to Neo4j: {e}")
-        logger.warning("Continuing without Neo4j - graph features unavailable")
         neo4j_client = None
+    else:
+        try:
+            neo4j_client = Neo4jClient(
+                uri=settings.neo4j_uri,
+                user=settings.neo4j_user,
+                password=neo4j_password,
+            )
+            await neo4j_client.connect()
+            logger.info("Neo4j connection established")
+        except Exception as e:
+            logger.error(f"Failed to connect to Neo4j: {e}")
+            logger.warning("Continuing without Neo4j - graph features unavailable")
+            neo4j_client = None
 
     register_application_neo4j_client(neo4j_client)
 
@@ -88,6 +102,11 @@ async def lifespan(app: FastAPI):
         await start_graphiti()
     except Exception as e:
         logger.warning("Graphiti startup skipped: %s", e)
+
+    if (settings.api_shared_secret or "").strip():
+        logger.info("API shared-secret auth is ENABLED for /api/*")
+    else:
+        logger.warning("API shared-secret auth is DISABLED (API_SHARED_SECRET unset) — " "suitable for local lab only")
 
     yield
 
@@ -110,11 +129,15 @@ async def lifespan(app: FastAPI):
     register_application_neo4j_client(None)
 
 
+_docs_enabled = bool(settings.debug)
 app = FastAPI(
     title="ScenarioLab API",
     description="AI war-gaming platform for strategy consultants",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
 )
 
 # CORS middleware - restricted origins (extend ALLOWED_ORIGINS for production)
@@ -123,7 +146,14 @@ app.add_middleware(
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "X-API-Key",
+        "X-ScenarioLab-Secret",
+        "X-Request-ID",
+        "X-Client-Upload-Id",
+    ],
 )
 
 
@@ -134,17 +164,61 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(self), geolocation=()"
         return response
 
 
+# Middleware order: last added runs first on the request (outermost).
+# SecurityHeaders must be outermost so 401s from SharedSecretAuth still get headers.
+app.add_middleware(RequestIdMiddleware)
+app.add_middleware(SharedSecretAuthMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
 
 @app.get("/api/health", tags=["health"])
 async def health_check():
-    """Health check endpoint."""
+    """Liveness probe — process is up."""
     return {"status": "ok", "service": "scenariolab-backend"}
+
+
+@app.get("/api/ready", tags=["health"])
+async def readiness_check():
+    """Readiness probe — SQLite reachable; Neo4j optional."""
+    checks: dict[str, str] = {}
+    overall = "ok"
+
+    try:
+        db = await get_db()
+        await db.execute("SELECT 1")
+        checks["sqlite"] = "ok"
+    except Exception as e:
+        logger.warning("Readiness sqlite check failed: %s", e)
+        checks["sqlite"] = "error"
+        overall = "degraded"
+
+    if neo4j_client is not None:
+        try:
+            if not neo4j_client.is_connected:
+                checks["neo4j"] = "skipped"
+            else:
+                await neo4j_client.verify_connectivity()
+                checks["neo4j"] = "ok"
+        except Exception as e:
+            logger.warning("Readiness neo4j check failed: %s", e)
+            checks["neo4j"] = "error"
+            overall = "degraded"
+    else:
+        checks["neo4j"] = "skipped"
+
+    status_code = 200 if overall == "ok" else 503
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": overall,
+            "service": "scenariolab-backend",
+            "checks": checks,
+        },
+    )
 
 
 # Include routers
@@ -165,13 +239,16 @@ app.include_router(research_router)
 @app.get("/")
 async def root():
     """Root endpoint."""
-    return {
+    payload = {
         "message": "Welcome to ScenarioLab API",
-        "docs": "/docs",
         "health": "/api/health",
+        "ready": "/api/ready",
         "personas": "/api/personas",
         "playbooks": "/api/playbooks",
         "simulations": "/api/simulations",
         "reports": "/api/reports",
         "mcp": "/api/mcp",
     }
+    if _docs_enabled:
+        payload["docs"] = "/docs"
+    return payload

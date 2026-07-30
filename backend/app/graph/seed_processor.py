@@ -65,7 +65,7 @@ class SeedProcessor:
     def _get_repo(self):
         """Lazy-import SeedRepository to avoid circular imports."""
         if self._repo is None:
-            from app.database import SeedRepository
+            from app.db.seeds import SeedRepository
 
             self._repo = SeedRepository()
         return self._repo

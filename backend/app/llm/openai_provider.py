@@ -12,6 +12,7 @@ from tenacity import (
     wait_exponential,
 )
 
+from app.config import settings
 from app.llm.provider import (
     MAX_TOKENS_CAP,
     LLMMessage,
@@ -19,6 +20,7 @@ from app.llm.provider import (
     LLMResponse,
     get_llm_semaphore,
 )
+from app.llm.usage_tracker import usage_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +41,11 @@ class OpenAIProvider(LLMProvider):
         self.api_key = api_key
         self.base_url = base_url
         self.model = model
-        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        self.client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=settings.llm_http_timeout,
+        )
         logger.info(f"Initialized OpenAI provider with model: {model}")
 
     def _convert_messages(self, messages: list[LLMMessage]) -> list[dict]:
@@ -56,7 +62,9 @@ class OpenAIProvider(LLMProvider):
         """Generate a completion from messages."""
         max_tokens = min(max_tokens, MAX_TOKENS_CAP)
         async with get_llm_semaphore(self.provider_name):
-            return await self._generate_with_retry(messages, temperature, max_tokens, **kwargs)
+            response = await self._generate_with_retry(messages, temperature, max_tokens, **kwargs)
+            usage_tracker.record_current(response.usage, provider=self.provider_name)
+            return response
 
     @retry(
         stop=stop_after_attempt(3),
@@ -115,23 +123,25 @@ class OpenAIProvider(LLMProvider):
         **kwargs,
     ) -> AsyncIterator[str]:
         """Stream a completion token by token."""
-        try:
-            openai_messages = self._convert_messages(messages)
-            stream = await self.client.chat.completions.create(
-                model=self.model,
-                messages=openai_messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stream=True,
-                **kwargs,
-            )
+        max_tokens = min(max_tokens, MAX_TOKENS_CAP)
+        async with get_llm_semaphore(self.provider_name):
+            try:
+                openai_messages = self._convert_messages(messages)
+                stream = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=openai_messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=True,
+                    **kwargs,
+                )
 
-            async for chunk in stream:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
-        except Exception as e:
-            logger.error(f"Error streaming completion: {e}")
-            raise
+                async for chunk in stream:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        yield chunk.choices[0].delta.content
+            except Exception as e:
+                logger.error(f"Error streaming completion: {e}")
+                raise
 
     async def test_connection(self) -> dict:
         """Test connectivity to the LLM provider."""

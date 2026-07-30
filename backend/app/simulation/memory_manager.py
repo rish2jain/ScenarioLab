@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime, timezone
 
-from app.database import AgentMemoryRepository
+from app.db.memories import AgentMemoryRepository
 from app.simulation.models import RoundState, SimulationMessage
 
 logger = logging.getLogger(__name__)

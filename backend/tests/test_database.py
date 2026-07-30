@@ -43,7 +43,7 @@ async def repo(tmp_path):
         patch.object(conn_mod, "DB_PATH", db_path),
     ):
         await conn_mod.init_schema()
-        from app.database import SimulationRepository
+        from app.db.simulations import SimulationRepository
 
         yield SimulationRepository()
         await conn_mod.close_database()

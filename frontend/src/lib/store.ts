@@ -122,6 +122,8 @@ interface ChatState {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   clearMessages: () => void;
+  /** Reset chat UI state when switching simulations. */
+  resetForSimulation: () => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -144,6 +146,13 @@ export const useChatStore = create<ChatState>((set) => ({
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),
   clearMessages: () => set({ messages: [] }),
+  resetForSimulation: () =>
+    set({
+      messages: [],
+      selectedAgentId: null,
+      isLoading: false,
+      error: null,
+    }),
 }));
 
 // Upload Store

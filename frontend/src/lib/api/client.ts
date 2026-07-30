@@ -1,8 +1,29 @@
 // API client — shared fetch helper and base URL config
 import type { ApiResponse } from '../types';
 
-const envApiBaseUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '');
-export const API_BASE_URL = envApiBaseUrl ?? '';
+/**
+ * Browser traffic must stay same-origin (`/api/...`) so Next.js middleware can
+ * inject `API_SHARED_SECRET`. Direct `NEXT_PUBLIC_API_URL` calls would bypass
+ * that boundary and cannot safely carry the secret in the client bundle.
+ *
+ * Server-side callers may use BACKEND_INTERNAL_URL (or NEXT_PUBLIC_API_URL) and
+ * attach the secret from non-public `API_SHARED_SECRET`.
+ */
+const envApiBaseUrl =
+  process.env.BACKEND_INTERNAL_URL?.replace(/\/$/, '') ||
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '') ||
+  '';
+
+export const API_BASE_URL =
+  typeof window !== 'undefined' ? '' : envApiBaseUrl;
+
+function serverSharedSecretHeaders(): Record<string, string> {
+  if (typeof window !== 'undefined') {
+    return {};
+  }
+  const secret = process.env.API_SHARED_SECRET?.trim() ?? '';
+  return secret ? { 'X-ScenarioLab-Secret': secret } : {};
+}
 
 /** Parse FastAPI `detail` (string, object, or validation error list) for user-facing messages. */
 function formatFastApiDetail(raw: unknown): string | null {
@@ -59,7 +80,9 @@ export async function fetchApi<T>(
   options?: RequestInit
 ): Promise<ApiResponse<T>> {
   try {
-    const defaultHeaders: Record<string, string> = {};
+    const defaultHeaders: Record<string, string> = {
+      ...serverSharedSecretHeaders(),
+    };
     // Only set Content-Type for non-FormData requests
     if (!(options?.body instanceof FormData)) {
       defaultHeaders['Content-Type'] = 'application/json';

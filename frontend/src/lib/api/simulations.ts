@@ -19,21 +19,65 @@ import {
   type AgentColorResolver,
 } from './normalizers';
 import { normalizeSimulationEnvironmentType } from '../environment-types';
+import {
+  SIMULATIONS_PAGE_SIZE,
+  parseSimulationListResponse,
+  shouldFetchNextSimulationPage,
+} from './simulationList';
 
 export type LoadSimulationsResult = { ok: boolean; simulations: Simulation[] };
 
-/** True only when GET /api/simulations succeeds and the body is an array (normalized). */
+/**
+ * Load all simulations from GET /api/simulations.
+ * Walks paginated `{ items, total }` responses (page size = backend max) and
+ * still accepts a legacy bare array body.
+ */
 export async function loadSimulationsFromApi(): Promise<LoadSimulationsResult> {
-  const result = await fetchApi<unknown>('/api/simulations');
-  if (result.success && Array.isArray(result.data)) {
-    return {
-      ok: true,
-      simulations: result.data.map((s) =>
-        normalizeSimulation(s as Record<string, unknown>)
-      ),
-    };
+  const collected: unknown[] = [];
+  let offset = 0;
+
+  for (;;) {
+    const result = await fetchApi<unknown>(
+      `/api/simulations?limit=${SIMULATIONS_PAGE_SIZE}&offset=${offset}`
+    );
+    if (!result.success || result.data == null) {
+      return { ok: false, simulations: [] };
+    }
+
+    const parsed = parseSimulationListResponse(result.data);
+    if (!parsed) {
+      return { ok: false, simulations: [] };
+    }
+
+    if (parsed.kind === 'legacy') {
+      return {
+        ok: true,
+        simulations: parsed.items.map((s) =>
+          normalizeSimulation(s as Record<string, unknown>)
+        ),
+      };
+    }
+
+    collected.push(...parsed.items);
+    if (
+      !shouldFetchNextSimulationPage({
+        itemsOnPage: parsed.items.length,
+        pageSize: SIMULATIONS_PAGE_SIZE,
+        offset,
+        total: parsed.total,
+      })
+    ) {
+      break;
+    }
+    offset += parsed.items.length;
   }
-  return { ok: false, simulations: [] };
+
+  return {
+    ok: true,
+    simulations: collected.map((s) =>
+      normalizeSimulation(s as Record<string, unknown>)
+    ),
+  };
 }
 
 /**
@@ -443,7 +487,14 @@ export const simulationApi = {
   // Upload / Seeds
   listSeeds: async (): Promise<UploadedFile[]> => {
     const result = await fetchApi<{ seeds?: unknown[] }>('/api/seeds');
-    if (!result.success || !result.data) return [];
+    if (!result.success || !result.data) {
+      throw new Error(
+        result.error?.trim() ||
+          (result.status
+            ? `Could not load seeds (HTTP ${result.status}).`
+            : 'Could not load seeds.')
+      );
+    }
     const data = result.data as { seeds?: unknown[] };
     const rows = Array.isArray(data.seeds) ? data.seeds : [];
     return rows
@@ -731,7 +782,12 @@ export const simulationApi = {
       }));
     }
     if (result.status === 404) return [];
-    return [];
+    throw new Error(
+      result.error?.trim() ||
+        (result.status
+          ? `Could not load chat messages (HTTP ${result.status}).`
+          : 'Could not load chat messages.')
+    );
   },
 
   // Send a message to a specific agent and get a real LLM response

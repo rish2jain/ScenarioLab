@@ -1,5 +1,6 @@
 """Base environment class for simulations."""
 
+import asyncio
 import logging
 from abc import ABC, abstractmethod
 from typing import Any
@@ -132,20 +133,14 @@ class BaseEnvironment(ABC):
                             exc_info=True,
                         )
 
-            if (
-                settings.graphiti_enabled
-                and settings.graphiti_inject_agent_context
-                and round_number > 1
-            ):
+            if settings.graphiti_enabled and settings.graphiti_inject_agent_context and round_number > 1:
                 sim_id = getattr(self._sim_config, "id", "")
                 if sim_id:
                     try:
                         hint = f"{agent.archetype.role} {agent.state.name} round {round_number}"
                         gt = await graphiti_context_snippet(sim_id, hint)
                         if gt:
-                            enriched_context = (
-                                f"{gt}\n\n{enriched_context}" if enriched_context else gt
-                            )
+                            enriched_context = f"{gt}\n\n{enriched_context}" if enriched_context else gt
                     except Exception:
                         logger.debug(
                             "Graphiti context retrieval failed for %s",
@@ -182,39 +177,47 @@ class BaseEnvironment(ABC):
         round_state: RoundState,
     ) -> list[dict]:
         """Run a voting phase and collect results."""
-        votes = []
+        votes: list[dict] = []
 
-        for agent in agents:
+        async def _cast(agent: SimulationAgent) -> tuple[SimulationAgent, dict | None, Exception | None]:
             try:
-                vote_result = await agent.cast_vote(
+                result = await agent.cast_vote(
                     proposal=proposal,
                     arguments=round_state.messages,
                     round_number=round_state.round_number,
                 )
-                votes.append(vote_result)
-
-                # Create a vote message
-                vote_message = SimulationMessage(
-                    round_number=round_state.round_number,
-                    phase="vote",
-                    agent_id=agent.id,
-                    agent_name=agent.name,
-                    agent_role=agent.archetype.role,
-                    content=(f"Vote: {vote_result['vote']}. " f"{vote_result['reasoning']}"),
-                    message_type="vote",
-                )
-                round_state.messages.append(vote_message)
-
+                return agent, result, None
             except Exception as e:
-                logger.error(f"Error collecting vote from {agent.name}: {e}")
+                return agent, None, e
+
+        outcomes = await asyncio.gather(*[_cast(agent) for agent in agents])
+
+        for agent, vote_result, err in outcomes:
+            if err is not None or vote_result is None:
+                logger.error(f"Error collecting vote from {agent.name}: {err}")
                 votes.append(
                     {
                         "agent_id": agent.id,
                         "agent_name": agent.name,
                         "vote": "abstain",
-                        "reasoning": f"Error: {str(e)}",
+                        "reasoning": f"Error: {str(err)}",
                     }
                 )
+                continue
+
+            votes.append(vote_result)
+
+            # Create a vote message (append after gather — no concurrent mutation)
+            vote_message = SimulationMessage(
+                round_number=round_state.round_number,
+                phase="vote",
+                agent_id=agent.id,
+                agent_name=agent.name,
+                agent_role=agent.archetype.role,
+                content=(f"Vote: {vote_result['vote']}. " f"{vote_result['reasoning']}"),
+                message_type="vote",
+            )
+            round_state.messages.append(vote_message)
 
         return votes
 

@@ -13,6 +13,7 @@ from tenacity import (
     wait_exponential,
 )
 
+from app.config import settings
 from app.llm.provider import (
     MAX_TOKENS_CAP,
     LLMMessage,
@@ -20,6 +21,7 @@ from app.llm.provider import (
     LLMResponse,
     get_llm_semaphore,
 )
+from app.llm.usage_tracker import usage_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +40,10 @@ class AnthropicProvider(LLMProvider):
         """
         self.api_key = api_key
         self.model = model
-        self.client = anthropic.AsyncAnthropic(api_key=api_key)
+        self.client = anthropic.AsyncAnthropic(
+            api_key=api_key,
+            timeout=settings.llm_http_timeout,
+        )
         logger.info(f"Initialized Anthropic provider with model: {model}")
 
     def _convert_messages(self, messages: list[LLMMessage]) -> tuple[str, list[dict]]:
@@ -68,7 +73,9 @@ class AnthropicProvider(LLMProvider):
         """Generate a completion from messages."""
         max_tokens = min(max_tokens, MAX_TOKENS_CAP)
         async with get_llm_semaphore(self.provider_name):
-            return await self._generate_with_retry(messages, temperature, max_tokens, **kwargs)
+            response = await self._generate_with_retry(messages, temperature, max_tokens, **kwargs)
+            usage_tracker.record_current(response.usage, provider=self.provider_name)
+            return response
 
     @retry(
         stop=stop_after_attempt(3),
@@ -135,26 +142,28 @@ class AnthropicProvider(LLMProvider):
         **kwargs,
     ) -> AsyncIterator[str]:
         """Stream a completion token by token."""
-        try:
-            system_msg, conversation = self._convert_messages(messages)
+        max_tokens = min(max_tokens, MAX_TOKENS_CAP)
+        async with get_llm_semaphore(self.provider_name):
+            try:
+                system_msg, conversation = self._convert_messages(messages)
 
-            request_kwargs = {
-                "model": self.model,
-                "messages": conversation,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                "stream": True,
-                **kwargs,
-            }
-            if system_msg:
-                request_kwargs["system"] = system_msg
+                request_kwargs = {
+                    "model": self.model,
+                    "messages": conversation,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "stream": True,
+                    **kwargs,
+                }
+                if system_msg:
+                    request_kwargs["system"] = system_msg
 
-            async with self.client.messages.stream(**request_kwargs) as stream:
-                async for text in stream.text_stream:
-                    yield text
-        except Exception as e:
-            logger.error(f"Error streaming completion: {e}")
-            raise
+                async with self.client.messages.stream(**request_kwargs) as stream:
+                    async for text in stream.text_stream:
+                        yield text
+            except Exception as e:
+                logger.error(f"Error streaming completion: {e}")
+                raise
 
     async def test_connection(self) -> dict:
         """Test connectivity to the Anthropic API."""

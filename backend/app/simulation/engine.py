@@ -7,13 +7,14 @@ import uuid
 from datetime import datetime, timezone
 
 from app.config import settings
-from app.database import SimulationRepository
+from app.db.simulations import SimulationRepository
 from app.graph.graphiti_service import delete_simulation_graph, schedule_round_episode_ingest
 from app.graph.seed_processor import SeedProcessor
 from app.inference_modes import InferenceMode, normalize_inference_mode
 from app.llm.factory import get_llm_provider as _get_llm_provider
 from app.llm.factory import get_local_llm_provider
 from app.llm.inference_router import InferenceRouter
+from app.llm.usage_tracker import track_simulation_usage, usage_tracker
 from app.personas.library import get_archetype
 from app.simulation.agent import SimulationAgent
 from app.simulation.audit_trail import AuditEventType, audit_manager
@@ -515,6 +516,8 @@ class SimulationEngine:
 
         logger.info(f"Starting simulation {simulation_id}")
 
+        usage_ctx = track_simulation_usage(simulation_id)
+        usage_ctx.__enter__()
         try:
             # Determine start_round to support resuming paused simulations correctly
             start_round = len(sim_state.rounds) + 1
@@ -600,11 +603,15 @@ class SimulationEngine:
                     None,
                 )
                 if round_state is not None:
-                    for agent in agents:
-                        await agent.update_stance(
-                            round_state.messages,
-                            round_number=round_num,
-                        )
+                    await asyncio.gather(
+                        *[
+                            agent.update_stance(
+                                round_state.messages,
+                                round_number=round_num,
+                            )
+                            for agent in agents
+                        ]
+                    )
                     if agents:
                         router = agents[0].router
                         if (
@@ -648,6 +655,11 @@ class SimulationEngine:
 
             # Rounds done — compile results and generate post-run artifacts
             sim_state.results_summary = await self._compile_results(sim_state)
+            token_usage = usage_tracker.get(simulation_id)
+            if token_usage.get("calls"):
+                summary = dict(sim_state.results_summary or {})
+                summary["token_usage"] = token_usage
+                sim_state.results_summary = summary
 
             # Signal that report generation is in progress
             sim_state.status = SimulationStatus.GENERATING_REPORT
@@ -683,10 +695,15 @@ class SimulationEngine:
         except Exception as e:
             logger.error(f"Simulation {simulation_id} failed: {e}")
             sim_state.status = SimulationStatus.FAILED
-            sim_state.results_summary = {"error": str(e)}
+            failed_summary: dict = {"error": str(e)}
+            token_usage = usage_tracker.get(simulation_id)
+            if token_usage.get("calls"):
+                failed_summary["token_usage"] = token_usage
+            sim_state.results_summary = failed_summary
             await self._repo.save(sim_state)
 
         finally:
+            usage_ctx.__exit__(None, None, None)
             self.running_tasks[simulation_id] = False
 
     async def _run_round(
@@ -1001,8 +1018,13 @@ class SimulationEngine:
             return in_memory
         return await self._repo.get(simulation_id)
 
-    async def list_simulations(self) -> list[dict]:
-        """List all simulations (merge in-memory running + DB stored)."""
+    async def list_simulations(
+        self, *, limit: int | None = 50, offset: int = 0
+    ) -> dict:
+        """List simulations (merge in-memory running + DB stored) with pagination.
+
+        Returns ``{"items": [...], "total": int, "limit": int|None, "offset": int}``.
+        """
         # Build in-memory summaries keyed by id
         in_memory: dict[str, dict] = {}
         for sim_id, sim_state in self.simulations.items():
@@ -1018,17 +1040,38 @@ class SimulationEngine:
                 "updated_at": sim_state.updated_at,
             }
 
-        # Fetch DB records, preferring in-memory versions for running sims
-        db_summaries = await self._repo.list_all()
+        # Fetch enough DB rows to fill the page after merging in-memory prefs.
+        # list_page caps LIMIT at 200; for deep offsets load all rows (limit=None)
+        # so the post-merge slice can still return the requested page.
+        offset = max(0, int(offset))
+        if limit is None:
+            fetch_limit: int | None = None
+        else:
+            limit = max(1, min(int(limit), 200))
+            need = offset + limit + len(in_memory)
+            fetch_limit = None if need > 200 else need
+        db_summaries, db_total = await self._repo.list_page(limit=fetch_limit, offset=0)
         merged: dict[str, dict] = {}
         for summary in db_summaries:
             sid = summary["id"]
             merged[sid] = in_memory.pop(sid, summary)
-
-        # Add any in-memory-only entries (shouldn't happen, but be safe)
         merged.update(in_memory)
 
-        return list(merged.values())
+        items = list(merged.values())
+        # Sort by updated_at desc for stable paging
+        items.sort(key=lambda s: s.get("updated_at") or "", reverse=True)
+        total = max(db_total, len(items))
+        if limit is None:
+            page = items
+        else:
+            page = items[offset : offset + limit]
+
+        return {
+            "items": page,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
 
     async def delete_simulation(self, simulation_id: str) -> bool:
         """Delete a simulation from memory and database."""

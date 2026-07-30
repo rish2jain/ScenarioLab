@@ -1,6 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
 import { getPlaywrightBaseURL } from './e2e/playwright-base-url';
 
+/** When set (CI job sets this), Playwright starts the frontend so global-setup can reach it. */
+const useWebServer =
+  process.env.CI === 'true' ||
+  process.env.PLAYWRIGHT_WEB_SERVER === '1' ||
+  process.env.PLAYWRIGHT_WEB_SERVER === 'true';
+
 export default defineConfig({
   testDir: './e2e',
   globalSetup: './e2e/global-setup.ts',
@@ -39,7 +45,16 @@ export default defineConfig({
     },
   ],
 
-  // Optional: let Playwright start the dev server (not default — avoids a second
-  // server when you already use ./start.sh or npm run dev). See e2e/README.md.
-  // webServer: { command: 'cd frontend && npm run dev', url: 'http://localhost:3000' },
+  // Local default: leave webServer off (start via ./start.sh or npm run dev).
+  // CI / PLAYWRIGHT_WEB_SERVER=1: serve the already-built frontend (see e2e/README.md).
+  ...(useWebServer
+    ? {
+        webServer: {
+          command: 'npm run start --prefix frontend',
+          url: getPlaywrightBaseURL(),
+          reuseExistingServer: !process.env.CI,
+          timeout: 120_000,
+        },
+      }
+    : {}),
 });

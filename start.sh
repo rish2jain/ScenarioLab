@@ -189,7 +189,7 @@ LLM_MODEL_NAME=gpt-4
 # Neo4j Configuration
 NEO4J_URI=bolt://localhost:7687
 NEO4J_USER=neo4j
-NEO4J_PASSWORD=password
+NEO4J_PASSWORD=local-dev-scenariolab-neo4j
 
 # Miro API
 MIRO_API_TOKEN=

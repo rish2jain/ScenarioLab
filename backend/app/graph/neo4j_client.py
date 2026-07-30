@@ -80,6 +80,12 @@ class Neo4jClient:
     def is_connected(self) -> bool:
         return self._driver is not None
 
+    async def verify_connectivity(self) -> None:
+        """Probe the live driver; raise if disconnected or Neo4j is unreachable."""
+        if not self._driver:
+            raise RuntimeError("Neo4j client not connected. Call connect() first.")
+        await self._driver.verify_connectivity()
+
     async def connect(self):
         """Initialize connection pool."""
         try:

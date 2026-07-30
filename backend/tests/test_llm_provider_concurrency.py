@@ -62,9 +62,7 @@ class TestGetLlmSemaphore:
         c = provider_module.get_llm_semaphore("anthropic")
         assert c is not a
 
-    async def test_semaphore_enforces_concurrency_limit(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_semaphore_enforces_concurrency_limit(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("LLM_CONCURRENCY_OVERRIDES", '{"openai": 5}')
         from app.config import Settings
 

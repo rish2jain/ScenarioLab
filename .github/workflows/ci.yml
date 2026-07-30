@@ -17,8 +17,9 @@ jobs:
       - uses: astral-sh/setup-uv@v8.0.0
         with:
           version: "0.11.3"
-      - run: uv sync
+      - run: uv sync --frozen
       - run: uv run ruff check .
+      - run: uv run black --check .
       - run: uv run pytest -q --tb=line
         env:
           LLM_API_KEY: test-key
@@ -38,3 +39,42 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npx tsc --noEmit
+      - run: npm test
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+  # P0 Playwright suite: builds frontend, installs Chromium only, starts Next via webServer.
+  # Specs mock /api/* so a live backend is not required. See e2e/README.md.
+  e2e-p0:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+      - name: Install root (Playwright) and frontend deps
+        run: |
+          npm ci
+          npm ci --prefix frontend
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run P0 e2e (chromium)
+        run: npm run test:e2e:p0 -- --project=chromium
+        env:
+          CI: "true"
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+          NEXT_TELEMETRY_DISABLED: "1"
+          # Slow CI hosts — keep P0 navigation assertions from flaking
+          PERF_DASHBOARD_THRESHOLD_MS: "15000"
+          PERF_SIM_THRESHOLD_MS: "15000"

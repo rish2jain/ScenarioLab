@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from app.database import AnnotationRepository
+from app.db.annotations import AnnotationRepository
 
 logger = logging.getLogger(__name__)
 
